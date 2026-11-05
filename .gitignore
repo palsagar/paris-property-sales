@@ -62,3 +62,4 @@ artifacts/api-server/data/paris-sales.json
 
 # Browser test output
 .playwright-mcp/
+__pycache__/
