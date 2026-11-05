@@ -141,3 +141,12 @@ These items do not block launch.
 - Removal of the hardcoded dates, so that a new DVF release needs fewer manual edits.
 - A proxy for `/api` in the Vite development server.
 - Removal of the unused template code: `lib/db`, `scripts/src/hello.ts`, the Replit dependencies and the unused UI components.
+
+## Planned work
+
+This document describes the site as it is today. The next iteration moves the data to DuckDB and adds the Communes around Paris. It has four parts, in this order, and the public launch follows them.
+
+1. [Move the sales data to DuckDB, with the same figures for Paris](https://github.com/palsagar/paris-property-sales/issues/2). See [decision record 7](adr/0007-duckdb-rebuilt-for-each-release.md).
+2. [Take all dates from the data, and check each DVF update](https://github.com/palsagar/paris-property-sales/issues/3).
+3. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
+4. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).

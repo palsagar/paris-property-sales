@@ -1,6 +1,6 @@
-# Paris Property Sales
+# Paris & Suburbs Property Sales
 
-A public website that helps home buyers and residents understand what homes in Paris have sold for and how prices have moved. Its figures come from DVF, the French tax administration's open data on property sales.
+A public website that helps home buyers and residents understand what homes in Paris and its suburbs have sold for and how prices have moved. Its figures come from DVF, the French tax administration's open data on property sales.
 
 ## Language
 
@@ -11,7 +11,7 @@ Demandes de valeurs foncières, the open dataset of property sales published by 
 _Avoid_: Land registry, cadastre
 
 **DVF release**:
-One publication of DVF by the DGFiP. A release covers about the last five years, and the site never shows a period that the latest release has dropped.
+One publication of DVF by the DGFiP, in April or October. A release covers about the last five years and can correct any part of them. The site shows exactly the dates that the latest release covers.
 _Avoid_: Delivery, version, data drop
 
 **Mutation**:
@@ -44,6 +44,10 @@ _Avoid_: Unit price, value per m²
 The percentage difference between the median Price per m² in the first and last Change windows of a Period. It is blank when either Change window has fewer than 5 Sales.
 _Avoid_: Growth, trend, appreciation
 
+**House share**:
+The percentage of the Sales in a Selection that are houses. A house's price includes its land, but its Price per m² uses only its Built surface, so a high House share raises a median and makes it harder to compare with an area of apartments.
+_Avoid_: Mix
+
 **Valuation**:
 An estimate of what a specific home is worth. The site describes past Sales and never gives a Valuation.
 _Avoid_: Fair price, estimate, price check
@@ -59,7 +63,7 @@ _Avoid_: Window, rolling average
 ### Selecting what to look at
 
 **Area**:
-All of Paris, one arrondissement or one quartier.
+All of Paris, one Department, one Arrondissement, one Quartier or one Commune. There is no Area for the whole region, because its figures would depend on which Communes the site includes.
 _Avoid_: Scope, zone, district, neighbourhood
 
 **Arrondissement**:
@@ -70,9 +74,25 @@ _Avoid_: District
 One of the 80 administrative subdivisions of Paris. A Quartier belongs to exactly one Arrondissement.
 _Avoid_: Neighbourhood
 
+**Commune**:
+One French municipality outside Paris that the site includes. It is the smallest Area outside Paris.
+_Avoid_: Banlieue, suburb (for one town), city
+
+**Department**:
+Hauts-de-Seine (92), Seine-Saint-Denis (93) or Val-de-Marne (94). The site includes every Commune in these three, so each one is a complete Area. Other departments are not Areas.
+_Avoid_: County, region
+
+**Major town**:
+A Commune outside the three Departments that the site includes: either it has at least 50,000 residents, or it is Saint-Germain-en-Laye, Fontainebleau or Melun. Major towns are listed together, but their combined figures are never shown.
+_Avoid_: Outer ring, satellite town
+
 **Period**:
-The dates a Visitor has chosen. It defaults to the full coverage of the data.
+The dates a Visitor has chosen. It defaults to all the dates in the latest DVF release.
 _Avoid_: Range, time span, slice
+
+**Partial year**:
+A calendar year that the latest DVF release covers only in part. The site always labels it with its months, for example "2021, Jul–Dec".
+_Avoid_: Incomplete year
 
 **Selection**:
 A property type, an Area and a Period, taken together. Every panel on the site describes the Sales in the current Selection.
@@ -81,7 +101,7 @@ _Avoid_: Scope, filters, slice, view
 ### People
 
 **Visitor**:
-A home buyer or Paris resident using the public site.
+A home buyer or resident of Paris or its suburbs using the public site.
 _Avoid_: User, customer
 
 ## Relationships
@@ -90,6 +110,8 @@ _Avoid_: User, customer
 - A **Sale** has exactly one **Price per m²**, calculated from its **Built surface**.
 - A **Selection** contains exactly one **Area** and one **Period**.
 - A **Change** is calculated from two **Change windows** inside one **Period**.
+- A **Commune** belongs to one **Department** or is a **Major town**, never both.
+- A **Quartier** belongs to one **Arrondissement**, and an **Arrondissement** belongs to Paris. A **Commune** has no smaller Area inside it.
 
 ## Example dialogue
 
@@ -109,9 +131,18 @@ _Avoid_: User, customer
 
 > **Domain expert:** "No. That would be a Valuation. The site can show the Sales in that Quartier, and each Sale location, but the judgement stays with the Visitor."
 
+> **Dev:** "Can a Visitor select Versailles and Meaux together and see one median?"
+
+> **Domain expert:** "No. Each is a Major town, so each is its own Area. They appear in one list so that a Visitor can compare them, but the site never shows a figure for the list as a whole."
+
+> **Dev:** "A saved link asks for July to December 2021, and the latest DVF release no longer covers those dates. What does the Visitor see?"
+
+> **Domain expert:** "The nearest dates that the release does cover, with a short notice that says the Period changed."
+
 ## Flagged ambiguities
 
 - **"Transaction"** was used for both Mutation and Sale. Use Sale for records on the site, and Mutation for raw records.
 - **"Window"** was used for both Change window and Smoothing window. Always use the full term.
 - **"Carrez or built surface"** appeared on the site, but the figures use only Built surface.
 - **"Every recorded sale"** appeared on the site, but Excluded mutations are left out.
+- **"Banlieue"** was used for the Communes around Paris. The word has a negative meaning in French for some places, so the site does not use it. Use Commune for one town, and "suburbs" only in general English text.
