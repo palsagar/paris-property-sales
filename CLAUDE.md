@@ -16,7 +16,7 @@ The goal is a public site for home buyers and Paris residents. It is not ready t
 
 ## Commands
 
-The repository has no test suite and no linter. `pnpm run typecheck` is the only automated check. To verify a change, build the app and use it in a browser.
+The repository has no linter. The only tests cover the response cache, so `pnpm run typecheck` and those tests are the only automated checks. To verify a change, build the app and use it in a browser.
 
 pnpm is not installed globally on this machine. Use `npx -y pnpm@10.26.1` in place of `pnpm`, or install pnpm first.
 
@@ -33,6 +33,12 @@ docker compose restart
 
 # Check types across the workspace
 pnpm run typecheck
+
+# Run the tests (Node's test runner through tsx)
+pnpm run test
+
+# Run one test by name
+pnpm --filter @workspace/api-server exec node --import tsx --test --test-name-pattern="byte limit" "src/**/*.test.ts"
 
 # Regenerate the client hooks and validators after editing lib/api-spec/openapi.yaml
 pnpm --filter @workspace/api-spec run codegen
@@ -55,7 +61,7 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 **The server keeps all data in memory and has no database.** `salesData.ts` loads the JSON at import time and builds indexes by arrondissement and quartier. Routes in `routes/sales.ts` compute each answer on request from `filterSales()`. Time bucketing, the rolling window and the "change over the period" calculation are in `timeStats.ts`. The bundle finds its data at `../data` relative to `dist/`, so `dist/` and `data/` must stay next to each other at runtime. In Docker, that folder is a mount at `/app/data`, which replaces the folder in the image and must hold all three data files.
 
 **Two pieces of code depend on the exact requests the dashboard makes.**
-- `lib/responseCache.ts` caches every successful `/api` GET in memory, keyed on the path and sorted query string. It assumes that the data never changes while the process runs, so a server must restart to show new data.
+- `lib/responseCache.ts` caches successful `/api` GETs in memory, up to a limit in total bytes. The key is the path plus the query after validation, with the same Zod schema the route uses, so the cache and the route always agree on what a request means. A new route is not cached until you add it and its schema to `QUERY_SCHEMAS`. The cache assumes that the data never changes while the process runs, so a server must restart to show new data.
 - `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 2,600 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
 
 **The dashboard is one page.** `pages/dashboard.tsx` owns the view and passes filters to the panels in `components/`. Each panel fetches its own data through the generated hooks. The view state (`lib/view-state.ts`) is mirrored into the URL query string, and links depend on it, so a new filter belongs there. Charts use Recharts, and the map uses Leaflet.
@@ -68,7 +74,3 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 - `pnpm-workspace.yaml` still has `'-'` overrides for `@expo/ngrok-bin`. They do no harm. Do not restore the overrides for `rollup`, `esbuild`, `lightningcss` or `@tailwindcss/oxide`, because those break the build on every platform except Linux x64.
 - `minimumReleaseAge: 1440` in `pnpm-workspace.yaml` makes pnpm reject package versions published less than a day ago.
 - If the data's end date changes, several hardcoded places need an update. "Update the data" in `README.md` lists them.
-
-## Known issue
-
-`responseCache.ts` builds its key with `URLSearchParams`, which parses some URLs differently from Express. A request to `/api/sales/summary??propertyType=Maison` runs without the filter but stores its result under the filtered key, so later visitors get wrong numbers until the server restarts. Unknown parameters also create new cache entries without limit. Both must be fixed before launch.

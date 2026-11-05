@@ -88,7 +88,7 @@ Open <http://localhost:3000>.
 
 The Vite development server has no proxy for `/api`, so `pnpm --filter @workspace/data-app run dev` shows the dashboard without data unless you put a proxy in front of it.
 
-To check the types, run `pnpm run typecheck` at the repository root.
+To check the types, run `pnpm run typecheck` at the repository root. To run the tests, run `pnpm run test`.
 
 ### Host the dashboard and the API separately
 
@@ -107,7 +107,7 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 ## Things to know
 
 - **Startup:** the server pre-computes about 2,600 common responses when it starts, which takes about 17 seconds. The API answers during that time, but the first requests can be slower.
-- **Memory:** the server used about 355 MB after startup in testing. Give the container at least 1 GB.
+- **Memory:** the server used about 355 MB after startup in testing, and about 750 MB under sustained requests for large responses. Give the container at least 1 GB.
 - **External services:** the browser loads fonts from Google Fonts and map tiles from Esri, so it needs internet access to both. To self-host the fonts, replace the `@import url(...)` line at the top of `artifacts/data-app/src/index.css`. To use another map provider, replace the tile URL in `artifacts/data-app/src/components/sales-map.tsx`. Check Esri's terms of use for your level of traffic.
 - **Coverage:** the data ends on 30 June 2026, the end of the latest DVF release used here. Prices are nominal euros, not adjusted for inflation.
 - **Which sales are included:** a sale in the dataset is one DVF "Vente" transaction with exactly one apartment or house and no commercial premises. It costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface, and has a price of 2,000 to 35,000 EUR/m². These rules leave out about 28,400 residential transactions, and the app says so in its data note.

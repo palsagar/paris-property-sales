@@ -69,7 +69,7 @@ sequenceDiagram
 
 - **In-memory data:** `salesData.ts` loads the dataset when the process starts and indexes the Sales by Arrondissement and Quartier. There is no database. See [decision record 2](adr/0002-in-memory-data-no-database.md).
 - **Calculations:** `routes/sales.ts` calculates each response from the filtered Sales. `timeStats.ts` holds the time buckets, the Smoothing window and the Change calculation.
-- **Response cache:** `responseCache.ts` keeps up to 6,000 responses, or 24 large ones, in memory. It removes the oldest when it reaches a limit.
+- **Response cache:** `responseCache.ts` keeps responses in memory, up to 256 MB in total, and removes the least recently used first. The key is the path plus the query after validation, with the same schema the route uses. Unknown parameters and different spellings of a value therefore share one entry, and the cache and the route always agree on what a request means. A path that is not listed in `QUERY_SCHEMAS` is not cached.
 - **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. In testing, it stored 2,610 responses in about 17 seconds. The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
 
 ## Dashboard
@@ -104,7 +104,7 @@ These steps have not yet run on a real Coolify server. A local test covered the 
 5. Under **Configuration**, **Persistent Storage**, add a **Directory Mount** from `/srv/paris-property-sales/data` to `/app/data`.
 6. Add the domain. Coolify's proxy handles HTTPS.
 7. Leave the health check in the Coolify dashboard turned off. It needs `curl` or `wget` in the image, and this image has neither. The Dockerfile has its own health check, which calls `/api/healthz` through Node.
-8. Give the application at least 1 GB of memory. The server used about 355 MB after startup in testing.
+8. Give the application at least 1 GB of memory. The server used about 355 MB after startup in testing. In a 1 GB container under sustained requests for large responses, it levelled off at about 750 MB.
 
 The image sets `PORT`, `STATIC_DIR` and `NODE_ENV`, so the application needs no environment variables in Coolify.
 
@@ -122,10 +122,9 @@ Coolify's storage is not a backup, but the data does not need one. The two scrip
 
 The site is not ready for the public yet. These items must be complete first.
 
-- **Fix the response cache.** `responseCache.ts` builds its key with `URLSearchParams`, which reads some URLs differently from Express. A request to `/api/sales/summary??propertyType=Maison` runs without the filter but stores its result under the filtered key. In a local test, this changed a count from 32 to 9,205 for later requests. Unknown parameters also create new cache entries, so requests can push out useful entries and use more memory. The key should come from the validated query, and the limit should cover total bytes.
 - **Show Sale locations only.** Change `build_paris_sales.py` to drop the house number and round coordinates to about 100 m, so the dataset never contains them. Rounded dots can stack on the map, which the map design must handle.
 - **Block search engines.** Change `robots.txt` and the `robots` meta tag, and block `/api` as well. Both currently allow indexing.
-- **Make the API private to the site.** Remove the open CORS setting, add rate limits, cap the number of records in one response, and limit exports to what is on screen. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address.
+- **Make the API private to the site.** Remove the open CORS setting, add rate limits, cap the number of records in one response, and limit exports to what is on screen. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong.
 - **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts.
 - **Self-host the fonts and replace the Esri tiles.** We could not confirm that Esri's tile address can be used on a public site without an account. Choose a map provider with terms that clearly allow public use.
 
