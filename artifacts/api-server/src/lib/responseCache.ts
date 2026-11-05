@@ -112,6 +112,9 @@ export function createResponseCache(maxBytes = MAX_CACHE_BYTES): RequestHandler 
         const bytes = Buffer.byteLength(body);
         // A response over the limit would push out every other entry and then itself.
         if (bytes <= maxBytes) {
+          // Overlapping misses on one key each store a response here.
+          const previous = cache.get(key);
+          if (previous) totalBytes -= previous.bytes;
           cache.set(key, { body, bytes });
           totalBytes += bytes;
           evict();
