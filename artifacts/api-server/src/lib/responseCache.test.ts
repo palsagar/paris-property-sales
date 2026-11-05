@@ -27,6 +27,11 @@ async function startApp(maxBytes?: number): Promise<string> {
     const size = Number(String(req.query["to"]).slice(0, 4));
     res.json({ padding: randomBytes(Math.ceil(size / 2)).toString("hex") });
   });
+  // Waits before it answers, as a route does when it queries the Sales file.
+  routes.get("/sales/by-arrondissement", async (_req, res) => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    res.json({ padding: "x".repeat(1000) });
+  });
   routes.get("/healthz", (_req, res) => {
     res.json({ status: "ok" });
   });
@@ -145,5 +150,20 @@ describe("byte limit", () => {
 
     assert.equal((await get(compressed)).cache, "HIT");
     assert.equal((await get(other)).cache, "MISS");
+  });
+
+  test("overlapping misses on one key do not stop later responses from being cached", async () => {
+    const base = await startApp(2500);
+    const url = (day: number) => `${base}/sales/by-arrondissement?from=2024-01-0${day}`;
+
+    // Both requests miss, so both responses are stored under the same key.
+    for (const day of [2, 3, 4]) {
+      await Promise.all([get(url(day)), get(url(day))]);
+    }
+
+    for (const day of [5, 6]) {
+      assert.equal((await get(url(day))).cache, "MISS");
+      assert.equal((await get(url(day))).cache, "HIT");
+    }
   });
 });

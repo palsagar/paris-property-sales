@@ -17,13 +17,13 @@ An interactive dashboard of private home sales in Paris from January 2022 to Jun
 
 ## Quick start
 
-You need [Docker](https://docs.docker.com/get-docker/) and Python 3. The app needs no database, login or API key.
+You need [Docker](https://docs.docker.com/get-docker/), Python 3 and [uv](https://docs.astral.sh/uv/). The app needs no database server, login or API key.
 
-**1. Get the data.** The sales data is not in this repository (see [Data and licences](#data-and-licences)). These two scripts download it from data.gouv.fr and build the dataset. They use only the Python standard library. The download is about 500 MB, because the source files cover all of France, but only the Paris rows are saved (about 74 MB).
+**1. Get the data.** The sales data is not in this repository (see [Data and licences](#data-and-licences)). These two scripts download it from data.gouv.fr and build the dataset. The first script uses only the Python standard library. The second script needs `uv`, which installs its `duckdb` package on the first run. The download is about 610 MB, because the source file covers all of France, but only the Paris rows are saved.
 
 ```sh
 python3 scripts/fetch_dvf.py
-python3 scripts/build_paris_sales.py
+uv run scripts/build_paris_sales.py
 ```
 
 **2. Start the app.**
@@ -34,7 +34,7 @@ docker compose up --build -d
 
 Open <http://localhost:3000>. To stop the app, run `docker compose down`.
 
-The container serves the dashboard at `/` and the API at `/api`. It works on x64 and ARM64 machines, including Apple Silicon. The health check is `GET /api/healthz`. The image holds no sales data, so Compose mounts `artifacts/api-server/data` into the container. If that folder has no `paris-sales.json`, the container stops at startup.
+The container serves the dashboard at `/` and the API at `/api`. It works on x64 and ARM64 machines, including Apple Silicon. The health check is `GET /api/healthz`. The image holds no sales data, so Compose mounts `artifacts/api-server/data` into the container. If that folder has no `sales.duckdb`, the container stops at startup.
 
 ## Documentation
 
@@ -47,25 +47,26 @@ The container serves the dashboard at `/` and the API at `/api`. It works on x64
 ```mermaid
 flowchart LR
   A[DVF files on data.gouv.fr] -->|fetch_dvf.py| B[data-raw/src]
-  B -->|build_paris_sales.py| C[paris-sales.json]
-  C -->|loaded into memory at start| D[Express API]
+  B -->|build_paris_sales.py| C[sales.duckdb]
+  C -->|opened read-only at start| D[Express API]
   D -->|"/api, validated with Zod"| E[React dashboard]
   F[openapi.yaml] -->|Orval code generation| G[Client hooks and validators]
   G --> D
   G --> E
 ```
 
-The API server reads the dataset into memory when it starts, and it computes every response from that data. There is no database. Responses are cached in memory, because the data does not change while the server runs.
+The API server opens the DuckDB file read-only when it starts, and it calculates every response with SQL queries on that file. The file is the only database, and the server never writes to it. Responses are cached in memory, because the data does not change while the server runs.
 
 | Path | Contents |
 | --- | --- |
 | `artifacts/data-app` | The React dashboard (Vite, Tailwind, Recharts, Leaflet) |
 | `artifacts/api-server` | The Express API |
-| `artifacts/api-server/data` | Boundary files for the map, and the built sales dataset (`paris-sales.json`, not in git) |
+| `artifacts/api-server/data` | The built sales dataset (`sales.duckdb`, not in git) |
+| `artifacts/api-server/boundaries` | Boundary files for the map |
 | `lib/api-spec` | The API contract (`openapi.yaml`) and the code generation config |
 | `lib/api-client-react`, `lib/api-zod` | The React Query hooks and Zod validators generated from the contract |
 | `scripts/fetch_dvf.py` | Downloads the raw DVF files into `data-raw/src` (not in git) |
-| `scripts/build_paris_sales.py` | Builds the files in `artifacts/api-server/data` from `data-raw` |
+| `scripts/build_paris_sales.py` | Builds `sales.duckdb` in `artifacts/api-server/data`, and the files in `artifacts/api-server/boundaries`, from `data-raw` |
 | `data-raw` | Raw boundary files, and the downloaded DVF files in `src/` |
 
 `lib/db` and `scripts/src/hello.ts` are unused template code from the original project.
@@ -107,18 +108,17 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 ## Things to know
 
 - **Startup:** the server pre-computes about 2,600 common responses when it starts, which takes about 17 seconds. The API answers during that time, but the first requests can be slower.
-- **Memory:** the server used about 355 MB after startup in testing, and about 750 MB under sustained requests for large responses. Give the container at least 1 GB.
+- **Memory:** the container used about 250 to 440 MiB after the warm-up finished, measured twice with Docker. Under load it needs much more. In a test of 120 requests, three quarters of them `/sales/points` for the whole city with different `from` dates, sent 10, 20 and 40 at a time, a container limited to 1 GB was killed for lack of memory in all three runs. With no limit and 40 requests at a time, the peak was 2.2 GiB, against 1.13 GiB for the server before DuckDB. Each setting ran once, with Docker on Apple Silicon. Give the container at least 3 GB.
 - **External services:** the browser loads fonts from Google Fonts and map tiles from Esri, so it needs internet access to both. To self-host the fonts, replace the `@import url(...)` line at the top of `artifacts/data-app/src/index.css`. To use another map provider, replace the tile URL in `artifacts/data-app/src/components/sales-map.tsx`. Check Esri's terms of use for your level of traffic.
 - **Coverage:** the data ends on 30 June 2026, the end of the latest DVF release used here. Prices are nominal euros, not adjusted for inflation.
 - **Which sales are included:** a sale in the dataset is one DVF "Vente" transaction with exactly one apartment or house and no commercial premises. It costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface, and has a price of 2,000 to 35,000 EUR/m². These rules leave out about 28,400 residential transactions, and the app says so in its data note.
 
 ## Update the data
 
-1. Add any new period to `RESOURCES` in `scripts/fetch_dvf.py`. The resource id of each file is on the [dataset page](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres-geolocalisees/). A new semester file can replace an older partial file for the same year.
-2. Remove any period that the source no longer publishes from `RESOURCES`, and delete its file from `data-raw/src`. The build reads every `paris-*.csv` file in that folder, and the site must not show more than DVF does.
-3. Run `python3 scripts/fetch_dvf.py`, and then `python3 scripts/build_paris_sales.py`.
-4. Run `docker compose restart`. The server loads the data at startup and caches responses in memory, so it must restart to show the new data. The image does not need a rebuild.
-5. If the data now ends on a different date, update the text in `artifacts/data-app/index.html` and the coverage text in `artifacts/data-app/src/pages/dashboard.tsx`. Also update the year list in `artifacts/api-server/src/lib/prewarm.ts`.
+1. Run `python3 scripts/fetch_dvf.py`. The script downloads the latest five-year file through a link that always points to the newest DVF release, and it replaces `data-raw/src/paris.csv`.
+2. Run `uv run scripts/build_paris_sales.py`. The script rebuilds `sales.duckdb` in full.
+3. Run `docker compose restart`. The server opens the data file at startup and caches responses in memory, so it must restart to show the new data. The image does not need a rebuild.
+4. If the data now ends on a different date, update the text in `artifacts/data-app/index.html` and the coverage text in `artifacts/data-app/src/pages/dashboard.tsx`. Also update the year list in `artifacts/api-server/src/lib/prewarm.ts`.
 
 DGFiP can correct past periods in a new release, so the figures can change when you download the data again. The November 2026 download reproduces the dataset used in the screenshot exactly: 128,114 sales.
 
@@ -137,4 +137,4 @@ The code in this repository is under the [MIT licence](LICENSE). The licence doe
 
 **Why the sales data is not in git:** each record links a price to a street address and coordinates. The [DVF page](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres/) says that reuse must not allow indexing by external search engines, and article R112 A-3 of the Livre des procédures fiscales says that use of the files must not allow people to be re-identified indirectly. A public Git repository cannot guarantee the first condition, so each user downloads the data directly from the source.
 
-**The app is not ready for public hosting yet.** It currently allows search engines (`robots.txt`, and the `robots` meta tag in `artifacts/data-app/index.html`), and it shows individual addresses and prices. "Before public launch" in [`docs/architecture.md`](docs/architecture.md) lists the work that remains. Read the [DVF conditions](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres/) and check the current terms of each source before commercial use or redistribution.
+**The app is not ready for public hosting yet.** It currently allows search engines (`robots.txt`, and the `robots` meta tag in `artifacts/data-app/index.html`), and it shows the street name and the price of each sale. "Before public launch" in [`docs/architecture.md`](docs/architecture.md) lists the work that remains. Read the [DVF conditions](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres/) and check the current terms of each source before commercial use or redistribution.

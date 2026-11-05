@@ -4,6 +4,6 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # Created by scripts/build_paris_sales.py. See "Quick start" in README.md.
+      # Holds sales.duckdb, created by scripts/build_paris_sales.py. See "Quick start" in README.md.
       - ./artifacts/api-server/data:/app/data:ro
     restart: unless-stopped

@@ -25,25 +25,22 @@ import {
   arrondissementGeo,
   datasetMeta,
   datasetRange,
-  filterSales,
-  histogram,
-  mean,
-  median,
-  percentile,
   quartierGeo,
   quartierNames,
-  sortedValues2,
-  type Sale,
-  type SaleFilter,
+  salesDb,
 } from "../lib/salesData";
 import {
-  bucketOrdinal,
-  changeWindows,
-  computeChange,
-  groupByOrdinal,
-  pooledBuckets,
-  trendPoint,
-} from "../lib/timeStats";
+  areaStats,
+  areaTrendPoints,
+  distribution,
+  salePoints,
+  salesByRooms,
+  summaryStats,
+  transactionPage,
+  trendPoints,
+  type SaleFilter,
+} from "../lib/salesQueries";
+import { bucketOrdinal, changeWindows } from "../lib/timeStats";
 
 const router: IRouter = Router();
 
@@ -73,61 +70,14 @@ function effectiveRange(q: RangeQuery): { from: string; to: string } {
   };
 }
 
-function areaStat(
-  id: string,
-  name: string,
-  arrondissement: number,
-  sales: Sale[],
-  range: { from: string; to: string },
-) {
-  const ppsm = sortedValues2(sales.map((s) => s.pricePerSqm));
-  const change = computeChange(sales, changeWindows(range.from, range.to));
-  return {
-    id,
-    name,
-    arrondissement,
-    count: sales.length,
-    medianPrice: median(sales.map((s) => s.price)),
-    medianPricePerSqm: percentile(ppsm, 0.5),
-    p25PricePerSqm: percentile(ppsm, 0.25),
-    p75PricePerSqm: percentile(ppsm, 0.75),
-    medianSurface: median(sales.map((s) => s.surface)),
-    startMedianPricePerSqm: change.startMedianPricePerSqm,
-    endMedianPricePerSqm: change.endMedianPricePerSqm,
-    changePct: change.changePct,
-  };
-}
-
-function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
-  const map = new Map<K, T[]>();
-  for (const item of items) {
-    const k = key(item);
-    const list = map.get(k);
-    if (list) list.push(item);
-    else map.set(k, [item]);
-  }
-  return map;
-}
-
-router.get("/sales/summary", (req, res): void => {
+router.get("/sales/summary", async (req, res): Promise<void> => {
   const q = GetSalesSummaryQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q));
   const range = effectiveRange(q);
-  const prices = sales.map((s) => s.price);
-  const ppsm = sales.map((s) => s.pricePerSqm);
-  const change = computeChange(sales, changeWindows(range.from, range.to));
   const windows = changeWindows(range.from, range.to);
+  const stats = await summaryStats(salesDb, toFilter(q), windows);
   res.json(
     GetSalesSummaryResponse.parse({
-      count: sales.length,
-      totalVolume: prices.reduce((a, b) => a + b, 0),
-      medianPrice: median(prices),
-      averagePrice: mean(prices),
-      medianPricePerSqm: median(ppsm),
-      averagePricePerSqm: mean(ppsm),
-      medianSurface: median(sales.map((s) => s.surface)),
-      minPrice: prices.length ? prices.reduce((m, v) => Math.min(m, v), Infinity) : 0,
-      maxPrice: prices.reduce((m, v) => Math.max(m, v), 0),
+      ...stats,
       periodFrom: range.from,
       periodTo: range.to,
       datasetFrom: datasetRange.from,
@@ -135,219 +85,141 @@ router.get("/sales/summary", (req, res): void => {
       source: datasetMeta.source,
       excludedCount: datasetMeta.excludedCount,
       changeWindowMonths: windows?.months ?? 0,
-      ...change,
     }),
   );
 });
 
-router.get("/sales/price-distribution", (req, res): void => {
+router.get("/sales/price-distribution", async (req, res): Promise<void> => {
   const q = GetPriceDistributionQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q));
   res.json(
     GetPriceDistributionResponse.parse(
-      histogram(
-        sales.map((s) => s.price),
-        45,
-      ),
+      await distribution(salesDb, toFilter(q), "price", 45),
     ),
   );
 });
 
-router.get("/sales/price-per-sqm-distribution", (req, res): void => {
+router.get("/sales/price-per-sqm-distribution", async (req, res): Promise<void> => {
   const q = GetPricePerSqmDistributionQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q));
   res.json(
     GetPricePerSqmDistributionResponse.parse(
-      histogram(
-        sales.map((s) => s.pricePerSqm),
-        45,
+      await distribution(salesDb, toFilter(q), "price_per_sqm", 45),
+    ),
+  );
+});
+
+router.get("/sales/trend", async (req, res): Promise<void> => {
+  const q = GetSalesTrendQueryParams.parse(req.query);
+  const range = effectiveRange(q);
+  res.json(
+    GetSalesTrendResponse.parse(
+      await trendPoints(
+        salesDb,
+        toFilter(q),
+        q.granularity,
+        q.window,
+        bucketOrdinal(range.from, q.granularity),
+        bucketOrdinal(range.to, q.granularity),
       ),
     ),
   );
 });
 
-router.get("/sales/trend", (req, res): void => {
-  const q = GetSalesTrendQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q));
+router.get("/sales/area-trend", async (req, res): Promise<void> => {
+  const q = GetAreaTrendQueryParams.parse(req.query);
   const range = effectiveRange(q);
-  const byOrdinal = groupByOrdinal(sales, q.granularity);
-  const pooled = pooledBuckets(
-    byOrdinal,
-    bucketOrdinal(range.from, q.granularity),
-    bucketOrdinal(range.to, q.granularity),
-    q.window,
-  );
   res.json(
-    GetSalesTrendResponse.parse(
-      pooled.map((p) => trendPoint(p.ordinal, q.granularity, p.sales)),
+    GetAreaTrendResponse.parse(
+      await areaTrendPoints(
+        salesDb,
+        toFilter(q),
+        q.level,
+        q.granularity,
+        q.window,
+        bucketOrdinal(range.from, q.granularity),
+        bucketOrdinal(range.to, q.granularity),
+      ),
     ),
   );
 });
 
-router.get("/sales/area-trend", (req, res): void => {
-  const q = GetAreaTrendQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q));
-  const range = effectiveRange(q);
-  const first = bucketOrdinal(range.from, q.granularity);
-  const last = bucketOrdinal(range.to, q.granularity);
-  const byArea = groupBy(sales, (s) =>
-    q.level === "quartier" ? (s.quartier ?? "") : String(s.arr),
-  );
-  const rows: Array<{
-    id: string;
-    period: string;
-    label: string;
-    count: number;
-    medianPricePerSqm: number;
-  }> = [];
-  for (const [id, list] of byArea) {
-    if (id === "") continue;
-    const byOrdinal = groupByOrdinal(list, q.granularity);
-    for (const p of pooledBuckets(byOrdinal, first, last, q.window)) {
-      const point = trendPoint(p.ordinal, q.granularity, p.sales);
-      rows.push({
-        id,
-        period: point.period,
-        label: point.label,
-        count: point.count,
-        medianPricePerSqm: point.medianPricePerSqm,
-      });
-    }
-  }
-  rows.sort((a, b) =>
-    a.period === b.period
-      ? a.id.localeCompare(b.id, undefined, { numeric: true })
-      : a.period.localeCompare(b.period),
-  );
-  res.json(GetAreaTrendResponse.parse(rows));
-});
-
-router.get("/sales/by-rooms", (req, res): void => {
+router.get("/sales/by-rooms", async (req, res): Promise<void> => {
   const q = GetSalesByRoomsQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q)).filter((s) => s.rooms >= 1);
-  const byRooms = groupBy(sales, (s) => Math.min(s.rooms, 5));
-  const rows = [...byRooms.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([rooms, list]) => ({
-      rooms,
-      count: list.length,
-      medianPrice: median(list.map((s) => s.price)),
-      medianPricePerSqm: median(list.map((s) => s.pricePerSqm)),
-      medianSurface: median(list.map((s) => s.surface)),
-    }));
-  res.json(GetSalesByRoomsResponse.parse(rows));
+  res.json(GetSalesByRoomsResponse.parse(await salesByRooms(salesDb, toFilter(q))));
 });
 
-router.get("/sales/by-arrondissement", (req, res): void => {
+router.get("/sales/by-arrondissement", async (req, res): Promise<void> => {
   const q = GetSalesByArrondissementQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q));
   const range = effectiveRange(q);
-  const byArr = groupBy(sales, (s) => s.arr);
+  const stats = await areaStats(
+    salesDb,
+    toFilter(q),
+    "arrondissement",
+    changeWindows(range.from, range.to),
+  );
   const names = new Map(
     arrondissementGeo.features.map((f) => [
       Number(f.properties["arr"]),
       String(f.properties["name"]),
     ]),
   );
-  const rows = [...byArr.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([arr, list]) =>
-      areaStat(String(arr), names.get(arr) ?? `${arr}`, arr, list, range),
-    );
+  const rows = stats.map(({ area, ...stat }) => {
+    const arr = Number(area);
+    return { id: area, name: names.get(arr) ?? area, arrondissement: arr, ...stat };
+  });
   res.json(GetSalesByArrondissementResponse.parse(rows));
 });
 
-router.get("/sales/by-quartier", (req, res): void => {
+router.get("/sales/by-quartier", async (req, res): Promise<void> => {
   const q = GetSalesByQuartierQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q)).filter((s) => s.quartier !== null);
   const range = effectiveRange(q);
-  const byQuartier = groupBy(sales, (s) => s.quartier as string);
+  const stats = await areaStats(
+    salesDb,
+    toFilter(q),
+    "quartier",
+    changeWindows(range.from, range.to),
+  );
+  const byQuartier = new Map(stats.map((s) => [s.area, s]));
   const rows = quartierGeo.features.flatMap((f) => {
     const id = String(f.properties["id"]);
-    const list = byQuartier.get(id);
-    if (!list) return [];
+    const found = byQuartier.get(id);
+    if (!found) return [];
+    const { area: _area, ...stat } = found;
     return [
-      areaStat(
+      {
         id,
-        String(f.properties["name"]),
-        Number(f.properties["arr"]),
-        list,
-        range,
-      ),
+        name: String(f.properties["name"]),
+        arrondissement: Number(f.properties["arr"]),
+        ...stat,
+      },
     ];
   });
   res.json(GetSalesByQuartierResponse.parse(rows));
 });
 
-router.get("/sales/points", (req, res): void => {
+router.get("/sales/points", async (req, res): Promise<void> => {
   const q = GetSalesPointsQueryParams.parse(req.query);
-  const rows = filterSales(toFilter(q)).flatMap((s) =>
-    s.lon === null || s.lat === null
-      ? []
-      : [
-          {
-            id: s.id,
-            lon: s.lon,
-            lat: s.lat,
-            price: s.price,
-            surface: s.surface,
-            pricePerSqm: s.pricePerSqm,
-            arrondissement: s.arr,
-            date: s.date,
-            type: s.type,
-            address: s.address,
-          },
-        ],
-  );
-  res.json(GetSalesPointsResponse.parse(rows));
+  res.json(GetSalesPointsResponse.parse(await salePoints(salesDb, toFilter(q))));
 });
 
-const SORT_KEYS = {
-  date: (s: Sale) => s.date,
-  price: (s: Sale) => s.price,
-  pricePerSqm: (s: Sale) => s.pricePerSqm,
-  surface: (s: Sale) => s.surface,
-} as const;
-
-// Paging through a long list re-uses the same sorted order.
-const sortedCache = new Map<string, Sale[]>();
-
-router.get("/sales/transactions", (req, res): void => {
+router.get("/sales/transactions", async (req, res): Promise<void> => {
   const q = ListTransactionsQueryParams.parse(req.query);
-  const sales = filterSales(toFilter(q));
-  const pick = SORT_KEYS[q.sortBy];
-  const dir = q.sortDir === "asc" ? 1 : -1;
-  const sortKey = JSON.stringify([toFilter(q), q.sortBy, q.sortDir]);
-  let sorted = sortedCache.get(sortKey);
-  if (sorted) {
-    sortedCache.delete(sortKey);
-  } else {
-    sorted = [...sales].sort((a, b) => {
-      const av = pick(a);
-      const bv = pick(b);
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return a.id.localeCompare(b.id);
-    });
-  }
-  sortedCache.set(sortKey, sorted);
-  if (sortedCache.size > 6) {
-    const oldest = sortedCache.keys().next();
-    if (!oldest.done) sortedCache.delete(oldest.value);
-  }
-  const items = sorted.slice(q.offset, q.offset + q.limit).map((s) => ({
-    id: s.id,
-    date: s.date,
-    type: s.type,
-    address: s.address,
-    arrondissement: s.arr,
-    quartierName: s.quartier ? (quartierNames.get(s.quartier) ?? null) : null,
-    price: s.price,
-    surface: s.surface,
-    pricePerSqm: s.pricePerSqm,
-    rooms: s.rooms,
-  }));
-  res.json(ListTransactionsResponse.parse({ total: sorted.length, items }));
+  const { total, items } = await transactionPage(
+    salesDb,
+    toFilter(q),
+    q.sortBy,
+    q.sortDir,
+    q.limit,
+    q.offset,
+  );
+  res.json(
+    ListTransactionsResponse.parse({
+      total,
+      items: items.map(({ quartier, ...item }) => ({
+        ...item,
+        quartierName: quartier ? (quartierNames.get(quartier) ?? null) : null,
+      })),
+    }),
+  );
 });
 
 export default router;

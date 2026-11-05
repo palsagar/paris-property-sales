@@ -1,5 +1,5 @@
 ---
-status: superseded by decision record 7, and the code follows this record until issue #2 is complete
+status: superseded by decision record 7
 ---
 
 # Data lives in memory, with no database

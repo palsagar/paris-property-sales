@@ -55,10 +55,11 @@ Thumbs.db
 .local/
 # DVF data with street-level addresses: rebuilt locally, never committed (see README)
 data-raw/src/
-artifacts/api-server/data/paris-sales.json
+artifacts/api-server/data/
 
 # Original source archive
 *.zip
 
 # Browser test output
 .playwright-mcp/
+__pycache__/

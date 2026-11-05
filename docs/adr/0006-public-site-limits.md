@@ -6,7 +6,7 @@ status: accepted, not yet implemented
 
 The site is public, and the DGFiP states these conditions for DVF: the file contains personal data, its use must not allow people to be re-identified indirectly, and reuse must not allow indexing by external search engines. We accept three limits because of them, even though each one makes the site less useful or harder to find.
 
-- **Sale location only.** A Visitor sees the street and a position rounded to about 100 m, and never the house number. The build script removes the exact details, so the dataset cannot leak them through an API bug. This lowers the risk of re-identification but does not remove it, especially on a short street.
+- **Sale location only.** A Visitor sees the street and a position rounded to about 100 m, and never the house number. The build script removes the exact details, so the dataset itself cannot leak them through an API bug. This lowers the risk of re-identification but does not remove it, especially on a short street. A Visitor can still match a Sale to the public DVF file, because each Sale keeps its `id_mutation`, and because date, price, surface and street together identify nearly every Sale uniquely.
 - **No search engines.** The whole site blocks indexing, because search engines can read pages drawn by JavaScript, including the sales list. Visitors reach the site through links.
 - **A private API.** The API serves only this site. It has no open CORS, it has rate limits, it caps the records in one response, and exports cover only what is on screen. This makes bulk copying harder but cannot prevent it.
 
