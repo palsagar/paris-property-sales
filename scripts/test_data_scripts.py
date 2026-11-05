@@ -14,7 +14,6 @@ import unittest
 from typing import Any
 
 import duckdb
-
 from build_paris_sales import Sale, classify_mutation, write_database
 from fetch_dvf import copy_paris_rows
 
@@ -161,7 +160,7 @@ def make_sale(**overrides: Any) -> Sale:
         "street": "Rue De Rivoli",
     }
     sale.update(overrides)
-    return sale  # type: ignore[return-value]
+    return sale  # ty: ignore[invalid-return-type]
 
 
 class WriteDatabaseTest(unittest.TestCase):
