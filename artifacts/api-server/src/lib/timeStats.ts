@@ -1,4 +1,3 @@
-import { median, percentile, sortedValues2, type Sale } from "./salesData";
 import type { SqlParams } from "./salesDb";
 
 export type Granularity = "month" | "quarter" | "year";
@@ -50,54 +49,6 @@ export function bucketInfo(
   return { period: `${ordinal}-01-01`, label: String(ordinal) };
 }
 
-export function groupByOrdinal(
-  sales: Sale[],
-  g: Granularity,
-): Map<number, Sale[]> {
-  const map = new Map<number, Sale[]>();
-  for (const s of sales) {
-    const o = bucketOrdinal(s.date, g);
-    const list = map.get(o);
-    if (list) list.push(s);
-    else map.set(o, [s]);
-  }
-  return map;
-}
-
-/**
- * Pools each bucket with the previous window-1 buckets and returns the pooled
- * sales for every ordinal between first and last (empty pools are skipped).
- */
-export function pooledBuckets(
-  byOrdinal: Map<number, Sale[]>,
-  first: number,
-  last: number,
-  windowSize: number,
-): Array<{ ordinal: number; sales: Sale[] }> {
-  const out: Array<{ ordinal: number; sales: Sale[] }> = [];
-  for (let o = first; o <= last; o++) {
-    const pooled: Sale[] = [];
-    for (let k = o - windowSize + 1; k <= o; k++) {
-      const list = byOrdinal.get(k);
-      if (list) for (const s of list) pooled.push(s);
-    }
-    if (pooled.length > 0) out.push({ ordinal: o, sales: pooled });
-  }
-  return out;
-}
-
-export function trendPoint(ordinal: number, g: Granularity, sales: Sale[]) {
-  const ppsm = sortedValues2(sales.map((s) => s.pricePerSqm));
-  return {
-    ...bucketInfo(ordinal, g),
-    count: sales.length,
-    medianPrice: median(sales.map((s) => s.price)),
-    medianPricePerSqm: percentile(ppsm, 0.5),
-    p25PricePerSqm: percentile(ppsm, 0.25),
-    p75PricePerSqm: percentile(ppsm, 0.75),
-  };
-}
-
 function addMonthsIso(date: string, months: number): string {
   const { y, m, d } = parts(date);
   const t = new Date(Date.UTC(y, m - 1 + months, 1));
@@ -140,35 +91,6 @@ export interface Change {
   priceChangePct: number | null;
 }
 
-export function computeChange(sales: Sale[], w: ChangeWindows | null): Change {
-  const empty: Change = {
-    startMedianPricePerSqm: null,
-    endMedianPricePerSqm: null,
-    changePct: null,
-    startMedianPrice: null,
-    endMedianPrice: null,
-    priceChangePct: null,
-  };
-  if (!w) return empty;
-  const start = sales.filter((s) => s.date < w.startEnd);
-  const end = sales.filter((s) => s.date > w.endStart);
-  if (start.length < MIN_SALES_FOR_CHANGE || end.length < MIN_SALES_FOR_CHANGE) {
-    return empty;
-  }
-  const sp = median(start.map((s) => s.pricePerSqm));
-  const ep = median(end.map((s) => s.pricePerSqm));
-  const sPrice = median(start.map((s) => s.price));
-  const ePrice = median(end.map((s) => s.price));
-  return {
-    startMedianPricePerSqm: sp,
-    endMedianPricePerSqm: ep,
-    changePct: ((ep - sp) / sp) * 100,
-    startMedianPrice: sPrice,
-    endMedianPrice: ePrice,
-    priceChangePct: ((ePrice - sPrice) / sPrice) * 100,
-  };
-}
-
 export interface ChangeRow {
   nStart: number;
   nEnd: number;
@@ -178,7 +100,7 @@ export interface ChangeRow {
   endPrice: number | null;
 }
 
-/** SQL columns for the Change figures, for use in a SELECT over `sales` (same windows as computeChange). */
+/** SQL columns for the Change figures, for use in a SELECT over `sales` (the start and end windows from changeWindows). */
 export function changeSelect(w: ChangeWindows | null): { sql: string; params: SqlParams } {
   if (!w) {
     return {
