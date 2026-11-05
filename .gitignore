@@ -57,3 +57,6 @@ data-raw/
 
 # Original source archive
 *.zip
+
+# Browser test output
+.playwright-mcp/
