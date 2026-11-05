@@ -1,10 +1,13 @@
 import type { SalesDb, SqlParams } from "./salesDb";
 import {
+  bucketInfo,
   changeFromRow,
   changeSelect,
   type Change,
   type ChangeRow,
   type ChangeWindows,
+  type Granularity,
+  ordinalSql,
 } from "./timeStats";
 
 export interface SaleFilter {
@@ -197,4 +200,123 @@ export async function areaStats(
       changePct: c.changePct,
     };
   });
+}
+
+/**
+ * Pools each bucket with the previous windowSize-1 buckets, for every ordinal from first to last.
+ * The inner join skips empty pools. `areaExpr` adds an Area to the select and the GROUP BY.
+ */
+function pooledQuery(
+  f: SaleFilter,
+  g: Granularity,
+  windowSize: number,
+  first: number,
+  last: number,
+  areaExpr: string | null,
+  extraWhere: string,
+  measures: string,
+) {
+  const where = saleWhere(f);
+  const area = areaExpr ? `${areaExpr} AS area, ` : "";
+  return {
+    sql: `WITH s AS (SELECT ${area}price, price_per_sqm, ${ordinalSql(g)} AS o FROM sales WHERE ${extraWhere}${where.sql}),
+      buckets AS (SELECT unnest(range($tFirst::INTEGER, $tLast::INTEGER + 1))::INTEGER AS b)
+    SELECT ${areaExpr ? "area, " : ""}b, count(*)::INTEGER AS count, ${measures}
+    FROM buckets JOIN s ON s.o BETWEEN b - $tWindow::INTEGER + 1 AND b
+    GROUP BY ${areaExpr ? "area, " : ""}b`,
+    params: { ...where.params, tFirst: first, tLast: last, tWindow: windowSize },
+  };
+}
+
+export async function trendPoints(
+  db: SalesDb,
+  f: SaleFilter,
+  g: Granularity,
+  windowSize: number,
+  first: number,
+  last: number,
+) {
+  const q = pooledQuery(f, g, windowSize, first, last, null, "",
+    `quantile_cont(price, 0.5)::DOUBLE AS "medianPrice",
+      quantile_cont(price_per_sqm, 0.5)::DOUBLE AS "medianPricePerSqm",
+      quantile_cont(price_per_sqm, 0.25)::DOUBLE AS "p25PricePerSqm",
+      quantile_cont(price_per_sqm, 0.75)::DOUBLE AS "p75PricePerSqm"`);
+  const rows = await db.query<{
+    b: number; count: number; medianPrice: number; medianPricePerSqm: number;
+    p25PricePerSqm: number; p75PricePerSqm: number;
+  }>(`${q.sql} ORDER BY b`, q.params);
+  return rows.map(({ b, ...r }) => ({ ...bucketInfo(b, g), ...r }));
+}
+
+export async function areaTrendPoints(
+  db: SalesDb,
+  f: SaleFilter,
+  level: AreaLevel,
+  g: Granularity,
+  windowSize: number,
+  first: number,
+  last: number,
+) {
+  const q = pooledQuery(
+    f, g, windowSize, first, last,
+    level === "quartier" ? "quartier" : "arr::VARCHAR",
+    level === "quartier" ? "quartier <> '' AND " : "",
+    `quantile_cont(price_per_sqm, 0.5)::DOUBLE AS "medianPricePerSqm"`,
+  );
+  const rows = await db.query<{ area: string; b: number; count: number; medianPricePerSqm: number }>(q.sql, q.params);
+  return rows
+    .map(({ area, b, count, medianPricePerSqm }) => ({ id: area, ...bucketInfo(b, g), count, medianPricePerSqm }))
+    .sort((a, b) =>
+      a.period === b.period
+        ? a.id.localeCompare(b.id, undefined, { numeric: true })
+        : a.period.localeCompare(b.period),
+    );
+}
+
+export async function salePoints(db: SalesDb, f: SaleFilter) {
+  const where = saleWhere(f);
+  return db.query<{
+    id: string; lon: number; lat: number; price: number; surface: number; pricePerSqm: number;
+    arrondissement: number; date: string; type: string; address: string;
+  }>(
+    `SELECT id, lon, lat, price, surface, price_per_sqm AS "pricePerSqm", arr AS arrondissement,
+      sale_date AS "date", property_type AS "type", street AS "address"
+    FROM sales WHERE lon IS NOT NULL AND lat IS NOT NULL AND ${where.sql}
+    ORDER BY sale_date DESC, id`,
+    where.params,
+  );
+}
+
+const SORT_COLUMNS = {
+  date: "sale_date",
+  price: "price",
+  pricePerSqm: "price_per_sqm",
+  surface: "surface",
+} as const;
+
+export async function transactionPage(
+  db: SalesDb,
+  f: SaleFilter,
+  sortBy: keyof typeof SORT_COLUMNS,
+  sortDir: "asc" | "desc",
+  limit: number,
+  offset: number,
+) {
+  const where = saleWhere(f);
+  const order = `${SORT_COLUMNS[sortBy]} ${sortDir === "asc" ? "ASC" : "DESC"}, id`;
+  const [count] = await db.query<{ total: number }>(
+    `SELECT count(*)::INTEGER AS total FROM sales WHERE ${where.sql}`,
+    where.params,
+  );
+  const items = await db.query<{
+    id: string; date: string; type: string; address: string; arrondissement: number;
+    quartier: string | null; price: number; surface: number; pricePerSqm: number; rooms: number;
+  }>(
+    `SELECT id, sale_date AS "date", property_type AS "type", street AS "address", arr AS arrondissement,
+      quartier, price, surface, price_per_sqm AS "pricePerSqm", rooms
+    FROM sales WHERE ${where.sql}
+    ORDER BY ${order} LIMIT $tLimit::INTEGER OFFSET $tOffset::INTEGER`,
+    { ...where.params, tLimit: limit, tOffset: offset },
+  );
+  return { total: count!.total, items };
 }

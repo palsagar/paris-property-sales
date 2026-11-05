@@ -2,18 +2,23 @@ import assert from "node:assert/strict";
 import { before, test } from "node:test";
 import { createSalesFixture, FIXTURE_SALES, type FixtureSale } from "./salesFixture";
 import type { SalesDb } from "./salesDb";
-import { changeWindows } from "./timeStats";
+import { bucketOrdinal, changeWindows } from "./timeStats";
 import {
   areaStats,
+  areaTrendPoints,
   distribution,
+  salePoints,
   salesByRooms,
   summaryStats,
+  transactionPage,
+  trendPoints,
   type SaleFilter,
 } from "./salesQueries";
 
 let db: SalesDb;
 let changeDb: SalesDb;
 let fewEndDb: SalesDb;
+let numericDb: SalesDb;
 
 function changeSales(endCount: number): FixtureSale[] {
   const make = (id: string, date: string, price: number): FixtureSale => ({
@@ -30,6 +35,12 @@ before(async () => {
   db = await createSalesFixture(FIXTURE_SALES);
   changeDb = await createSalesFixture(changeSales(5));
   fewEndDb = await createSalesFixture(changeSales(4));
+  // Two Sales in one month, in Arrondissements 10 and 2.
+  const inArr = (id: string, arr: number): FixtureSale => ({
+    id, date: "2024-01-10", type: "Appartement", price: 100000, surface: 10, pricePerSqm: 10000,
+    rooms: 1, arr, quartier: null, lon: null, lat: null, street: "Rue X",
+  });
+  numericDb = await createSalesFixture([inArr("n1", 10), inArr("n2", 2)]);
 });
 
 test("summary of the fixture", async () => {
@@ -112,4 +123,69 @@ test("Change needs 5 Sales in each Change window", async () => {
   assert.ok(Math.abs(s.priceChangePct! - 20) < 1e-9);
   // The same data with 4 Sales in December gives no Change.
   assert.equal((await summaryStats(fewEndDb, {}, w)).changePct, null);
+});
+
+const month = (d: string) => bucketOrdinal(d, "month");
+
+test("trend with no pooling skips empty buckets", async () => {
+  const rows = await trendPoints(db, {}, "month", 1, month("2024-01-01"), month("2024-05-01"));
+  assert.deepEqual(
+    rows.map((r) => [r.label, r.count, r.medianPrice]),
+    [["2024-01", 2, 150000], ["2024-02", 1, 300000], ["2024-03", 2, 450000]],
+  );
+});
+
+test("Smoothing window pools each bucket with the ones before it", async () => {
+  const rows = await trendPoints(db, {}, "month", 2, month("2024-01-01"), month("2024-04-01"));
+  assert.deepEqual(
+    rows.map((r) => [r.label, r.count, r.medianPrice]),
+    [["2024-01", 2, 150000], ["2024-02", 3, 200000], ["2024-03", 3, 400000], ["2024-04", 2, 450000]],
+  );
+});
+
+test("quarter and year labels", async () => {
+  const q = await trendPoints(db, {}, "quarter", 1, bucketOrdinal("2024-01-01", "quarter"), bucketOrdinal("2024-12-31", "quarter"));
+  assert.deepEqual(q.map((r) => [r.label, r.period, r.count]), [["2024 Q1", "2024-01-01", 5]]);
+  const y = await trendPoints(db, {}, "year", 1, 2024, 2024);
+  assert.deepEqual(y.map((r) => [r.label, r.period, r.count]), [["2024", "2024-01-01", 5]]);
+});
+
+test("reversed range and no Sales give empty trends", async () => {
+  assert.deepEqual(await trendPoints(db, {}, "month", 1, month("2024-03-01"), month("2024-01-01")), []);
+  assert.deepEqual(await trendPoints(db, { from: "2030-01-01" }, "month", 1, month("2030-01-01"), month("2030-02-01")), []);
+  assert.deepEqual(await areaTrendPoints(db, { from: "2030-01-01" }, "quartier", "month", 1, month("2030-01-01"), month("2030-02-01")), []);
+});
+
+test("quartier trend leaves out Sales with no quartier", async () => {
+  const rows = await areaTrendPoints(db, {}, "quartier", "month", 1, month("2024-01-01"), month("2024-03-01"));
+  assert.deepEqual(
+    rows.map((r) => [r.period, r.id, r.count]),
+    [["2024-01-01", "7510101", 2], ["2024-02-01", "7510201", 1], ["2024-03-01", "7510201", 1]],
+  );
+});
+
+test("Arrondissements sort as numbers within a period", async () => {
+  const rows = await areaTrendPoints(numericDb, {}, "arrondissement", "month", 1, month("2024-01-01"), month("2024-01-01"));
+  assert.deepEqual(rows.map((r) => r.id), ["2", "10"]);
+});
+
+test("points leave out Sales with no position and have a fixed order", async () => {
+  assert.deepEqual((await salePoints(db, {})).map((p) => p.id), ["s4", "s3", "s2", "s1"]);
+  assert.deepEqual(await salePoints(db, { from: "2030-01-01" }), []);
+});
+
+test("ties break by id ascending in both directions", async () => {
+  const ids = async (by: "date" | "pricePerSqm", dir: "asc" | "desc") =>
+    (await transactionPage(db, {}, by, dir, 200, 0)).items.map((i) => i.id);
+  assert.deepEqual(await ids("date", "desc"), ["s4", "s5", "s3", "s2", "s1"]);
+  assert.deepEqual(await ids("pricePerSqm", "desc"), ["s5", "s1", "s2", "s4", "s3"]);
+  assert.deepEqual(await ids("pricePerSqm", "asc"), ["s3", "s1", "s2", "s4", "s5"]);
+});
+
+test("paging", async () => {
+  const page = await transactionPage(db, {}, "price", "asc", 2, 1);
+  assert.deepEqual([page.total, page.items.map((i) => i.id)], [5, ["s2", "s3"]]);
+  const past = await transactionPage(db, {}, "price", "asc", 15, 999999);
+  assert.deepEqual([past.total, past.items], [5, []]);
+  assert.equal(page.items[0]!.address, "Rue B");
 });

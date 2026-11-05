@@ -21,6 +21,15 @@ export function bucketOrdinal(date: string, g: Granularity): number {
   return y;
 }
 
+/** SQL for the same ordinal as bucketOrdinal(), over the text column sale_date (YYYY-MM-DD). */
+export function ordinalSql(g: Granularity): string {
+  const y = "cast(substr(sale_date, 1, 4) AS INTEGER)";
+  const m = "cast(substr(sale_date, 6, 2) AS INTEGER)";
+  if (g === "month") return `(${y} * 12 + (${m} - 1))`;
+  if (g === "quarter") return `(${y} * 4 + (${m} - 1) // 3)`;
+  return y;
+}
+
 /** First day (YYYY-MM-DD) and label of a bucket. */
 export function bucketInfo(
   ordinal: number,
