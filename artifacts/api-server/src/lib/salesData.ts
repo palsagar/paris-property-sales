@@ -39,8 +39,14 @@ const dataDir = path.resolve(
   "data",
 );
 
-function readJson<T>(file: string): T {
-  return JSON.parse(readFileSync(path.join(dataDir, file), "utf-8")) as T;
+const boundariesDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "boundaries",
+);
+
+function readJson<T>(file: string, dir: string = dataDir): T {
+  return JSON.parse(readFileSync(path.join(dir, file), "utf-8")) as T;
 }
 
 const dataset = readJson<Dataset>("paris-sales.json");
@@ -62,8 +68,12 @@ export const datasetMeta = {
 
 export const arrondissementGeo = readJson<GeoFeatureCollection>(
   "arrondissements.geojson",
+  boundariesDir,
 );
-export const quartierGeo = readJson<GeoFeatureCollection>("quartiers.geojson");
+export const quartierGeo = readJson<GeoFeatureCollection>(
+  "quartiers.geojson",
+  boundariesDir,
+);
 
 export interface SaleFilter {
   propertyType?: string;

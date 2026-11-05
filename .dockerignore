@@ -8,4 +8,4 @@
 data-raw
 attached_assets
 *.zip
-artifacts/api-server/data/paris-sales.json
+artifacts/api-server/data

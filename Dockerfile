@@ -15,8 +15,8 @@ ENV NODE_ENV=production \
     STATIC_DIR=/app/public
 WORKDIR /app
 COPY --from=build /app/artifacts/api-server/dist ./dist
+COPY --from=build /app/artifacts/api-server/boundaries ./boundaries
 # The image holds no sales data. Mount a folder with all the data files at /app/data at run time.
-COPY --from=build /app/artifacts/api-server/data ./data
 COPY --from=build /app/artifacts/data-app/dist/public ./public
 EXPOSE 3000
 # This image has no curl or wget, so Node makes the health request.
