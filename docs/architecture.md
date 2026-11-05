@@ -35,7 +35,7 @@ The pipeline has two Python scripts, and it runs outside the application. The fi
 | `boundaries/arrondissements.geojson` | The boundaries of the 20 Arrondissements | Yes |
 | `boundaries/quartiers.geojson` | The boundaries of the 80 Quartiers | Yes |
 
-The November 2026 download reproduces the original dataset byte for byte. A later DVF release can change the figures, because the DGFiP can correct past periods.
+The November 2026 download reproduces the same 128,114 Sales as the original dataset. A later DVF release can change the figures, because the DGFiP can correct past periods.
 
 ## API contract
 
@@ -105,7 +105,7 @@ These steps have not yet run on a real Coolify server. A local test covered the 
 5. Under **Configuration**, **Persistent Storage**, add a **Directory Mount** from `/srv/paris-property-sales/data` to `/app/data`.
 6. Add the domain. Coolify's proxy handles HTTPS.
 7. Leave the health check in the Coolify dashboard turned off. It needs `curl` or `wget` in the image, and this image has neither. The Dockerfile has its own health check, which calls `/api/healthz` through Node.
-8. Give the application at least 1 GB of memory. The server used about 355 MB after startup in testing. In a 1 GB container under sustained requests for large responses, it levelled off at about 750 MB.
+8. Give the application at least 1 GB of memory. The container used about 440 MB after the warm-up finished, measured once with Docker. Nobody has measured memory under sustained requests since the move to DuckDB.
 
 The image sets `PORT`, `STATIC_DIR` and `NODE_ENV`, so the application needs no environment variables in Coolify.
 
@@ -145,9 +145,8 @@ These items do not block launch.
 
 ## Planned work
 
-This document describes the site as it is today. The next iteration moves the data to DuckDB and adds the Communes around Paris. It has four parts, in this order, and the public launch follows them.
+This document describes the site as it is today. The next iteration adds the Communes around Paris. It has three parts, in this order, and the public launch follows them.
 
-1. [Move the sales data to DuckDB, with the same figures for Paris](https://github.com/palsagar/paris-property-sales/issues/2). See [decision record 7](adr/0007-duckdb-rebuilt-for-each-release.md).
-2. [Take all dates from the data, and check each DVF update](https://github.com/palsagar/paris-property-sales/issues/3).
-3. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
-4. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).
+1. [Take all dates from the data, and check each DVF update](https://github.com/palsagar/paris-property-sales/issues/3).
+2. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
+3. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).
