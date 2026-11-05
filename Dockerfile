@@ -3,6 +3,8 @@ FROM node:24-slim AS build
 RUN npm install -g pnpm@10.26.1
 WORKDIR /app
 COPY . .
+# The sales dataset is not in git. Stop here with a clear message if it is missing.
+RUN test -f artifacts/api-server/data/paris-sales.json || { echo "Missing artifacts/api-server/data/paris-sales.json. See 'Get the data' in README.md." >&2; exit 1; }
 RUN pnpm install --frozen-lockfile
 # The dashboard is served from the site root, so BASE_PATH is "/".
 # PORT is only required by the Vite config; it is not used for the production build.

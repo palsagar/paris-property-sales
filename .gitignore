@@ -53,7 +53,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
-data-raw/
+# DVF data with street-level addresses: rebuilt locally, never committed (see README)
+data-raw/src/
+artifacts/api-server/data/paris-sales.json
 
 # Original source archive
 *.zip
