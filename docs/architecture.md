@@ -26,7 +26,7 @@ flowchart LR
 
 The pipeline has two Python scripts, and it runs outside the application. The first uses only the standard library. The second runs with `uv` and needs the `duckdb` package.
 
-1. `scripts/fetch_dvf.py` streams the national DVF files for each period, keeps the rows for department 75, and writes `data-raw/src/paris.csv`. The download is about 610 MB.
+1. `scripts/fetch_dvf.py` streams the national DVF file, keeps the rows for department 75, and writes `data-raw/src/paris.csv`. The download is about 610 MB.
 2. `scripts/build_paris_sales.py` reads `paris.csv` and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It also assigns each Sale to a Quartier by its coordinates. It writes `sales.duckdb` to `artifacts/api-server/data/` and the two boundary files to `artifacts/api-server/boundaries/`.
 
 | Output file | Contents | In git |
@@ -105,7 +105,7 @@ These steps have not yet run on a real Coolify server. A local test covered the 
 5. Under **Configuration**, **Persistent Storage**, add a **Directory Mount** from `/srv/paris-property-sales/data` to `/app/data`.
 6. Add the domain. Coolify's proxy handles HTTPS.
 7. Leave the health check in the Coolify dashboard turned off. It needs `curl` or `wget` in the image, and this image has neither. The Dockerfile has its own health check, which calls `/api/healthz` through Node.
-8. Give the application at least 1 GB of memory. The container used about 440 MB after the warm-up finished, measured once with Docker. Nobody has measured memory under sustained requests since the move to DuckDB.
+8. Give the application at least 3 GB of memory. The container used about 250 to 440 MiB after the warm-up finished, measured twice with Docker. Under load it needs much more. In a test of 120 requests, three quarters of them `/sales/points` for the whole city with different `from` dates, sent 10, 20 and 40 at a time, a container limited to 1 GB was killed for lack of memory in all three runs. With no limit and 40 requests at a time, the peak was 2.2 GiB, against 1.13 GiB for the server before DuckDB. Each setting ran once, with Docker on Apple Silicon.
 
 The image sets `PORT`, `STATIC_DIR` and `NODE_ENV`, so the application needs no environment variables in Coolify.
 
@@ -127,6 +127,8 @@ The site is not ready for the public yet. These items must be complete first.
 - **Make the API private to the site.** Remove the open CORS setting, add rate limits, cap the number of records in one response, and limit exports to what is on screen. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong.
 - **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts.
 - **Self-host the fonts and replace the Esri tiles.** We could not confirm that Esri's tile address can be used on a public site without an account. Choose a map provider with terms that clearly allow public use.
+- **Decide how to handle re-identification through the public DVF file.** Every Sale keeps its `id_mutation`, and the public DVF file lists the same identifier with the house number and the exact coordinates. A Visitor can also match a Sale without the identifier, because date, price, surface and street together identify 128,086 of the 128,114 Sales uniquely. The rounded position and the missing house number therefore do not prevent re-identification. This limit needs a decision before launch.
+- **Design the map for rounded Sale locations.** Several dots stack on one position. 127,850 of the 128,107 points share a position with at least one other point, and the largest stack holds 160 Sales.
 
 [Decision record 6](adr/0006-public-site-limits.md) explains the location, search engine and API limits.
 
@@ -139,7 +141,6 @@ These items do not block launch.
 - Copy fixes: "Every recorded" in the introduction, "of this selection" in the data note, "Carrez or built surface" on the surface card, and "transactions" in the sales list.
 - A warning for a Change over a Period of less than 12 months.
 - Removal of the hardcoded dates, so that a new DVF release needs fewer manual edits.
-- A map design that handles rounded Sale locations, because several dots can stack on one position.
 - A proxy for `/api` in the Vite development server.
 - Removal of the unused template code: `lib/db`, `scripts/src/hello.ts`, the Replit dependencies and the unused UI components.
 

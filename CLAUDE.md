@@ -21,7 +21,7 @@ The repository has no linter. The automated checks are `pnpm run typecheck`, the
 pnpm is not installed globally on this machine. Use `npx -y pnpm@10.26.1` in place of `pnpm`, or install pnpm first.
 
 ```sh
-# Data: required once per clone. The download is about 500 MB and takes under a minute.
+# Data: required once per clone. The download is about 610 MB and takes about a minute and a half.
 python3 scripts/fetch_dvf.py            # writes data-raw/src/paris.csv
 uv run scripts/build_paris_sales.py     # writes artifacts/api-server/data/sales.duckdb
 
@@ -34,7 +34,7 @@ docker compose restart
 # Check types across the workspace
 pnpm run typecheck
 
-# Run the server tests (Node's test runner through tsx)
+# Run all tests: the server tests (Node's test runner through tsx) and the Python tests, which need uv
 pnpm run test
 
 # Run the Python tests for the data scripts
