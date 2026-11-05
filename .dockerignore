@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+.git
+.local
+.cache
+.config
+.agents
+data-raw
+attached_assets
+*.zip

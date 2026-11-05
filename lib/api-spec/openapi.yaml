@@ -1,0 +1,636 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: sales
+    description: Paris residential property sales since 2022 (DVF open data)
+  - name: geo
+    description: Paris administrative boundaries
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /sales/summary:
+    get:
+      operationId: getSalesSummary
+      tags: [sales]
+      summary: Headline figures for the selected sales, including the price change over the period
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/Arrondissement"
+        - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesSummary"
+  /sales/price-distribution:
+    get:
+      operationId: getPriceDistribution
+      tags: [sales]
+      summary: Histogram of total purchase prices
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/Arrondissement"
+        - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Histogram
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Distribution"
+  /sales/price-per-sqm-distribution:
+    get:
+      operationId: getPricePerSqmDistribution
+      tags: [sales]
+      summary: Histogram of prices per square metre
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/Arrondissement"
+        - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Histogram
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Distribution"
+  /sales/trend:
+    get:
+      operationId: getSalesTrend
+      tags: [sales]
+      summary: Sales volume and price percentiles over time for the selection
+      description: >
+        One point per period (month, quarter or year) between the from and to dates.
+        With window greater than 1, each point pools the sales of that period and the
+        previous window-1 periods, which smooths noisy small areas. Periods without any
+        sale in the pooled window are omitted.
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/Arrondissement"
+        - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Granularity"
+        - $ref: "#/components/parameters/Window"
+      responses:
+        "200":
+          description: Time series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrendPoint"
+  /sales/area-trend:
+    get:
+      operationId: getAreaTrend
+      tags: [sales]
+      summary: Median price per m2 over time for every arrondissement or quartier
+      description: >
+        Long-format table with one row per area and period. Used for the map time slider
+        and the arrondissement by period heat map. The window parameter pools neighbouring
+        periods exactly as for the trend endpoint.
+      parameters:
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [arrondissement, quartier]
+            default: arrondissement
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Granularity"
+        - $ref: "#/components/parameters/Window"
+      responses:
+        "200":
+          description: Rows per area and period
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AreaTrendPoint"
+  /sales/by-rooms:
+    get:
+      operationId: getSalesByRooms
+      tags: [sales]
+      summary: Median prices grouped by number of main rooms
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/Arrondissement"
+        - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Stats by room count
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoomsStat"
+  /sales/by-arrondissement:
+    get:
+      operationId: getSalesByArrondissement
+      tags: [sales]
+      summary: Price statistics and price change for each of the 20 arrondissements
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Stats by arrondissement
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AreaStat"
+  /sales/by-quartier:
+    get:
+      operationId: getSalesByQuartier
+      tags: [sales]
+      summary: Price statistics and price change for each of the 80 administrative quartiers
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Stats by quartier
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AreaStat"
+  /sales/points:
+    get:
+      operationId: getSalesPoints
+      tags: [sales]
+      summary: Geolocated sales for the point map
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/Arrondissement"
+        - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalePoint"
+  /sales/transactions:
+    get:
+      operationId: listTransactions
+      tags: [sales]
+      summary: Individual transactions, most recent first
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/Arrondissement"
+        - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: sortBy
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [date, price, pricePerSqm, surface]
+            default: date
+        - name: sortDir
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 25
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: A page of transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionPage"
+  /geo/arrondissements:
+    get:
+      operationId: getArrondissementBoundaries
+      tags: [geo]
+      summary: GeoJSON boundaries of the 20 arrondissements
+      responses:
+        "200":
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoFeatureCollection"
+  /geo/quartiers:
+    get:
+      operationId: getQuartierBoundaries
+      tags: [geo]
+      summary: GeoJSON boundaries of the 80 administrative quartiers
+      responses:
+        "200":
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoFeatureCollection"
+components:
+  parameters:
+    PropertyType:
+      name: propertyType
+      in: query
+      required: false
+      description: Restrict to apartments or houses. Defaults to all residential sales.
+      schema:
+        type: string
+        enum: [all, Appartement, Maison]
+        default: all
+    Arrondissement:
+      name: arrondissement
+      in: query
+      required: false
+      description: Restrict to one arrondissement (1 to 20).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+    Quartier:
+      name: quartier
+      in: query
+      required: false
+      description: Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).
+      schema:
+        type: string
+        pattern: "^[0-9]{7}$"
+    From:
+      name: from
+      in: query
+      required: false
+      description: First day to include (YYYY-MM-DD). Defaults to the start of the data.
+      schema:
+        type: string
+        pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    To:
+      name: to
+      in: query
+      required: false
+      description: Last day to include (YYYY-MM-DD). Defaults to the end of the data.
+      schema:
+        type: string
+        pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    Granularity:
+      name: granularity
+      in: query
+      required: false
+      description: Size of each time bucket.
+      schema:
+        type: string
+        enum: [month, quarter, year]
+        default: quarter
+    Window:
+      name: window
+      in: query
+      required: false
+      description: Number of consecutive periods pooled into each point (rolling window). 1 means no smoothing.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 12
+        default: 1
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    SalesSummary:
+      type: object
+      required:
+        - count
+        - totalVolume
+        - medianPrice
+        - averagePrice
+        - medianPricePerSqm
+        - averagePricePerSqm
+        - medianSurface
+        - minPrice
+        - maxPrice
+        - periodFrom
+        - periodTo
+        - datasetFrom
+        - datasetTo
+        - source
+        - excludedCount
+        - startMedianPricePerSqm
+        - endMedianPricePerSqm
+        - changePct
+        - startMedianPrice
+        - endMedianPrice
+        - priceChangePct
+        - changeWindowMonths
+      properties:
+        count:
+          type: integer
+        totalVolume:
+          type: number
+          description: Sum of all purchase prices in euros
+        medianPrice:
+          type: number
+        averagePrice:
+          type: number
+        medianPricePerSqm:
+          type: number
+        averagePricePerSqm:
+          type: number
+        medianSurface:
+          type: number
+        minPrice:
+          type: number
+        maxPrice:
+          type: number
+        periodFrom:
+          type: string
+          description: Date of the earliest selected sale (YYYY-MM-DD)
+        periodTo:
+          type: string
+          description: Date of the latest selected sale (YYYY-MM-DD)
+        datasetFrom:
+          type: string
+          description: Date of the earliest sale in the whole dataset
+        datasetTo:
+          type: string
+          description: Date of the latest sale in the whole dataset
+        source:
+          type: string
+        excludedCount:
+          type: integer
+          description: Residential transactions in the raw data that were left out (multi-property sales, commercial premises, outliers)
+        changeWindowMonths:
+          type: integer
+          description: Length in months of the start and end windows used for the change figures
+        startMedianPricePerSqm:
+          type: ["number", "null"]
+          description: Median price per m2 over the first changeWindowMonths months of the selected range (null if fewer than 5 sales)
+        endMedianPricePerSqm:
+          type: ["number", "null"]
+          description: Median price per m2 over the last changeWindowMonths months of the selected range (null if fewer than 5 sales)
+        changePct:
+          type: ["number", "null"]
+          description: Percentage change of the median price per m2 between the start and end windows
+        startMedianPrice:
+          type: ["number", "null"]
+        endMedianPrice:
+          type: ["number", "null"]
+        priceChangePct:
+          type: ["number", "null"]
+          description: Percentage change of the median purchase price between the start and end windows
+    DistributionBin:
+      type: object
+      required: [from, to, count]
+      properties:
+        from:
+          type: number
+        to:
+          type: number
+        count:
+          type: integer
+    Distribution:
+      type: object
+      required: [bins, median, mean, p10, p25, p75, p90]
+      properties:
+        bins:
+          type: array
+          items:
+            $ref: "#/components/schemas/DistributionBin"
+        median:
+          type: number
+        mean:
+          type: number
+        p10:
+          type: number
+        p25:
+          type: number
+        p75:
+          type: number
+        p90:
+          type: number
+    TrendPoint:
+      type: object
+      required: [period, label, count, medianPrice, medianPricePerSqm, p25PricePerSqm, p75PricePerSqm]
+      properties:
+        period:
+          type: string
+          description: Start date of the bucket (YYYY-MM-DD)
+        label:
+          type: string
+          description: Human label, for example "2024-03", "2024 Q2" or "2024"
+        count:
+          type: integer
+          description: Number of sales pooled into this point
+        medianPrice:
+          type: number
+        medianPricePerSqm:
+          type: number
+        p25PricePerSqm:
+          type: number
+        p75PricePerSqm:
+          type: number
+    AreaTrendPoint:
+      type: object
+      required: [id, period, label, count, medianPricePerSqm]
+      properties:
+        id:
+          type: string
+          description: Arrondissement number as a string, or INSEE quartier code
+        period:
+          type: string
+          description: Start date of the bucket (YYYY-MM-DD)
+        label:
+          type: string
+        count:
+          type: integer
+        medianPricePerSqm:
+          type: number
+    RoomsStat:
+      type: object
+      required: [rooms, count, medianPrice, medianPricePerSqm, medianSurface]
+      properties:
+        rooms:
+          type: integer
+          description: Number of main rooms; 5 means 5 or more
+        count:
+          type: integer
+        medianPrice:
+          type: number
+        medianPricePerSqm:
+          type: number
+        medianSurface:
+          type: number
+    AreaStat:
+      type: object
+      required:
+        - id
+        - name
+        - arrondissement
+        - count
+        - medianPrice
+        - medianPricePerSqm
+        - p25PricePerSqm
+        - p75PricePerSqm
+        - medianSurface
+        - startMedianPricePerSqm
+        - endMedianPricePerSqm
+        - changePct
+      properties:
+        id:
+          type: string
+          description: Arrondissement number (1 to 20) as a string, or the INSEE quartier code
+        name:
+          type: string
+        arrondissement:
+          type: integer
+        count:
+          type: integer
+        medianPrice:
+          type: number
+        medianPricePerSqm:
+          type: number
+        p25PricePerSqm:
+          type: number
+        p75PricePerSqm:
+          type: number
+        medianSurface:
+          type: number
+        startMedianPricePerSqm:
+          type: ["number", "null"]
+          description: Median price per m2 over the first months of the selected range (null if fewer than 5 sales)
+        endMedianPricePerSqm:
+          type: ["number", "null"]
+          description: Median price per m2 over the last months of the selected range (null if fewer than 5 sales)
+        changePct:
+          type: ["number", "null"]
+          description: Percentage change between the start and end windows (null when either window has fewer than 5 sales)
+    SalePoint:
+      type: object
+      required: [id, lon, lat, price, surface, pricePerSqm, arrondissement, date, type, address]
+      properties:
+        id:
+          type: string
+        lon:
+          type: number
+        lat:
+          type: number
+        price:
+          type: number
+        surface:
+          type: number
+        pricePerSqm:
+          type: number
+        arrondissement:
+          type: integer
+        date:
+          type: string
+        type:
+          type: string
+        address:
+          type: string
+    Transaction:
+      type: object
+      required: [id, date, type, address, arrondissement, quartierName, price, surface, pricePerSqm, rooms]
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+        type:
+          type: string
+        address:
+          type: string
+        arrondissement:
+          type: integer
+        quartierName:
+          type: ["string", "null"]
+        price:
+          type: number
+        surface:
+          type: number
+        pricePerSqm:
+          type: number
+        rooms:
+          type: integer
+    TransactionPage:
+      type: object
+      required: [total, items]
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+    GeoFeatureCollection:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+        features:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
