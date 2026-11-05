@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Never commit `artifacts/api-server/data/paris-sales.json` or `data-raw/src/`. These files link prices to street addresses, and the repository is public. The DVF reuse conditions are the reason. See "Data and licences" in `README.md`. A fresh clone has neither file, so run the two data scripts below first.
 
+## Documentation
+
+- `CONTEXT.md` defines the project's terms. Use them in code, text and conversation.
+- `docs/architecture.md` has the full architecture, the Coolify deployment, and the "Before public launch" and "Improvements" lists.
+- `docs/adr/` records the major decisions. Read the relevant record before you propose to change one of them. For example, the site never gives a Valuation, and search engines stay blocked.
+
+The goal is a public site for home buyers and Paris residents. It is not ready to launch yet.
+
 ## Commands
 
 The repository has no test suite and no linter. `pnpm run typecheck` is the only automated check. To verify a change, build the app and use it in a browser.
@@ -17,8 +25,11 @@ pnpm is not installed globally on this machine. Use `npx -y pnpm@10.26.1` in pla
 python3 scripts/fetch_dvf.py            # writes data-raw/src/paris-*.csv
 python3 scripts/build_paris_sales.py    # writes artifacts/api-server/data/
 
-# Run everything in one container on http://localhost:3000
+# Run everything in one container on http://localhost:3000. Compose mounts the data folder.
 docker compose up --build -d
+
+# Load new data: the image holds no sales data, so a restart is enough
+docker compose restart
 
 # Check types across the workspace
 pnpm run typecheck
@@ -41,7 +52,7 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 
 **The API contract is the source of truth.** `lib/api-spec/openapi.yaml` generates two packages through Orval: `lib/api-zod` (Zod validators, used by the server) and `lib/api-client-react` (React Query hooks, used by the dashboard). To change an endpoint, edit the YAML first and run codegen. Never edit a `generated/` folder by hand. Routes call `.parse()` on their responses as well as their queries, and Zod removes unknown keys, so a field that is missing from the YAML silently disappears from the response.
 
-**The server keeps all data in memory and has no database.** `salesData.ts` loads the JSON at import time and builds indexes by arrondissement and quartier. Routes in `routes/sales.ts` compute each answer on request from `filterSales()`. Time bucketing, the rolling window and the "change over the period" calculation are in `timeStats.ts`. The bundle finds its data at `../data` relative to `dist/`, so `dist/` and `data/` must stay next to each other at runtime.
+**The server keeps all data in memory and has no database.** `salesData.ts` loads the JSON at import time and builds indexes by arrondissement and quartier. Routes in `routes/sales.ts` compute each answer on request from `filterSales()`. Time bucketing, the rolling window and the "change over the period" calculation are in `timeStats.ts`. The bundle finds its data at `../data` relative to `dist/`, so `dist/` and `data/` must stay next to each other at runtime. In Docker, that folder is a mount at `/app/data`, which replaces the folder in the image and must hold all three data files.
 
 **Two pieces of code depend on the exact requests the dashboard makes.**
 - `lib/responseCache.ts` caches every successful `/api` GET in memory, keyed on the path and sorted query string. It assumes that the data never changes while the process runs, so a server must restart to show new data.
@@ -60,4 +71,4 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 
 ## Known issue
 
-`responseCache.ts` builds its key with `URLSearchParams`, which parses some URLs differently from Express. A request to `/api/sales/summary??propertyType=Maison` runs without the filter but stores its result under the filtered key, so later visitors get wrong numbers until the server restarts. Unknown parameters also create new cache entries without limit. Fix both before hosting the app publicly.
+`responseCache.ts` builds its key with `URLSearchParams`, which parses some URLs differently from Express. A request to `/api/sales/summary??propertyType=Maison` runs without the filter but stores its result under the filtered key, so later visitors get wrong numbers until the server restarts. Unknown parameters also create new cache entries without limit. Both must be fixed before launch.

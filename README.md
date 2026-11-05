@@ -34,7 +34,13 @@ docker compose up --build -d
 
 Open <http://localhost:3000>. To stop the app, run `docker compose down`.
 
-The container serves the dashboard at `/` and the API at `/api`. It works on x64 and ARM64 machines, including Apple Silicon. The health check is `GET /api/healthz`.
+The container serves the dashboard at `/` and the API at `/api`. It works on x64 and ARM64 machines, including Apple Silicon. The health check is `GET /api/healthz`. The image holds no sales data, so Compose mounts `artifacts/api-server/data` into the container. If that folder has no `paris-sales.json`, the container stops at startup.
+
+## Documentation
+
+- [`docs/architecture.md`](docs/architecture.md) explains how the site works, how to deploy it with Coolify, and what remains to do before a public launch.
+- [`CONTEXT.md`](CONTEXT.md) defines the terms this project uses, such as Sale, Mutation and Selection.
+- [`docs/adr/`](docs/adr/) records the major decisions and the reasons for them.
 
 ## How it works
 
@@ -43,7 +49,7 @@ flowchart LR
   A[DVF files on data.gouv.fr] -->|fetch_dvf.py| B[data-raw/src]
   B -->|build_paris_sales.py| C[paris-sales.json]
   C -->|loaded into memory at start| D[Express API]
-  D -->|/api, validated with Zod| E[React dashboard]
+  D -->|"/api, validated with Zod"| E[React dashboard]
   F[openapi.yaml] -->|Orval code generation| G[Client hooks and validators]
   G --> D
   G --> E
@@ -109,9 +115,10 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 ## Update the data
 
 1. Add any new period to `RESOURCES` in `scripts/fetch_dvf.py`. The resource id of each file is on the [dataset page](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres-geolocalisees/). A new semester file can replace an older partial file for the same year.
-2. Run `python3 scripts/fetch_dvf.py`, and then `python3 scripts/build_paris_sales.py`.
-3. Rebuild the Docker image with `docker compose up --build -d`. Responses are cached in memory, so a running server must restart to show the new data.
-4. If the data now ends on a different date, update the text in `artifacts/data-app/index.html` and the coverage text in `artifacts/data-app/src/pages/dashboard.tsx`. Also update the year list in `artifacts/api-server/src/lib/prewarm.ts`.
+2. Remove any period that the source no longer publishes from `RESOURCES`, and delete its file from `data-raw/src`. The build reads every `paris-*.csv` file in that folder, and the site must not show more than DVF does.
+3. Run `python3 scripts/fetch_dvf.py`, and then `python3 scripts/build_paris_sales.py`.
+4. Run `docker compose restart`. The server loads the data at startup and caches responses in memory, so it must restart to show the new data. The image does not need a rebuild.
+5. If the data now ends on a different date, update the text in `artifacts/data-app/index.html` and the coverage text in `artifacts/data-app/src/pages/dashboard.tsx`. Also update the year list in `artifacts/api-server/src/lib/prewarm.ts`.
 
 DGFiP can correct past periods in a new release, so the figures can change when you download the data again. The November 2026 download reproduces the dataset used in the screenshot exactly: 128,114 sales.
 
@@ -130,4 +137,4 @@ The code in this repository is under the [MIT licence](LICENSE). The licence doe
 
 **Why the sales data is not in git:** each record links a price to a street address and coordinates. The [DVF page](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres/) says that reuse must not allow indexing by external search engines, and article R112 A-3 of the Livre des procédures fiscales says that use of the files must not allow people to be re-identified indirectly. A public Git repository cannot guarantee the first condition, so each user downloads the data directly from the source.
 
-**If you host this app publicly,** read the [DVF conditions](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres/) first. The dashboard currently allows search engines (`robots.txt`, and the `robots` meta tag in `artifacts/data-app/index.html`), and it shows individual addresses and prices. Check the current terms of each source before commercial use or redistribution.
+**The app is not ready for public hosting yet.** It currently allows search engines (`robots.txt`, and the `robots` meta tag in `artifacts/data-app/index.html`), and it shows individual addresses and prices. "Before public launch" in [`docs/architecture.md`](docs/architecture.md) lists the work that remains. Read the [DVF conditions](https://www.data.gouv.fr/datasets/demandes-de-valeurs-foncieres/) and check the current terms of each source before commercial use or redistribution.
