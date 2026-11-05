@@ -260,7 +260,7 @@ export async function areaTrendPoints(
   const q = pooledQuery(
     f, g, windowSize, first, last,
     level === "quartier" ? "quartier" : "arr::VARCHAR",
-    level === "quartier" ? "quartier <> '' AND " : "",
+    level === "quartier" ? "quartier IS NOT NULL AND " : "",
     `quantile_cont(price_per_sqm, 0.5)::DOUBLE AS "medianPricePerSqm"`,
   );
   const rows = await db.query<{ area: string; b: number; count: number; medianPricePerSqm: number }>(q.sql, q.params);

@@ -53,12 +53,55 @@ class Sale(TypedDict):
 
 
 def round_coords(c: Any) -> Any:
+    """Round every coordinate of a GeoJSON geometry to 5 decimals.
+
+    This function is for boundary files, which keep 5 decimals. Sale positions
+    do not use it. They are rounded to POSITION_DECIMALS.
+
+    Parameters
+    ----------
+    c : list
+        A position ``[lon, lat]``, or any nesting of positions as in a GeoJSON
+        ``coordinates`` array.
+
+    Returns
+    -------
+    list
+        A new list with the same nesting and every number rounded.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        round_coords([2.3456789, 48.8612345])  # [2.34568, 48.86123]
+    """
     if isinstance(c[0], (int, float)):
         return [round(c[0], 5), round(c[1], 5)]
     return [round_coords(x) for x in c]
 
 
 def load_geo(path: str, keep: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    """Read a GeoJSON file and keep only the wanted properties.
+
+    Parameters
+    ----------
+    path : str
+        The GeoJSON file to read.
+    keep : callable
+        Receives the properties of one feature and returns the properties to keep.
+
+    Returns
+    -------
+    dict
+        A feature collection with the kept properties and coordinates rounded
+        to 5 decimals.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        arr_geo = load_geo("data-raw/arr.geojson", lambda p: {"arr": int(p["c_ar"])})
+    """
     with open(path, encoding="utf-8") as f:
         d = json.load(f)
     feats = []
@@ -77,6 +120,29 @@ def load_geo(path: str, keep: Callable[[dict[str, Any]], dict[str, Any]]) -> dic
 
 
 def point_in_ring(x: float, y: float, ring: list[list[float]]) -> bool:
+    """Tell whether a point is inside a ring, with the ray casting method.
+
+    Parameters
+    ----------
+    x : float
+        The longitude of the point.
+    y : float
+        The latitude of the point.
+    ring : list of list of float
+        The ring as a list of ``[lon, lat]`` positions.
+
+    Returns
+    -------
+    bool
+        True when the point is inside the ring.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        square = [[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]
+        point_in_ring(1, 1, square)  # True
+    """
     inside = False
     j = len(ring) - 1
     for i in range(len(ring)):
@@ -89,6 +155,31 @@ def point_in_ring(x: float, y: float, ring: list[list[float]]) -> bool:
 
 
 def point_in_geom(x: float, y: float, geom: dict[str, Any]) -> bool:
+    """Tell whether a point is inside a Polygon or MultiPolygon geometry.
+
+    A point in a hole of a polygon is outside.
+
+    Parameters
+    ----------
+    x : float
+        The longitude of the point.
+    y : float
+        The latitude of the point.
+    geom : dict
+        A GeoJSON geometry of type ``Polygon`` or ``MultiPolygon``.
+
+    Returns
+    -------
+    bool
+        True when the point is inside the geometry.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        geom = {"type": "Polygon", "coordinates": [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]]}
+        point_in_geom(1, 1, geom)  # True
+    """
     polys = [geom["coordinates"]] if geom["type"] == "Polygon" else geom["coordinates"]
     for poly in polys:
         if point_in_ring(x, y, poly[0]) and not any(point_in_ring(x, y, h) for h in poly[1:]):
@@ -113,12 +204,10 @@ def make_find_quartier(quartier_geo: dict[str, Any]) -> Callable[[float, float, 
 
     Examples
     --------
-    .. code-block:: rst
+    .. code-block:: python
 
-        .. code-block:: python
-
-            find = make_find_quartier(quartier_geo)
-            quartier = find(2.34567, 48.86123, 1)
+        find = make_find_quartier(quartier_geo)
+        quartier = find(2.34567, 48.86123, 1)
     """
     by_arr: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for ft in quartier_geo["features"]:
@@ -163,13 +252,11 @@ def classify_mutation(
 
     Examples
     --------
-    .. code-block:: rst
+    .. code-block:: python
 
-        .. code-block:: python
-
-            outcome, sale = classify_mutation(rows, find_quartier)
-            if outcome == "kept":
-                print(sale["pricePerSqm"])
+        outcome, sale = classify_mutation(rows, find_quartier)
+        if outcome == "kept":
+            print(sale["pricePerSqm"])
     """
     if rows[0]["nature_mutation"] != "Vente":
         return "not_a_sale", None
@@ -232,11 +319,9 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
 
     Examples
     --------
-    .. code-block:: rst
+    .. code-block:: python
 
-        .. code-block:: python
-
-            write_database(sales, stats, "artifacts/api-server/data/sales.duckdb")
+        write_database(sales, stats, "artifacts/api-server/data/sales.duckdb")
     """
     if not sales:
         raise ValueError("No Sales to write. The input has no usable rows, so the existing file stays unchanged.")
@@ -287,6 +372,19 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
 
 
 def main() -> None:
+    """Build the Sales database and the boundary files.
+
+    The function reads the boundaries and ``data-raw/src/paris.csv``, groups the
+    rows by mutation, keeps the mutations that count as one Sale, and writes
+    ``sales.duckdb`` and the two boundary GeoJSON files. It prints the
+    exclusion counts and the period of the data.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        main()
+    """
     arr_geo = load_geo(
         os.path.join(RAW, "arr.geojson"),
         lambda p: {"arr": int(p["c_ar"]), "name": p["l_aroff"]},
