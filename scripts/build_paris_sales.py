@@ -33,7 +33,7 @@ DWELLINGS = ("Appartement", "Maison")
 MIN_PRICE, MAX_PRICE = 20_000, 20_000_000
 MIN_SURFACE, MAX_SURFACE = 9, 300
 MIN_PPSM, MAX_PPSM = 2_000, 35_000
-# Three decimal places of a degree are about 80 m, too coarse to find one building.
+# Three decimal places of a degree are about 100 m, too coarse to find one building.
 POSITION_DECIMALS = 3
 
 
@@ -224,7 +224,7 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
     Parameters
     ----------
     sales : list of Sale
-        The Sales to store. Their positions are already rounded.
+        The Sales to store. Their positions are already rounded. The list must not be empty.
     stats : mapping of str to int
         The number of mutations per outcome, such as ``kept``.
     path : str
@@ -238,6 +238,8 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
 
             write_database(sales, stats, "artifacts/api-server/data/sales.duckdb")
     """
+    if not sales:
+        raise ValueError("No Sales to write. The input has no usable rows, so the existing file stays unchanged.")
     part = f"{path}.part"
     folder = os.path.dirname(os.path.abspath(path))
     # The temporary CSV is in the target folder and holds only finished values.

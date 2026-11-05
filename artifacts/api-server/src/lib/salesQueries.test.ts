@@ -189,3 +189,8 @@ test("paging", async () => {
   assert.deepEqual([past.total, past.items], [5, []]);
   assert.equal(page.items[0]!.address, "Rue B");
 });
+
+test("an offset beyond the INTEGER range gives an empty page", async () => {
+  const past = await transactionPage(db, {}, "price", "asc", 15, 3_000_000_000);
+  assert.deepEqual([past.total, past.items], [5, []]);
+});

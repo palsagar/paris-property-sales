@@ -308,6 +308,8 @@ export async function transactionPage(
     `SELECT count(*)::INTEGER AS total FROM sales WHERE ${where.sql}`,
     where.params,
   );
+  // An offset past the last Sale gives an empty page. The check also keeps a huge offset out of the INTEGER cast below.
+  if (offset >= count!.total) return { total: count!.total, items: [] };
   const items = await db.query<{
     id: string; date: string; type: string; address: string; arrondissement: number;
     quartier: string | null; price: number; surface: number; pricePerSqm: number; rooms: number;

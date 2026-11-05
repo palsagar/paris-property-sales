@@ -210,6 +210,13 @@ class WriteDatabaseTest(unittest.TestCase):
         self.assertEqual(self.read("SELECT id FROM sales ORDER BY id"), [("new1",), ("new2",)])
         self.assertEqual(os.listdir(self.dir.name), ["sales.duckdb"])
 
+    def test_empty_sales_raise_and_keep_existing_file(self) -> None:
+        write_database([make_sale(id="old")], {"kept": 1}, self.path)
+        with self.assertRaises(ValueError):
+            write_database([], {"kept": 0}, self.path)
+        self.assertEqual(self.read("SELECT id FROM sales"), [("old",)])
+        self.assertEqual(os.listdir(self.dir.name), ["sales.duckdb"])
+
     def test_failed_write_keeps_existing_file_and_leaves_no_extra_files(self) -> None:
         write_database([make_sale(id="old")], {"kept": 1}, self.path)
         with self.assertRaises(Exception):
