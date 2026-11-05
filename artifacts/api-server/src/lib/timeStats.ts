@@ -1,4 +1,5 @@
 import { median, percentile, sortedValues2, type Sale } from "./salesData";
+import type { SqlParams } from "./salesDb";
 
 export type Granularity = "month" | "quarter" | "year";
 
@@ -156,5 +157,61 @@ export function computeChange(sales: Sale[], w: ChangeWindows | null): Change {
     startMedianPrice: sPrice,
     endMedianPrice: ePrice,
     priceChangePct: ((ePrice - sPrice) / sPrice) * 100,
+  };
+}
+
+export interface ChangeRow {
+  nStart: number;
+  nEnd: number;
+  startPpsm: number | null;
+  endPpsm: number | null;
+  startPrice: number | null;
+  endPrice: number | null;
+}
+
+/** SQL columns for the Change figures, for use in a SELECT over `sales` (same windows as computeChange). */
+export function changeSelect(w: ChangeWindows | null): { sql: string; params: SqlParams } {
+  if (!w) {
+    return {
+      sql: "0::INTEGER AS nStart, 0::INTEGER AS nEnd, NULL::DOUBLE AS startPpsm, NULL::DOUBLE AS endPpsm, NULL::DOUBLE AS startPrice, NULL::DOUBLE AS endPrice",
+      params: {},
+    };
+  }
+  const start = "sale_date < $cwStartEnd";
+  const end = "sale_date > $cwEndStart";
+  return {
+    sql: `count(*) FILTER (WHERE ${start})::INTEGER AS nStart,
+      count(*) FILTER (WHERE ${end})::INTEGER AS nEnd,
+      quantile_cont(price_per_sqm, 0.5) FILTER (WHERE ${start})::DOUBLE AS startPpsm,
+      quantile_cont(price_per_sqm, 0.5) FILTER (WHERE ${end})::DOUBLE AS endPpsm,
+      quantile_cont(price, 0.5) FILTER (WHERE ${start})::DOUBLE AS startPrice,
+      quantile_cont(price, 0.5) FILTER (WHERE ${end})::DOUBLE AS endPrice`,
+    params: { cwStartEnd: w.startEnd, cwEndStart: w.endStart },
+  };
+}
+
+export function changeFromRow(row: ChangeRow): Change {
+  if (
+    row.nStart < MIN_SALES_FOR_CHANGE ||
+    row.nEnd < MIN_SALES_FOR_CHANGE ||
+    row.startPpsm === null || row.endPpsm === null ||
+    row.startPrice === null || row.endPrice === null
+  ) {
+    return {
+      startMedianPricePerSqm: null,
+      endMedianPricePerSqm: null,
+      changePct: null,
+      startMedianPrice: null,
+      endMedianPrice: null,
+      priceChangePct: null,
+    };
+  }
+  return {
+    startMedianPricePerSqm: row.startPpsm,
+    endMedianPricePerSqm: row.endPpsm,
+    changePct: ((row.endPpsm - row.startPpsm) / row.startPpsm) * 100,
+    startMedianPrice: row.startPrice,
+    endMedianPrice: row.endPrice,
+    priceChangePct: ((row.endPrice - row.startPrice) / row.startPrice) * 100,
   };
 }
