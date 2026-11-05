@@ -4,17 +4,18 @@ This document explains how the Paris Property Sales site works and how it is dep
 
 ## Overview
 
-The site is one Node.js process. It serves the API and the built dashboard on one port, and it holds all of its data in memory. It writes nothing, so it can restart at any time without losing anything.
+The site is one Node.js process. It serves the API and the built dashboard on one port, and it reads all of its data from one DuckDB file. It writes nothing, so it can restart at any time without losing anything.
 
 ```mermaid
 flowchart LR
   subgraph prep["Data preparation on a developer machine"]
     A["DVF files on data.gouv.fr"] -->|"fetch_dvf.py"| B["Paris rows in data-raw/src"]
-    B -->|"build_paris_sales.py"| C["Data folder"]
-    G["Boundaries in data-raw"] -->|"build_paris_sales.py"| C
+    B -->|"build_paris_sales.py"| C["sales.duckdb"]
+    G["Boundaries in data-raw"] -->|"build_paris_sales.py"| H["Boundary files in git"]
   end
   subgraph server["Server"]
     C -->|"copied to the server and mounted"| D["Node.js process"]
+    H -->|"in the image"| D
     D -->|"/api"| E["Dashboard in the browser"]
     D -->|"built static files"| E
   end
@@ -23,16 +24,16 @@ flowchart LR
 
 ## Data pipeline
 
-The pipeline has two standard-library Python scripts, and it runs outside the application.
+The pipeline has two Python scripts, and it runs outside the application. The first uses only the standard library. The second runs with `uv` and needs the `duckdb` package.
 
-1. `scripts/fetch_dvf.py` streams the national DVF files for each period, keeps the rows for department 75, and writes `data-raw/src/paris-*.csv`. The download is about 500 MB, and the saved rows are about 74 MB.
-2. `scripts/build_paris_sales.py` reads every `paris-*.csv` file and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It also assigns each Sale to a Quartier by its coordinates. It writes three files to `artifacts/api-server/data/`.
+1. `scripts/fetch_dvf.py` streams the national DVF files for each period, keeps the rows for department 75, and writes `data-raw/src/paris.csv`. The download is about 610 MB.
+2. `scripts/build_paris_sales.py` reads `paris.csv` and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It also assigns each Sale to a Quartier by its coordinates. It writes `sales.duckdb` to `artifacts/api-server/data/` and the two boundary files to `artifacts/api-server/boundaries/`.
 
 | Output file | Contents | In git |
 | --- | --- | --- |
-| `paris-sales.json` | 128,114 Sales and the exclusion counts (about 26 MB) | No |
-| `arrondissements.geojson` | The boundaries of the 20 Arrondissements | Yes |
-| `quartiers.geojson` | The boundaries of the 80 Quartiers | Yes |
+| `data/sales.duckdb` | 128,114 Sales and the exclusion counts | No |
+| `boundaries/arrondissements.geojson` | The boundaries of the 20 Arrondissements | Yes |
+| `boundaries/quartiers.geojson` | The boundaries of the 80 Quartiers | Yes |
 
 The November 2026 download reproduces the original dataset byte for byte. A later DVF release can change the figures, because the DGFiP can correct past periods.
 
@@ -52,23 +53,23 @@ sequenceDiagram
   participant B as Dashboard
   participant C as Response cache
   participant R as Route
-  participant D as Sales in memory
+  participant D as DuckDB file
   B->>C: GET /api/sales/summary?propertyType=all
   alt Response is in the cache
     C-->>B: Cached JSON (X-Cache: HIT)
   else Response is not in the cache
     C->>R: Pass the request on
     R->>R: Validate the query with Zod
-    R->>D: Filter the Sales
-    D-->>R: Matching Sales
-    R->>R: Calculate medians and Change, validate the response
+    R->>D: Query the Sales
+    D-->>R: Medians, counts and Sales
+    R->>R: Validate the response
     R-->>C: JSON
     C-->>B: Store and return the JSON (X-Cache: MISS)
   end
 ```
 
-- **In-memory data:** `salesData.ts` loads the dataset when the process starts and indexes the Sales by Arrondissement and Quartier. There is no database. See [decision record 2](adr/0002-in-memory-data-no-database.md).
-- **Calculations:** `routes/sales.ts` calculates each response from the filtered Sales. `timeStats.ts` holds the time buckets, the Smoothing window and the Change calculation.
+- **Sales file:** `salesData.ts` opens `sales.duckdb` when the process starts. `salesDb.ts` opens it read-only and uses one connection for each query. See [decision record 7](adr/0007-duckdb-rebuilt-for-each-release.md).
+- **Calculations:** `routes/sales.ts` calls `salesQueries.ts`, which holds all the SQL and calculates each response from the matching Sales. `timeStats.ts` holds the time buckets and the SQL for the Change.
 - **Response cache:** `responseCache.ts` keeps responses in memory, up to 256 MB in total, and removes the least recently used first. The key is the path plus the query after validation, with the same schema the route uses. Unknown parameters and different spellings of a value therefore share one entry, and the cache and the route always agree on what a request means. A path that is not listed in `QUERY_SCHEMAS` is not cached.
 - **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. In testing, it stored 2,610 responses in about 17 seconds. The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
 
@@ -93,7 +94,7 @@ These steps have not yet run on a real Coolify server. A local test covered the 
 ### First deployment
 
 1. On your machine, build the data as the [README quick start](../README.md#quick-start) explains.
-2. Copy the data folder to the VPS. This must happen before the first deployment, because the mount replaces the image's data folder and the process stops at startup if `paris-sales.json` is missing.
+2. Copy the data folder to the VPS. This must happen before the first deployment, because the image has no data folder and the process stops at startup if `sales.duckdb` is missing.
 
    ```sh
    rsync -av --delete artifacts/api-server/data/ user@your-vps:/srv/paris-property-sales/data/
@@ -122,7 +123,6 @@ Coolify's storage is not a backup, but the data does not need one. The two scrip
 
 The site is not ready for the public yet. These items must be complete first.
 
-- **Show Sale locations only.** Change `build_paris_sales.py` to drop the house number and round coordinates to about 100 m, so the dataset never contains them. Rounded dots can stack on the map, which the map design must handle.
 - **Block search engines.** Change `robots.txt` and the `robots` meta tag, and block `/api` as well. Both currently allow indexing.
 - **Make the API private to the site.** Remove the open CORS setting, add rate limits, cap the number of records in one response, and limit exports to what is on screen. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong.
 - **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts.
@@ -139,6 +139,7 @@ These items do not block launch.
 - Copy fixes: "Every recorded" in the introduction, "of this selection" in the data note, "Carrez or built surface" on the surface card, and "transactions" in the sales list.
 - A warning for a Change over a Period of less than 12 months.
 - Removal of the hardcoded dates, so that a new DVF release needs fewer manual edits.
+- A map design that handles rounded Sale locations, because several dots can stack on one position.
 - A proxy for `/api` in the Vite development server.
 - Removal of the unused template code: `lib/db`, `scripts/src/hello.ts`, the Replit dependencies and the unused UI components.
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Data rule
 
-Never commit `artifacts/api-server/data/paris-sales.json` or `data-raw/src/`. These files link prices to street addresses, and the repository is public. The DVF reuse conditions are the reason. See "Data and licences" in `README.md`. A fresh clone has neither file, so run the two data scripts below first.
+Never commit `artifacts/api-server/data/sales.duckdb` or `data-raw/src/`. The raw files link prices to street addresses and exact coordinates, and the built file holds street names and positions rounded to about 100 m. The repository is public. The DVF reuse conditions are the reason. See "Data and licences" in `README.md`. A fresh clone has neither file, so run the two data scripts below first.
 
 ## Documentation
 
@@ -16,14 +16,14 @@ The goal is a public site for home buyers and Paris residents. It is not ready t
 
 ## Commands
 
-The repository has no linter. The only tests cover the response cache, so `pnpm run typecheck` and those tests are the only automated checks. To verify a change, build the app and use it in a browser.
+The repository has no linter. The automated checks are `pnpm run typecheck`, the server tests (the response cache, the DuckDB connection and the SQL queries) and the Python tests for the data scripts. To verify a change, build the app and use it in a browser.
 
 pnpm is not installed globally on this machine. Use `npx -y pnpm@10.26.1` in place of `pnpm`, or install pnpm first.
 
 ```sh
 # Data: required once per clone. The download is about 500 MB and takes under a minute.
-python3 scripts/fetch_dvf.py            # writes data-raw/src/paris-*.csv
-python3 scripts/build_paris_sales.py    # writes artifacts/api-server/data/
+python3 scripts/fetch_dvf.py            # writes data-raw/src/paris.csv
+uv run scripts/build_paris_sales.py     # writes artifacts/api-server/data/sales.duckdb
 
 # Run everything in one container on http://localhost:3000. Compose mounts the data folder.
 docker compose up --build -d
@@ -34,8 +34,11 @@ docker compose restart
 # Check types across the workspace
 pnpm run typecheck
 
-# Run the tests (Node's test runner through tsx)
+# Run the server tests (Node's test runner through tsx)
 pnpm run test
+
+# Run the Python tests for the data scripts
+cd scripts && uv run test_data_scripts.py
 
 # Run one test by name
 pnpm --filter @workspace/api-server exec node --import tsx --test --test-name-pattern="byte limit" "src/**/*.test.ts"
@@ -58,7 +61,7 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 
 **The API contract is the source of truth.** `lib/api-spec/openapi.yaml` generates two packages through Orval: `lib/api-zod` (Zod validators, used by the server) and `lib/api-client-react` (React Query hooks, used by the dashboard). To change an endpoint, edit the YAML first and run codegen. Never edit a `generated/` folder by hand. Routes call `.parse()` on their responses as well as their queries, and Zod removes unknown keys, so a field that is missing from the YAML silently disappears from the response.
 
-**The server keeps all data in memory and has no database.** `salesData.ts` loads the JSON at import time and builds indexes by arrondissement and quartier. Routes in `routes/sales.ts` compute each answer on request from `filterSales()`. Time bucketing, the rolling window and the "change over the period" calculation are in `timeStats.ts`. The bundle finds its data at `../data` relative to `dist/`, so `dist/` and `data/` must stay next to each other at runtime. In Docker, that folder is a mount at `/app/data`, which replaces the folder in the image and must hold all three data files.
+**The server reads all Sales from one DuckDB file.** `salesDb.ts` opens `sales.duckdb` read-only and uses one connection for each query. `salesQueries.ts` holds all the SQL, and the routes in `routes/sales.ts` call it. `timeStats.ts` builds the time buckets and the SQL for the Change. `salesData.ts` opens the file at import time with a top-level await. The bundle finds the file at `../data` and the boundary files at `../boundaries`, both relative to `dist/`, so `dist/`, `data/` and `boundaries/` must stay next to each other at runtime. The `boundaries` folder is in git and in the image. In Docker, `data` is a mount at `/app/data`. The image has no such folder, and the mount must hold `sales.duckdb`. The `@duckdb/node-api` package is a native module that the bundle does not include, so the `Dockerfile` installs it into the image.
 
 **Two pieces of code depend on the exact requests the dashboard makes.**
 - `lib/responseCache.ts` caches successful `/api` GETs in memory, up to a limit in total bytes. The key is the path plus the query after validation, with the same Zod schema the route uses, so the cache and the route always agree on what a request means. A new route is not cached until you add it and its schema to `QUERY_SCHEMAS`. The cache assumes that the data never changes while the process runs, so a server must restart to show new data.

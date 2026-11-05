@@ -1,5 +1,5 @@
 ---
-status: accepted, not yet implemented
+status: accepted
 ---
 
 # The data lives in one DuckDB file, rebuilt by hand for each DVF release

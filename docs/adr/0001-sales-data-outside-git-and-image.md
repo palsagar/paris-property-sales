@@ -7,4 +7,4 @@ The sales data is also not in the Docker image. Coolify builds from the public r
 ## Consequences
 
 - A fresh clone cannot run until someone runs the two scripts.
-- The mount replaces the image's data folder, so the folder on the server must hold all three data files. The process stops at startup if the sales file is missing.
+- The image has no data folder, and the folder on the server holds one generated file, `sales.duckdb`. The process stops at startup if that file is missing. The boundary files are not sales data, so they are in git and in the image.
