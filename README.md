@@ -1,6 +1,6 @@
 # Paris Property Sales
 
-An interactive dashboard of private home sales in Paris from January 2022 to June 2026. It is built from DVF (Demandes de valeurs foncières), the open data on property sales published by the French tax administration (DGFiP).
+An interactive dashboard of private home sales in Paris. It is built from DVF (Demandes de valeurs foncières), the open data on property sales published by the French tax administration (DGFiP).
 
 ![The dashboard: a map of median price per square metre by arrondissement, next to a ranked list of arrondissements](docs/screenshot.png)
 
@@ -19,11 +19,10 @@ An interactive dashboard of private home sales in Paris from January 2022 to Jun
 
 You need [Docker](https://docs.docker.com/get-docker/), Python 3 and [uv](https://docs.astral.sh/uv/). The app needs no database server, login or API key.
 
-**1. Get the data.** The sales data is not in this repository (see [Data and licences](#data-and-licences)). These two scripts download it from data.gouv.fr and build the dataset. The first script uses only the Python standard library. The second script needs `uv`, which installs its `duckdb` package on the first run. The download is about 610 MB, because the source file covers all of France, but only the Paris rows are saved.
+**1. Get the data.** The sales data is not in this repository (see [Data and licences](#data-and-licences)). This command downloads it from data.gouv.fr and builds the dataset. `uv` installs the `duckdb` package on the first run. The download is about 610 MB, because the source file covers all of France, but only the Paris rows are saved.
 
 ```sh
-python3 scripts/fetch_dvf.py
-uv run scripts/build_paris_sales.py
+uv run scripts/update_data.py
 ```
 
 **2. Start the app.**
@@ -65,6 +64,7 @@ The API server opens the DuckDB file read-only when it starts, and it calculates
 | `artifacts/api-server/boundaries` | Boundary files for the map |
 | `lib/api-spec` | The API contract (`openapi.yaml`) and the code generation config |
 | `lib/api-client-react`, `lib/api-zod` | The React Query hooks and Zod validators generated from the contract |
+| `scripts/update_data.py` | Runs `fetch_dvf.py` and then `build_paris_sales.py`. This is the command to use |
 | `scripts/fetch_dvf.py` | Downloads the raw DVF files into `data-raw/src` (not in git) |
 | `scripts/build_paris_sales.py` | Builds `sales.duckdb` in `artifacts/api-server/data`, and the files in `artifacts/api-server/boundaries`, from `data-raw` |
 | `data-raw` | Raw boundary files, and the downloaded DVF files in `src/` |
@@ -110,17 +110,19 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 - **Startup:** the server pre-computes about 2,600 common responses when it starts, which takes about 17 seconds. The API answers during that time, but the first requests can be slower.
 - **Memory:** the container used about 250 to 440 MiB after the warm-up finished, measured twice with Docker. Under load it needs much more. In a test of 120 requests, three quarters of them `/sales/points` for the whole city with different `from` dates, sent 10, 20 and 40 at a time, a container limited to 1 GB was killed for lack of memory in all three runs. With no limit and 40 requests at a time, the peak was 2.2 GiB, against 1.13 GiB for the server before DuckDB. Each setting ran once, with Docker on Apple Silicon. Give the container at least 3 GB.
 - **External services:** the browser loads fonts from Google Fonts and map tiles from Esri, so it needs internet access to both. To self-host the fonts, replace the `@import url(...)` line at the top of `artifacts/data-app/src/index.css`. To use another map provider, replace the tile URL in `artifacts/data-app/src/components/sales-map.tsx`. Check Esri's terms of use for your level of traffic.
-- **Coverage:** the data ends on 30 June 2026, the end of the latest DVF release used here. Prices are nominal euros, not adjusted for inflation.
-- **Which sales are included:** a sale in the dataset is one DVF "Vente" transaction with exactly one apartment or house and no commercial premises. It costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface, and has a price of 2,000 to 35,000 EUR/m². These rules leave out about 28,400 residential transactions, and the app says so in its data note.
+- **Coverage:** the data covers the latest DVF release, and the dashboard shows its first and last dates. Prices are nominal euros, not adjusted for inflation.
+- **Which sales are included:** a sale in the dataset is one DVF "Vente" transaction with exactly one apartment or house and no commercial premises. It costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface, and has a price of 2,000 to 35,000 EUR/m². These rules leave out some residential transactions, and the data note in the app shows how many.
 
 ## Update the data
 
-1. Run `python3 scripts/fetch_dvf.py`. The script downloads the latest five-year file through a link that always points to the newest DVF release, and it replaces `data-raw/src/paris.csv`.
-2. Run `uv run scripts/build_paris_sales.py`. The script rebuilds `sales.duckdb` in full.
-3. Run `docker compose restart`. The server opens the data file at startup and caches responses in memory, so it must restart to show the new data. The image does not need a rebuild.
-4. If the data now ends on a different date, update the text in `artifacts/data-app/index.html` and the coverage text in `artifacts/data-app/src/pages/dashboard.tsx`. Also update the year list in `artifacts/api-server/src/lib/prewarm.ts`.
+DGFiP publishes a new DVF release each April and October. After each release, update the data by hand. No scheduled job does it.
 
-DGFiP can correct past periods in a new release, so the figures can change when you download the data again. The November 2026 download reproduces the dataset used in the screenshot exactly: 128,114 sales.
+1. Run `uv run scripts/update_data.py`. The script finds the latest five-year file on data.gouv.fr, downloads it, and rebuilds `sales.duckdb` in full. The dashboard takes every date from the new file, so no text needs an edit.
+2. Load the new file. On a local machine, run `docker compose restart`. On the VPS, copy the file with the `rsync` command in [`docs/architecture.md`](docs/architecture.md#update-the-data), and then restart the application. The server opens the data file at startup and caches responses in memory, so it must restart to show the new data. The image does not need a rebuild.
+
+Before the build replaces `sales.duckdb`, it checks the new release. The release must have the expected columns. Its Sale count must be within 15% of the previous file. Every Arrondissement and every Quartier must have Sales. Every date must be in ISO format. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason and exits with an error. The previous `sales.duckdb` and the boundary files stay in place.
+
+DGFiP can correct past periods in a new release, so the figures can change when you download the data again.
 
 ## Change the API
 

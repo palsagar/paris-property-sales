@@ -21,9 +21,9 @@ The repository has no linter. The automated checks are `pnpm run typecheck`, the
 pnpm is not installed globally on this machine. Use `npx -y pnpm@10.26.1` in place of `pnpm`, or install pnpm first.
 
 ```sh
-# Data: required once per clone. The download is about 610 MB and takes about a minute and a half.
-python3 scripts/fetch_dvf.py            # writes data-raw/src/paris.csv
-uv run scripts/build_paris_sales.py     # writes artifacts/api-server/data/sales.duckdb
+# Data: required once per clone, and again after each DVF release. The download is about 610 MB and takes about a minute and a half.
+# This runs fetch_dvf.py and then build_paris_sales.py, and the build checks the release before it replaces sales.duckdb.
+uv run scripts/update_data.py           # writes data-raw/src/paris.csv and artifacts/api-server/data/sales.duckdb
 
 # Run everything in one container on http://localhost:3000. Compose mounts the data folder.
 docker compose up --build -d
@@ -76,4 +76,3 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 - This project came from a Replit template. `lib/db`, `scripts/src/hello.ts`, the root `@replit/connectors-sdk` dependency and the `@replit/*` Vite plugins are leftovers. Nothing imports `@workspace/db` or the connectors SDK. Most of `components/ui/` is an unused UI kit, so check for imports before you rely on or edit a component there.
 - `pnpm-workspace.yaml` still has `'-'` overrides for `@expo/ngrok-bin`. They do no harm. Do not restore the overrides for `rollup`, `esbuild`, `lightningcss` or `@tailwindcss/oxide`, because those break the build on every platform except Linux x64.
 - `minimumReleaseAge: 1440` in `pnpm-workspace.yaml` makes pnpm reject package versions published less than a day ago.
-- If the data's end date changes, several hardcoded places need an update. "Update the data" in `README.md` lists them.
