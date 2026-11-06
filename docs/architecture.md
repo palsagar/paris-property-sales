@@ -154,6 +154,6 @@ These items do not block launch.
 
 ## Planned work
 
-This document describes the site as it is today. Only one item remains before the public launch.
+This document describes the site as it is today. One item of planned work remains.
 
 1. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).

@@ -11,7 +11,7 @@ An interactive dashboard of private home sales in Paris and its suburbs: the 20 
 - A price trend over time, by month, quarter or year, with the middle half of prices shaded.
 - A heat map of price per m² for every area and quarter. A median needs at least 5 sales; below that the app says "Too few sales".
 - A ranking of arrondissements, or of the communes of one department or of the major towns, by price or by change over the period.
-- One search box that finds an arrondissement, a quartier or a commune.
+- One search box that finds a department, a quartier or a commune. The numbered buttons beside it select an arrondissement.
 - Distributions of sale price and price per m², and prices by number of rooms.
 - A sortable list of individual sales, and CSV downloads for each chart.
 - Filters for period, property type and area. The filters are stored in the URL, so a link reproduces the view. There is also a dark theme.
