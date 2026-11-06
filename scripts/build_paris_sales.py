@@ -24,6 +24,7 @@ from datetime import date
 from typing import Any, TypedDict
 
 import duckdb
+from communes import COMMUNE_CODES, PARIS_CODES, current_code
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data-raw")
@@ -34,7 +35,7 @@ SOURCE = "DVF géolocalisées, data.gouv.fr (DGFiP / Etalab)"
 DWELLINGS = ("Appartement", "Maison")
 MIN_PRICE, MAX_PRICE = 20_000, 20_000_000
 MIN_SURFACE, MAX_SURFACE = 9, 300
-MIN_PPSM, MAX_PPSM = 2_000, 35_000
+MIN_PPSM, MAX_PPSM = 1_000, 35_000
 # Three decimal places of a degree are about 100 m, too coarse to find one building.
 POSITION_DECIMALS = 3
 # A new release may change the Sale count by at most this share of the previous count.
@@ -55,7 +56,9 @@ class Sale(TypedDict):
     surface: int
     pricePerSqm: int
     rooms: int
-    arr: int
+    department: str
+    commune: str | None
+    arr: int | None
     quartier: str | None
     lon: float | None
     lat: float | None
@@ -268,6 +271,10 @@ def classify_mutation(
         if outcome == "kept":
             print(sale["pricePerSqm"])
     """
+    # A Mutation wholly outside the site is not an Excluded mutation, so it is tested first.
+    in_scope = (*PARIS_CODES, *COMMUNE_CODES)
+    if not any(current_code(r["code_commune"]) in in_scope for r in rows):
+        return "outside_communes", None
     if rows[0]["nature_mutation"] != "Vente":
         return "not_a_sale", None
     if any(r["type_local"] == "Local industriel. commercial ou assimilé" for r in rows):
@@ -288,21 +295,27 @@ def classify_mutation(
     ppsm = price / surface
     if not (MIN_PPSM <= ppsm <= MAX_PPSM):
         return "out_of_range_price_per_sqm", None
-    arr = int(r["code_commune"]) - 75100
-    if not 1 <= arr <= 20:
-        return "bad_arrondissement", None
+    code = current_code(r["code_commune"])
+    if code not in in_scope:
+        return "outside_communes", None
+    department = code[:2]
+    arr = int(code) - 75100 if department == "75" else None
+    commune = None if department == "75" else code
     lon = float(r["longitude"]) if r["longitude"] else None
     lat = float(r["latitude"]) if r["latitude"] else None
     # The Quartier comes from the exact position. Only then is the position rounded.
-    quartier = find_quartier(lon, lat, arr) if lon is not None and lat is not None else None
+    # Only Paris has Quartiers.
+    quartier = find_quartier(lon, lat, arr) if arr is not None and lon is not None and lat is not None else None
     return "kept", {
-        "id": r["id_mutation"],
+        "id": "",  # Set by assign_ids. The id never comes from id_mutation.
         "date": r["date_mutation"],
         "type": r["type_local"],
         "price": round(price),
         "surface": round(surface),
         "pricePerSqm": round(ppsm),
         "rooms": int(r["nombre_pieces_principales"] or 0),
+        "department": department,
+        "commune": commune,
         "arr": arr,
         "quartier": quartier,
         "lon": round(lon, POSITION_DECIMALS) if lon is not None else None,
@@ -310,6 +323,38 @@ def classify_mutation(
         # The house number and its suffix are dropped on purpose.
         "street": r["adresse_nom_voie"].title(),
     }
+
+
+def assign_ids(sales: list[Sale]) -> None:
+    """Sort the Sales and give each one an id that carries no meaning.
+
+    The Sales are sorted in place, newest first, and then by every other
+    stored field, so the same Sales in any input order get the same ids.
+    The id is the position in the sorted list, starting at 1. Two identical
+    Sales are interchangeable, so the order between them does not matter.
+
+    Parameters
+    ----------
+    sales : list of Sale
+        The Sales to sort and number. Their ``id`` is replaced.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        assign_ids(sales)
+        sales[0]["id"]  # "1", the newest Sale
+    """
+
+    def other_fields(s: Sale) -> tuple[tuple[bool, Any], ...]:
+        # A None becomes (False, 0), so a None never has to compare with a real value.
+        return tuple((v is not None, 0 if v is None else v) for k, v in sorted(s.items()) if k not in ("id", "date"))
+
+    # The sort is stable: order by the other fields first, then by date, newest first.
+    sales.sort(key=other_fields)
+    sales.sort(key=lambda s: s["date"], reverse=True)
+    for position, sale in enumerate(sales, start=1):
+        sale["id"] = str(position)
 
 
 def check_columns(fieldnames: Sequence[str] | None) -> list[str]:
@@ -510,6 +555,7 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], release_month: s
                     [
                         s["id"], s["date"], s["type"], s["price"], s["surface"], s["pricePerSqm"],
                         s["rooms"], s["arr"], s["quartier"], s["lon"], s["lat"], s["street"],
+                        s["department"], s["commune"],
                     ]
                 )
         for leftover in (part, f"{part}.wal"):
@@ -521,8 +567,9 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], release_month: s
                 """CREATE TABLE sales (
                   id VARCHAR NOT NULL, sale_date VARCHAR NOT NULL, property_type VARCHAR NOT NULL,
                   price INTEGER NOT NULL, surface INTEGER NOT NULL, price_per_sqm INTEGER NOT NULL,
-                  rooms INTEGER NOT NULL, arr INTEGER NOT NULL, quartier VARCHAR,
-                  lon DOUBLE, lat DOUBLE, street VARCHAR NOT NULL
+                  rooms INTEGER NOT NULL, arr INTEGER, quartier VARCHAR,
+                  lon DOUBLE, lat DOUBLE, street VARCHAR NOT NULL,
+                  department VARCHAR NOT NULL, commune VARCHAR
                 )"""
             )
             con.execute("CREATE TABLE metadata (key VARCHAR NOT NULL, value VARCHAR NOT NULL)")
@@ -609,7 +656,7 @@ def main() -> None:
     if reasons:
         raise SystemExit("\n".join(reasons))
 
-    sales.sort(key=lambda s: s["date"], reverse=True)
+    assign_ids(sales)
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(BOUNDARIES, exist_ok=True)
     write_database(sales, stats, release_month, db_path)

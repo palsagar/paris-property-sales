@@ -22,6 +22,7 @@ import fetch_communes
 from build_paris_sales import (
     EXPECTED_COLUMNS,
     Sale,
+    assign_ids,
     check_columns,
     check_release,
     classify_mutation,
@@ -194,11 +195,16 @@ class ClassifyMutationTest(unittest.TestCase):
             ("surface 8", [mutation_row(**money(100_000, 8))], "out_of_range_price_or_surface"),
             ("surface 301", [mutation_row(**money(1_000_000, 301))], "out_of_range_price_or_surface"),
             ("surface 300", [mutation_row(**money(1_000_000, 300))], "kept"),
-            ("2,000 less 1 EUR/m2", [mutation_row(**money(99_999, 50))], "out_of_range_price_per_sqm"),
-            ("exactly 2,000 EUR/m2", [mutation_row(**money(100_000, 50))], "kept"),
+            ("1,000 less 1 EUR/m2", [mutation_row(**money(49_999, 50))], "out_of_range_price_per_sqm"),
+            ("exactly 1,000 EUR/m2", [mutation_row(**money(50_000, 50))], "kept"),
             ("exactly 35,000 EUR/m2", [mutation_row(**money(1_750_000, 50))], "kept"),
             ("35,000 plus 1 EUR/m2", [mutation_row(**money(1_750_001, 50))], "out_of_range_price_per_sqm"),
-            ("commune 75121", [mutation_row(code_commune="75121")], "bad_arrondissement"),
+            ("commune 75121", [mutation_row(code_commune="75121")], "outside_communes"),
+            ("commune not on the list", [mutation_row(code_commune="77001")], "outside_communes"),
+            ("shop outside, dwelling inside", [mutation_row(), mutation_row(code_commune="77001", type_local="Local industriel. commercial ou assimilé")], "has_commercial_premises"),
+            ("dwelling outside, dependency inside", [mutation_row(code_commune="77001"), mutation_row(type_local="Dépendance")], "outside_communes"),
+            # A Mutation wholly outside the site never adds to the Excluded mutations.
+            ("wholly outside, several dwellings", [mutation_row(code_commune="77001"), mutation_row(code_commune="77001")], "outside_communes"),
         ]
         for name, rows, expected in cases:
             with self.subTest(name):
@@ -237,6 +243,30 @@ class ClassifyMutationTest(unittest.TestCase):
         self.assertEqual(sale["rooms"], 0)
 
 
+    def test_sale_in_a_commune_has_no_arrondissement_and_no_quartier_lookup(self) -> None:
+        def find(lon: float, lat: float, arr: int) -> str:
+            raise AssertionError("only Paris has Quartiers")
+
+        _, sale = classify_mutation([mutation_row(code_commune="92012")], find)
+        assert sale is not None
+        self.assertEqual((sale["department"], sale["commune"], sale["arr"], sale["quartier"]), ("92", "92012", None, None))
+
+    def test_sale_in_paris_has_no_commune(self) -> None:
+        _, sale = classify_mutation([mutation_row()], no_quartier)
+        assert sale is not None
+        self.assertEqual((sale["department"], sale["commune"], sale["arr"]), ("75", None, 1))
+
+    def test_old_commune_code_loses_no_sale(self) -> None:
+        outcome, sale = classify_mutation([mutation_row(code_commune="93059")], no_quartier)
+        assert sale is not None
+        self.assertEqual((outcome, sale["commune"], sale["department"]), ("kept", "93066", "93"))
+
+    def test_sale_does_not_read_id_mutation(self) -> None:
+        _, sale = classify_mutation([mutation_row(id_mutation="SECRET")], no_quartier)
+        assert sale is not None
+        self.assertNotIn("SECRET", sale.values())
+
+
 def make_sale(**overrides: Any) -> Sale:
     """Return one valid Sale, with ``overrides`` replacing the defaults."""
     sale: dict[str, Any] = {
@@ -247,6 +277,8 @@ def make_sale(**overrides: Any) -> Sale:
         "surface": 50,
         "pricePerSqm": 4_000,
         "rooms": 2,
+        "department": "75",
+        "commune": None,
         "arr": 1,
         "quartier": "7510101",
         "lon": 2.346,
@@ -255,6 +287,41 @@ def make_sale(**overrides: Any) -> Sale:
     }
     sale.update(overrides)
     return sale
+
+
+class AssignIdsTest(unittest.TestCase):
+    def sales(self) -> list[Sale]:
+        return [
+            make_sale(date="2026-01-10", price=300_000),
+            make_sale(date="2026-03-20", price=250_000, arr=None, commune="92012", department="92", quartier=None),
+            make_sale(date="2026-02-05", price=410_000, lon=None, lat=None),
+            make_sale(date="2026-02-05", price=410_000, lon=2.3, lat=48.8),
+        ]
+
+    @staticmethod
+    def key(sale: Sale) -> tuple[Any, ...]:
+        return tuple((k, v) for k, v in sorted(sale.items()) if k != "id")
+
+    def test_same_sales_in_another_order_get_the_same_ids(self) -> None:
+        first, second = self.sales(), list(reversed(self.sales()))
+        assign_ids(first)
+        assign_ids(second)
+        self.assertEqual({self.key(s): s["id"] for s in first}, {self.key(s): s["id"] for s in second})
+
+    def test_ids_are_unique_digits_from_one_to_n(self) -> None:
+        sales = self.sales()
+        assign_ids(sales)
+        self.assertEqual(sorted(s["id"] for s in sales), ["1", "2", "3", "4"])
+
+    def test_newest_sale_gets_id_one(self) -> None:
+        sales = self.sales()
+        assign_ids(sales)
+        self.assertEqual((sales[0]["id"], sales[0]["date"]), ("1", "2026-03-20"))
+
+    def test_none_values_do_not_raise(self) -> None:
+        sales = [make_sale(arr=None, commune=None, quartier=None, lon=None, lat=None), make_sale(arr=2, quartier="x", lon=2.3, lat=48.8)]
+        assign_ids(sales)
+        self.assertEqual(sorted(s["id"] for s in sales), ["1", "2"])
 
 
 class WriteDatabaseTest(unittest.TestCase):
@@ -275,19 +342,21 @@ class WriteDatabaseTest(unittest.TestCase):
             make_sale(id="a", street='Rue "Du, Test" Été'),
             make_sale(id="b", street=""),
             make_sale(id="c", quartier=None, lon=None, lat=None),
+            make_sale(id="d", department="92", commune="92012", arr=None, quartier=None),
         ]
-        write_database(sales, {"kept": 3}, "2026-10", self.path)
+        write_database(sales, {"kept": 4}, "2026-10", self.path)
         rows = self.read(
             "SELECT id, sale_date, property_type, price, surface, price_per_sqm, rooms, arr,"
-            " quartier, lon, lat, street FROM sales ORDER BY id"
+            " quartier, lon, lat, street, department, commune FROM sales ORDER BY id"
         )
         expected = [
             (s["id"], s["date"], s["type"], s["price"], s["surface"], s["pricePerSqm"], s["rooms"],
-             s["arr"], s["quartier"], s["lon"], s["lat"], s["street"])
+             s["arr"], s["quartier"], s["lon"], s["lat"], s["street"], s["department"], s["commune"])
             for s in sales
         ]
         self.assertEqual(rows, expected)
-        self.assertEqual(rows[1][-1], "")
+        self.assertEqual(rows[1][11], "")
+        self.assertIsNone(rows[0][-1])
 
     def test_metadata_and_filter_counts_hold_what_was_passed_in(self) -> None:
         write_database([make_sale()], {"kept": 1, "not_a_sale": 7}, "2026-10", self.path)
