@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { nearestValidPeriod } from "./period";
+import { groupOfArea, type Area, type DepartmentId, type RankGroup } from "./areas";
 import type { PropertyTypeParameter, GranularityParameter } from "@workspace/api-client-react";
 
-export type Area = { kind: "all" } | { kind: "arr"; arr: number } | { kind: "q"; id: string };
 export type MapMode = "level" | "change" | "dots";
 export type MapLevel = "arr" | "quartier";
 
 export interface ViewState {
   ptype: PropertyTypeParameter;
   area: Area;
+  rank: RankGroup;
   from?: string;
   to?: string;
   mapMode: MapMode;
@@ -18,19 +19,32 @@ export interface ViewState {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function read(): ViewState {
-  const sp = new URLSearchParams(window.location.search);
+const RANKS: readonly string[] = ["paris", "92", "93", "94", "major"];
+
+/** Reads a view from a query string. Unknown or invalid values fall back to the default view. */
+export function parseView(search: string): ViewState {
+  const sp = new URLSearchParams(search);
   const t = sp.get("type");
   const arr = Number(sp.get("arr"));
   const q = sp.get("q");
+  const commune = sp.get("commune");
+  const dept = sp.get("dept");
   const from = sp.get("from") ?? undefined;
   const to = sp.get("to") ?? undefined;
   const mm = sp.get("map");
   const ml = sp.get("level");
   const g = sp.get("gran");
+  const r = sp.get("rank");
+  const area: Area =
+    q && /^\d{7}$/.test(q) ? { kind: "q", id: q }
+    : commune && /^\d{5}$/.test(commune) ? { kind: "commune", id: commune }
+    : dept === "92" || dept === "93" || dept === "94" ? { kind: "department", id: dept as DepartmentId }
+    : arr >= 1 && arr <= 20 ? { kind: "arr", arr }
+    : { kind: "paris" };
   return {
     ptype: t === "Appartement" || t === "Maison" ? t : "all",
-    area: q && /^\d{7}$/.test(q) ? { kind: "q", id: q } : arr >= 1 && arr <= 20 ? { kind: "arr", arr } : { kind: "all" },
+    area,
+    rank: r && RANKS.includes(r) ? (r as RankGroup) : groupOfArea(area),
     from: from && DATE.test(from) ? from : undefined,
     to: to && DATE.test(to) ? to : undefined,
     mapMode: mm === "change" || mm === "dots" ? mm : "level",
@@ -39,26 +53,34 @@ function read(): ViewState {
   };
 }
 
+/** The query string (without "?") that reproduces a view. Defaults are left out. */
+export function viewQuery(s: ViewState): string {
+  const sp = new URLSearchParams();
+  if (s.ptype !== "all") sp.set("type", s.ptype);
+  if (s.area.kind === "arr") sp.set("arr", String(s.area.arr));
+  if (s.area.kind === "q") sp.set("q", s.area.id);
+  if (s.area.kind === "department") sp.set("dept", s.area.id);
+  if (s.area.kind === "commune") sp.set("commune", s.area.id);
+  if (s.rank !== groupOfArea(s.area)) sp.set("rank", s.rank);
+  if (s.from) sp.set("from", s.from);
+  if (s.to) sp.set("to", s.to);
+  if (s.mapMode !== "level") sp.set("map", s.mapMode);
+  if (s.mapLevel !== "arr") sp.set("level", s.mapLevel);
+  if (s.gran !== "quarter") sp.set("gran", s.gran);
+  return sp.toString();
+}
+
 /** View state mirrored into the query string so a link reproduces the view. */
 export function useViewState(datasetFrom: string, datasetTo: string) {
   // The first state holds the moved dates, so no request uses the expired ones.
   const [first] = useState(() => {
-    const s = read();
+    const s = parseView(window.location.search);
     const p = nearestValidPeriod(s.from, s.to, datasetFrom, datasetTo);
     return { state: { ...s, from: p.from, to: p.to }, movedTo: p.moved ? { from: p.from, to: p.to } : null };
   });
   const [state, setState] = useState<ViewState>(first.state);
   useEffect(() => {
-    const sp = new URLSearchParams();
-    if (state.ptype !== "all") sp.set("type", state.ptype);
-    if (state.area.kind === "arr") sp.set("arr", String(state.area.arr));
-    if (state.area.kind === "q") sp.set("q", state.area.id);
-    if (state.from) sp.set("from", state.from);
-    if (state.to) sp.set("to", state.to);
-    if (state.mapMode !== "level") sp.set("map", state.mapMode);
-    if (state.mapLevel !== "arr") sp.set("level", state.mapLevel);
-    if (state.gran !== "quarter") sp.set("gran", state.gran);
-    const qs = sp.toString();
+    const qs = viewQuery(state);
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
   }, [state]);
   const patch = (p: Partial<ViewState>) => setState((s) => ({ ...s, ...p }));

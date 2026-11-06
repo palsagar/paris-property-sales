@@ -1,0 +1,86 @@
+export type DepartmentId = "92" | "93" | "94";
+export type RankGroup = "paris" | DepartmentId | "major";
+export type Area =
+  | { kind: "paris" }
+  | { kind: "department"; id: DepartmentId }
+  | { kind: "arr"; arr: number }
+  | { kind: "q"; id: string }
+  | { kind: "commune"; id: string };
+
+export const DEPARTMENT_NAMES: Record<DepartmentId, string> = {
+  "92": "Hauts-de-Seine",
+  "93": "Seine-Saint-Denis",
+  "94": "Val-de-Marne",
+};
+
+export function areaParams(a: Area): { department?: DepartmentId; arrondissement?: number; quartier?: string; commune?: string } {
+  switch (a.kind) {
+    case "department": return { department: a.id };
+    case "arr": return { arrondissement: a.arr };
+    case "q": return { quartier: a.id };
+    case "commune": return { commune: a.id };
+    default: return {};
+  }
+}
+
+/** The group a Commune code belongs to, from its first two characters. */
+const groupOfCommune = (id: string): RankGroup => {
+  const d = id.slice(0, 2);
+  return d === "92" || d === "93" || d === "94" ? d : "major";
+};
+
+export function groupOfArea(a: Area): RankGroup {
+  if (a.kind === "department") return a.id;
+  if (a.kind === "commune") return groupOfCommune(a.id);
+  return "paris";
+}
+
+export interface MapFeature {
+  arr?: number;
+  id?: string;
+  name: string;
+  group?: RankGroup;
+}
+
+export const featureId = (p: MapFeature): string => p.id ?? String(p.arr);
+
+export function featureArea(p: MapFeature): Area {
+  if (p.id === undefined) return { kind: "arr", arr: p.arr as number };
+  return p.id.length === 7 ? { kind: "q", id: p.id } : { kind: "commune", id: p.id };
+}
+
+/**
+ * Whether a map feature is the selected Area, and whether it is in focus (drawn at full strength).
+ * `parentArr` is the Arrondissement of the selected Quartier, so that its parent stays in focus.
+ */
+export function featureState(p: MapFeature, a: Area, parentArr?: number): { selected: boolean; focus: boolean } {
+  switch (a.kind) {
+    case "paris":
+      return { selected: false, focus: true };
+    case "department": {
+      const on = p.id !== undefined && p.group === a.id;
+      return { selected: on, focus: on };
+    }
+    case "arr": {
+      const on = p.id === undefined && p.arr === a.arr;
+      return { selected: on, focus: on || (p.id !== undefined && p.arr === a.arr) };
+    }
+    case "q": {
+      const on = p.id === a.id;
+      return { selected: on, focus: on || (p.id === undefined && parentArr !== undefined && p.arr === parentArr) };
+    }
+    case "commune": {
+      const on = p.id === a.id;
+      return { selected: on, focus: on };
+    }
+  }
+}
+
+/** Old town names that a Visitor may still type. */
+const OLD_NAMES: Record<string, string> = { "93066": "Pierrefitte-sur-Seine" };
+
+/** The text the search box matches against: the name, the name without accents, the id and any old name. */
+export function searchValue(name: string, id: string): string {
+  const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return [name, plain(name), id, OLD_NAMES[id] ?? ""].join(" ").toLowerCase();
+}

@@ -11,6 +11,16 @@ export function eurShort(n: number) {
   return eur(n);
 }
 export const sqm = (n: number) => `${num(n)} EUR/m²`;
+export const TOO_FEW = "Too few sales";
+export const sqmOrTooFew = (n: number | null | undefined) => (n == null ? TOO_FEW : sqm(n));
+
+/** Houses above this share of the Sales (in percent) get a warning. */
+export const HOUSE_SHARE_LIMIT = 10;
+export const houseShareLabel = (share: number | null | undefined) => (share == null ? null : `${Math.round(share)}% houses`);
+export const houseShareWarning = (share: number | null | undefined) =>
+  share == null || share <= HOUSE_SHARE_LIMIT
+    ? null
+    : `Houses are ${Math.round(share)}% of these sales. A house's price includes its land, so this median is harder to compare.`;
 export const kShort = (n: number) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : Math.abs(n) >= 1e3 ? `${Math.round(n / 1e3)}k` : `${Math.round(n)}`);
 
 export function makeScale(min: number, max: number) {
