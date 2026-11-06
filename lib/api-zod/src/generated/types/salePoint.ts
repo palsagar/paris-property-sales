@@ -13,7 +13,8 @@ export interface SalePoint {
   price: number;
   surface: number;
   pricePerSqm: number;
-  arrondissement: number;
+  /** Name of the Arrondissement or Commune */
+  areaName: string;
   date: string;
   type: string;
   address: string;

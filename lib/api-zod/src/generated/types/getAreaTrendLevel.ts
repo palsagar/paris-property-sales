@@ -12,4 +12,5 @@ export type GetAreaTrendLevel = typeof GetAreaTrendLevel[keyof typeof GetAreaTre
 export const GetAreaTrendLevel = {
   arrondissement: 'arrondissement',
   quartier: 'quartier',
+  commune: 'commune',
 } as const;

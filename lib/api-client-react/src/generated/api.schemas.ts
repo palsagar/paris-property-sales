@@ -102,7 +102,7 @@ export interface TrendPoint {
 }
 
 export interface AreaTrendPoint {
-  /** Arrondissement number as a string, or INSEE quartier code */
+  /** Arrondissement number as a string, INSEE quartier code, or INSEE commune code */
   id: string;
   /** Start date of the bucket (YYYY-MM-DD) */
   period: string;
@@ -120,11 +120,31 @@ export interface RoomsStat {
   medianSurface: number;
 }
 
+/**
+ * Where the Area sits. Paris, one of the three Departments, or a Major town.
+ */
+export type AreaStatGroup = typeof AreaStatGroup[keyof typeof AreaStatGroup];
+
+
+export const AreaStatGroup = {
+  paris: 'paris',
+  NUMBER_92: '92',
+  NUMBER_93: '93',
+  NUMBER_94: '94',
+  major: 'major',
+} as const;
+
 export interface AreaStat {
-  /** Arrondissement number (1 to 20) as a string, or the INSEE quartier code */
+  /** Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code */
   id: string;
   name: string;
-  arrondissement: number;
+  /** Where the Area sits. Paris, one of the three Departments, or a Major town. */
+  group: AreaStatGroup;
+  /**
+     * The Arrondissement number, or null for a Commune
+     * @nullable
+     */
+  arrondissement: number | null;
   count: number;
   medianPrice: number;
   medianPricePerSqm: number;
@@ -155,7 +175,8 @@ export interface SalePoint {
   price: number;
   surface: number;
   pricePerSqm: number;
-  arrondissement: number;
+  /** Name of the Arrondissement or Commune */
+  areaName: string;
   date: string;
   type: string;
   address: string;
@@ -166,7 +187,15 @@ export interface Transaction {
   date: string;
   type: string;
   address: string;
-  arrondissement: number;
+  /** @nullable */
+  arrondissement: number | null;
+  /**
+     * INSEE commune code, null in Paris
+     * @nullable
+     */
+  commune: string | null;
+  /** @nullable */
+  communeName: string | null;
   /** @nullable */
   quartierName: string | null;
   price: number;
@@ -197,7 +226,7 @@ export const PropertyTypeParameter = {
 } as const;
 
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  */
 export type ArrondissementParameter = number;
 
@@ -205,6 +234,20 @@ export type ArrondissementParameter = number;
  * Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).
  */
 export type QuartierParameter = string;
+
+export type DepartmentParameter = typeof DepartmentParameter[keyof typeof DepartmentParameter];
+
+
+export const DepartmentParameter = {
+  NUMBER_92: '92',
+  NUMBER_93: '93',
+  NUMBER_94: '94',
+} as const;
+
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ */
+export type CommuneParameter = string;
 
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
@@ -236,7 +279,7 @@ export type GetSalesSummaryParams = {
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -246,6 +289,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
@@ -264,7 +316,7 @@ export type GetPriceDistributionParams = {
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -274,6 +326,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
@@ -292,7 +353,7 @@ export type GetPricePerSqmDistributionParams = {
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -302,6 +363,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
@@ -320,7 +390,7 @@ export type GetSalesTrendParams = {
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -330,6 +400,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
@@ -386,6 +465,7 @@ export type GetAreaTrendLevel = typeof GetAreaTrendLevel[keyof typeof GetAreaTre
 export const GetAreaTrendLevel = {
   arrondissement: 'arrondissement',
   quartier: 'quartier',
+  commune: 'commune',
 } as const;
 
 export type GetSalesByRoomsParams = {
@@ -394,7 +474,7 @@ export type GetSalesByRoomsParams = {
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -404,6 +484,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
@@ -450,13 +539,30 @@ from?: FromParameter;
 to?: ToParameter;
 };
 
+export type GetSalesByCommuneParams = {
+/**
+ * Restrict to apartments or houses. Defaults to all residential sales.
+ */
+propertyType?: PropertyTypeParameter;
+/**
+ * First day to include (YYYY-MM-DD). Defaults to the start of the data.
+ * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+ */
+from?: FromParameter;
+/**
+ * Last day to include (YYYY-MM-DD). Defaults to the end of the data.
+ * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+ */
+to?: ToParameter;
+};
+
 export type GetSalesPointsParams = {
 /**
  * Restrict to apartments or houses. Defaults to all residential sales.
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -466,6 +572,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
@@ -484,7 +599,7 @@ export type ListTransactionsParams = {
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -494,6 +609,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$

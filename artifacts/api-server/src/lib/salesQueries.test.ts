@@ -8,6 +8,7 @@ import {
   areaTrendPoints,
   distribution,
   salePoints,
+  saleAreaName,
   salesByRooms,
   summaryStats,
   transactionPage,
@@ -312,4 +313,64 @@ test("buckets beyond the first quarter and month of a year", async () => {
   // November alone sits in month ordinal 2024 * 12 + 10.
   const m = await trendPoints(yearDb, {}, "month", 1, month("2024-11-01"), month("2024-12-01"));
   assert.deepEqual(m.map((r) => [r.label, r.count]), [["2024-11", 1], ["2024-12", 1]]);
+});
+
+/** A Sale in the given Area, with a Price per m² of 10,000. */
+function areaSale(id: string, department: string, commune: string | null, arr: number | null): FixtureSale {
+  return {
+    id, date: "2024-01-10", type: "Appartement", price: 100000, surface: 10, pricePerSqm: 10000,
+    rooms: 1, department, commune, arr, quartier: null, lon: 2.3, lat: 48.8, street: "Rue X",
+  };
+}
+
+let areaDb: SalesDb;
+
+before(async () => {
+  // 2 Sales in Paris, 3 in Commune 92012, 2 in Commune 93066 and 1 in the Major town 78646.
+  areaDb = await createSalesFixture([
+    areaSale("p1", "75", null, 1), areaSale("p2", "75", null, 1),
+    areaSale("a1", "92", "92012", null), areaSale("a2", "92", "92012", null), areaSale("a3", "92", "92012", null),
+    areaSale("b1", "93", "93066", null), areaSale("b2", "93", "93066", null),
+    areaSale("m1", "78", "78646", null),
+  ]);
+});
+
+async function salePointsIds(database: SalesDb, f: SaleFilter): Promise<string[]> {
+  return (await salePoints(database, f)).map((p) => p.id).sort();
+}
+
+test("a filter with no Area means Paris, never the whole file", async () => {
+  assert.equal((await summaryStats(areaDb, {}, null)).count, 2);
+  assert.deepEqual(await salePointsIds(areaDb, {}), ["p1", "p2"]);
+  assert.equal((await transactionPage(areaDb, {}, "date", "desc", 200, 0)).total, 2);
+});
+
+test("each kind of Area filters to its own Sales", async () => {
+  const count = async (f: SaleFilter) => (await summaryStats(areaDb, f, null)).count;
+  assert.equal(await count({ department: "92" }), 3);
+  assert.equal(await count({ commune: "93066" }), 2);
+  assert.equal(await count({ commune: "78646" }), 1);
+});
+
+test("Commune figures list each Commune and no Paris Sale", async () => {
+  const rows = await areaStats(areaDb, {}, "commune", null);
+  assert.deepEqual(rows.map((r) => [r.area, r.count]), [["78646", 1], ["92012", 3], ["93066", 2]]);
+});
+
+test("Arrondissement figures hold only Paris", async () => {
+  const rows = await areaStats(areaDb, {}, "arrondissement", null);
+  assert.deepEqual(rows.map((r) => r.area), ["1"]);
+});
+
+test("Commune trend leaves out Paris", async () => {
+  const rows = await areaTrendPoints(areaDb, {}, "commune", "month", 1, month("2024-01-01"), month("2024-12-01"));
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((r) => r.id.length === 5));
+});
+
+test("the place name of a Sale", () => {
+  const names = new Map([["92012", "Boulogne-Billancourt"]]);
+  assert.equal(saleAreaName(1, null, names), "1er arrondissement");
+  assert.equal(saleAreaName(5, null, names), "5e arrondissement");
+  assert.equal(saleAreaName(null, "92012", names), "Boulogne-Billancourt");
 });

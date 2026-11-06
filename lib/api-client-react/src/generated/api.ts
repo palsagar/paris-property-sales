@@ -24,6 +24,7 @@ import type {
   GetPriceDistributionParams,
   GetPricePerSqmDistributionParams,
   GetSalesByArrondissementParams,
+  GetSalesByCommuneParams,
   GetSalesByQuartierParams,
   GetSalesByRoomsParams,
   GetSalesPointsParams,
@@ -496,8 +497,8 @@ export const getGetAreaTrendUrl = (params?: GetAreaTrendParams,) => {
 }
 
 /**
- * Long-format table with one row per area and period. Used for the map time slider and the arrondissement by period heat map. The window parameter pools neighbouring periods exactly as for the trend endpoint.
- * @summary Median price per m2 over time for every arrondissement or quartier
+ * Long-format table with one row per area and period. The commune level lists the Communes and no Paris Sale. Used for the map time slider and the arrondissement by period heat map. The window parameter pools neighbouring periods exactly as for the trend endpoint.
+ * @summary Median price per m2 over time for every arrondissement, quartier or commune
  */
 export const getAreaTrend = async (params?: GetAreaTrendParams, options?: Parameters<typeof customFetch>[1]): Promise<AreaTrendPoint[]> => {
 
@@ -544,7 +545,7 @@ export type GetAreaTrendQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Median price per m2 over time for every arrondissement or quartier
+ * @summary Median price per m2 over time for every arrondissement, quartier or commune
  */
 
 export function useGetAreaTrend<TData = Awaited<ReturnType<typeof getAreaTrend>>, TError = ErrorType<unknown>>(
@@ -805,6 +806,90 @@ export function useGetSalesByQuartier<TData = Awaited<ReturnType<typeof getSales
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSalesByQuartierQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSalesByCommuneUrl = (params?: GetSalesByCommuneParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/sales/by-commune?${stringifiedParams}` : `/api/sales/by-commune`
+}
+
+/**
+ * @summary Price statistics and price change for each Commune with Sales
+ */
+export const getSalesByCommune = async (params?: GetSalesByCommuneParams, options?: Parameters<typeof customFetch>[1]): Promise<AreaStat[]> => {
+
+  return customFetch<AreaStat[]>(getGetSalesByCommuneUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSalesByCommuneQueryKey = (params?: GetSalesByCommuneParams,) => {
+    return [
+    `/api/sales/by-commune`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSalesByCommuneQueryOptions = <TData = Awaited<ReturnType<typeof getSalesByCommune>>, TError = ErrorType<unknown>>(params?: GetSalesByCommuneParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesByCommune>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSalesByCommuneQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSalesByCommune>>> = ({ signal }) => getSalesByCommune(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSalesByCommune>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSalesByCommuneQueryResult = NonNullable<Awaited<ReturnType<typeof getSalesByCommune>>>
+export type GetSalesByCommuneQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Price statistics and price change for each Commune with Sales
+ */
+
+export function useGetSalesByCommune<TData = Awaited<ReturnType<typeof getSalesByCommune>>, TError = ErrorType<unknown>>(
+ params?: GetSalesByCommuneParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSalesByCommune>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSalesByCommuneQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1127,6 +1212,83 @@ export function useGetQuartierBoundaries<TData = Awaited<ReturnType<typeof getQu
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetQuartierBoundariesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCommuneBoundariesUrl = () => {
+
+
+
+
+  return `/api/geo/communes`
+}
+
+/**
+ * @summary GeoJSON boundaries of the Communes
+ */
+export const getCommuneBoundaries = async ( options?: Parameters<typeof customFetch>[1]): Promise<GeoFeatureCollection> => {
+
+  return customFetch<GeoFeatureCollection>(getGetCommuneBoundariesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCommuneBoundariesQueryKey = () => {
+    return [
+    `/api/geo/communes`
+    ] as const;
+    }
+
+
+export const getGetCommuneBoundariesQueryOptions = <TData = Awaited<ReturnType<typeof getCommuneBoundaries>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommuneBoundaries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCommuneBoundariesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommuneBoundaries>>> = ({ signal }) => getCommuneBoundaries({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCommuneBoundaries>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCommuneBoundariesQueryResult = NonNullable<Awaited<ReturnType<typeof getCommuneBoundaries>>>
+export type GetCommuneBoundariesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary GeoJSON boundaries of the Communes
+ */
+
+export function useGetCommuneBoundaries<TData = Awaited<ReturnType<typeof getCommuneBoundaries>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCommuneBoundaries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCommuneBoundariesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

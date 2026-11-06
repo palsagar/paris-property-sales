@@ -14,12 +14,20 @@ export interface SaleFilter {
   propertyType?: string;
   arrondissement?: number;
   quartier?: string;
+  department?: string;
+  commune?: string;
   from?: string;
   to?: string;
 }
 
-/** A WHERE clause for the filter. Dates compare as text, so a date that does not exist never raises an error. */
-export function saleWhere(f: SaleFilter): { sql: string; params: SqlParams } {
+/**
+ * A WHERE clause for the filter. Dates compare as text, so a date that does not exist never raises an error.
+ * A filter with no Area means Paris. `noArea` is the condition used then, and a caller may replace it.
+ */
+export function saleWhere(
+  f: SaleFilter,
+  noArea = "department = '75'",
+): { sql: string; params: SqlParams } {
   const conditions: string[] = [];
   const params: SqlParams = {};
   if (f.propertyType && f.propertyType !== "all") {
@@ -33,6 +41,17 @@ export function saleWhere(f: SaleFilter): { sql: string; params: SqlParams } {
   if (f.quartier !== undefined) {
     conditions.push("quartier = $fQuartier");
     params["fQuartier"] = f.quartier;
+  }
+  if (f.department !== undefined) {
+    conditions.push("department = $fDepartment");
+    params["fDepartment"] = f.department;
+  }
+  if (f.commune !== undefined) {
+    conditions.push("commune = $fCommune");
+    params["fCommune"] = f.commune;
+  }
+  if (f.arrondissement === undefined && f.quartier === undefined && f.department === undefined && f.commune === undefined) {
+    conditions.push(noArea);
   }
   if (f.from !== undefined) {
     conditions.push("sale_date >= $fFrom");
@@ -150,7 +169,20 @@ export async function salesByRooms(db: SalesDb, f: SaleFilter) {
   );
 }
 
-export type AreaLevel = "arrondissement" | "quartier";
+export type AreaLevel = "arrondissement" | "quartier" | "commune";
+
+/** For each level, the column that names the Area, a condition that keeps its Sales, and what a filter with no Area means. */
+const AREA_LEVELS: Record<AreaLevel, { column: string; expr: string; condition: string; noArea?: string }> = {
+  arrondissement: { column: "arr", expr: "arr::VARCHAR", condition: "arr IS NOT NULL" },
+  quartier: { column: "quartier", expr: "quartier", condition: "quartier IS NOT NULL" },
+  commune: { column: "commune", expr: "commune", condition: "commune IS NOT NULL", noArea: "commune IS NOT NULL" },
+};
+
+/** The name of the place of a Sale: its Arrondissement in Paris, otherwise its Commune. */
+export function saleAreaName(arr: number | null, commune: string | null, names: Map<string, string>): string {
+  if (arr !== null) return `${arr === 1 ? "1er" : `${arr}e`} arrondissement`;
+  return (commune && names.get(commune)) ?? commune ?? "";
+}
 
 export interface AreaStat {
   area: string;
@@ -171,24 +203,24 @@ export async function areaStats(
   level: AreaLevel,
   w: ChangeWindows | null,
 ): Promise<AreaStat[]> {
-  const where = saleWhere(f);
+  const lv = AREA_LEVELS[level];
+  const where = saleWhere(f, lv.noArea);
   const change = changeSelect(w);
-  const areaExpr = level === "quartier" ? "quartier" : "arr::VARCHAR";
   const rows = await db.query<
     {
       area: string; count: number; medianPrice: number; medianPricePerSqm: number;
       p25PricePerSqm: number; p75PricePerSqm: number; medianSurface: number;
     } & ChangeRow
   >(
-    `SELECT ${areaExpr} AS area, count(*)::INTEGER AS count,
+    `SELECT ${lv.expr} AS area, count(*)::INTEGER AS count,
       quantile_cont(price, 0.5)::DOUBLE AS medianPrice,
       quantile_cont(price_per_sqm, 0.5)::DOUBLE AS medianPricePerSqm,
       quantile_cont(price_per_sqm, 0.25)::DOUBLE AS p25PricePerSqm,
       quantile_cont(price_per_sqm, 0.75)::DOUBLE AS p75PricePerSqm,
       quantile_cont(surface, 0.5)::DOUBLE AS medianSurface,
       ${change.sql}
-    FROM sales WHERE ${level === "quartier" ? "quartier IS NOT NULL AND " : ""}${where.sql}
-    GROUP BY ${level === "quartier" ? "quartier" : "arr"} ORDER BY ${level === "quartier" ? "quartier" : "arr"}`,
+    FROM sales WHERE ${lv.condition} AND ${where.sql}
+    GROUP BY ${lv.column} ORDER BY ${lv.column}`,
     { ...where.params, ...change.params },
   );
   return rows.map(({ nStart, nEnd, startPpsm, endPpsm, startPrice, endPrice, ...r }) => {
@@ -215,8 +247,9 @@ function pooledQuery(
   areaExpr: string | null,
   extraWhere: string,
   measures: string,
+  noArea?: string,
 ) {
-  const where = saleWhere(f);
+  const where = saleWhere(f, noArea);
   const area = areaExpr ? `${areaExpr} AS area, ` : "";
   return {
     sql: `WITH s AS (SELECT ${area}price, price_per_sqm, ${ordinalSql(g)} AS o FROM sales WHERE ${extraWhere}${where.sql}),
@@ -257,11 +290,13 @@ export async function areaTrendPoints(
   first: number,
   last: number,
 ) {
+  const lv = AREA_LEVELS[level];
   const q = pooledQuery(
     f, g, windowSize, first, last,
-    level === "quartier" ? "quartier" : "arr::VARCHAR",
-    level === "quartier" ? "quartier IS NOT NULL AND " : "",
+    lv.expr,
+    `${lv.condition} AND `,
     `quantile_cont(price_per_sqm, 0.5)::DOUBLE AS "medianPricePerSqm"`,
+    lv.noArea,
   );
   const rows = await db.query<{ area: string; b: number; count: number; medianPricePerSqm: number }>(q.sql, q.params);
   return rows
@@ -277,9 +312,9 @@ export async function salePoints(db: SalesDb, f: SaleFilter) {
   const where = saleWhere(f);
   return db.query<{
     id: string; lon: number; lat: number; price: number; surface: number; pricePerSqm: number;
-    arrondissement: number; date: string; type: string; address: string;
+    arr: number | null; commune: string | null; date: string; type: string; address: string;
   }>(
-    `SELECT id, lon, lat, price, surface, price_per_sqm AS "pricePerSqm", arr AS arrondissement,
+    `SELECT id, lon, lat, price, surface, price_per_sqm AS "pricePerSqm", arr, commune,
       sale_date AS "date", property_type AS "type", street AS "address"
     FROM sales WHERE lon IS NOT NULL AND lat IS NOT NULL AND ${where.sql}
     ORDER BY sale_date DESC, id`,
@@ -311,10 +346,10 @@ export async function transactionPage(
   // An offset past the last Sale gives an empty page. The check also keeps a huge offset out of the INTEGER cast below.
   if (offset >= count!.total) return { total: count!.total, items: [] };
   const items = await db.query<{
-    id: string; date: string; type: string; address: string; arrondissement: number;
-    quartier: string | null; price: number; surface: number; pricePerSqm: number; rooms: number;
+    id: string; date: string; type: string; address: string; arr: number | null;
+    commune: string | null; quartier: string | null; price: number; surface: number; pricePerSqm: number; rooms: number;
   }>(
-    `SELECT id, sale_date AS "date", property_type AS "type", street AS "address", arr AS arrondissement,
+    `SELECT id, sale_date AS "date", property_type AS "type", street AS "address", arr, commune,
       quartier, price, surface, price_per_sqm AS "pricePerSqm", rooms
     FROM sales WHERE ${where.sql}
     ORDER BY ${order} LIMIT $tLimit::INTEGER OFFSET $tOffset::INTEGER`,

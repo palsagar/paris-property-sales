@@ -7,7 +7,7 @@
  */
 
 export interface AreaTrendPoint {
-  /** Arrondissement number as a string, or INSEE quartier code */
+  /** Arrondissement number as a string, INSEE quartier code, or INSEE commune code */
   id: string;
   /** Start date of the bucket (YYYY-MM-DD) */
   period: string;

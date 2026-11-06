@@ -11,7 +11,15 @@ export interface Transaction {
   date: string;
   type: string;
   address: string;
-  arrondissement: number;
+  /** @nullable */
+  arrondissement: number | null;
+  /**
+     * INSEE commune code, null in Paris
+     * @nullable
+     */
+  commune: string | null;
+  /** @nullable */
+  communeName: string | null;
   /** @nullable */
   quartierName: string | null;
   price: number;

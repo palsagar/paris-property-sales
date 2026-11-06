@@ -6,6 +6,7 @@ import {
   GetPriceDistributionQueryParams,
   GetPricePerSqmDistributionQueryParams,
   GetSalesByArrondissementQueryParams,
+  GetSalesByCommuneQueryParams,
   GetSalesByQuartierQueryParams,
   GetSalesByRoomsQueryParams,
   GetSalesPointsQueryParams,
@@ -37,10 +38,12 @@ const QUERY_SCHEMAS = new Map<string, ZodTypeAny>([
   ["/sales/by-rooms", GetSalesByRoomsQueryParams],
   ["/sales/by-arrondissement", GetSalesByArrondissementQueryParams],
   ["/sales/by-quartier", GetSalesByQuartierQueryParams],
+  ["/sales/by-commune", GetSalesByCommuneQueryParams],
   ["/sales/points", GetSalesPointsQueryParams],
   ["/sales/transactions", ListTransactionsQueryParams],
   ["/geo/arrondissements", NO_QUERY],
   ["/geo/quartiers", NO_QUERY],
+  ["/geo/communes", NO_QUERY],
 ]);
 
 // The key is the validated query, which is exactly what the route acts on. Two

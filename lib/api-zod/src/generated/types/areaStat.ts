@@ -5,12 +5,19 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AreaStatGroup } from './areaStatGroup';
 
 export interface AreaStat {
-  /** Arrondissement number (1 to 20) as a string, or the INSEE quartier code */
+  /** Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code */
   id: string;
   name: string;
-  arrondissement: number;
+  /** Where the Area sits. Paris, one of the three Departments, or a Major town. */
+  group: AreaStatGroup;
+  /**
+     * The Arrondissement number, or null for a Commune
+     * @nullable
+     */
+  arrondissement: number | null;
   count: number;
   medianPrice: number;
   medianPricePerSqm: number;

@@ -7,6 +7,6 @@
  */
 
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  */
 export type ArrondissementParameter = number;
