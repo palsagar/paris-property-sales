@@ -9,7 +9,9 @@ A Mutation counts as a Sale only if all of these conditions are true:
 - Its Built surface is 9 to 300 m².
 - Its Price per m² is 1,000 to 35,000 EUR.
 
-DVF records one price for a whole Mutation, so a price cannot be split reliably between several properties. The limits remove records that would distort the medians. On the October 2026 DVF release, 404,582 Mutations pass, and 66,954 are Excluded mutations.
+DVF records one price for a whole Mutation, so a price cannot be split reliably between several properties. The limits remove records that would distort the medians. On the October 2026 DVF release, 404,582 Mutations pass, and 39,375 are Excluded mutations.
+
+The build tests for a dwelling before it tests for commercial premises. A Mutation with no apartment or house is not residential, so it is never an Excluded mutation, even when it holds commercial premises. A Mutation with a dwelling and commercial premises is an Excluded mutation. On the October 2026 DVF release, 8,453 Mutations are in that second group, and 27,579 Mutations with commercial premises and no dwelling are not counted.
 
 The original project recorded no reasons for these rules, except the note that exclusions keep the Price per m² reliable. The rest of this reasoning is inferred from the code.
 

@@ -187,6 +187,9 @@ class ClassifyMutationTest(unittest.TestCase):
             ("echange", [mutation_row(nature_mutation="Echange")], "not_a_sale"),
             ("commercial premises", [mutation_row(), shop], "has_commercial_premises"),
             ("only a dependency", [mutation_row(type_local="Dépendance")], "no_dwelling"),
+            # A Mutation with no dwelling is not residential, so it never counts as an Excluded mutation.
+            ("a shop with no dwelling", [shop], "no_dwelling"),
+            ("a shop with one dwelling", [shop, mutation_row()], "has_commercial_premises"),
             ("two apartments", [mutation_row(), mutation_row()], "multiple_dwellings"),
             ("blank price", [mutation_row(valeur_fonciere="")], "missing_price_or_surface"),
             ("blank surface", [mutation_row(surface_reelle_bati="")], "missing_price_or_surface"),

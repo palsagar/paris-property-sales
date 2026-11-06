@@ -115,7 +115,7 @@ _Avoid_: User, customer
 
 ## Example dialogue
 
-> **Dev:** "The 6th arrondissement shows 3,365 Sales. Why does the data note still say 28,407 were left out?"
+> **Dev:** "The 6th arrondissement shows 3,365 Sales. Why does the data note still say 39,375 were left out?"
 
 > **Domain expert:** "Because that number counts Excluded mutations across the whole dataset. We do not know how many belong to one Selection."
 

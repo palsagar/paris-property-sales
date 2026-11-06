@@ -280,11 +280,13 @@ def classify_mutation(
         return "outside_communes", None
     if rows[0]["nature_mutation"] != "Vente":
         return "not_a_sale", None
-    if any(r["type_local"] == "Local industriel. commercial ou assimilé" for r in rows):
-        return "has_commercial_premises", None
+    # A Mutation with no dwelling is not residential, so it must not count as an Excluded mutation.
+    # That makes this test come before the one for commercial premises.
     dw = [r for r in rows if r["type_local"] in DWELLINGS]
     if not dw:
         return "no_dwelling", None
+    if any(r["type_local"] == "Local industriel. commercial ou assimilé" for r in rows):
+        return "has_commercial_premises", None
     if len(dw) > 1:
         return "multiple_dwellings", None
     r = dw[0]
