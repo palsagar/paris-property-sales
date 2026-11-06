@@ -1,5 +1,5 @@
 import { logger } from "./logger";
-import { datasetRange, datasetYears, quartierNames } from "./salesData";
+import { communeNames, datasetRange, datasetYears, quartierNames } from "./salesData";
 
 const PAGE = 15;
 const TYPES = ["all", "Appartement", "Maison"] as const;
@@ -37,16 +37,21 @@ function* warmUrls(): Generator<string> {
   const areas: Array<Record<string, string | number>> = [
     {},
     ...Array.from({ length: 20 }, (_, i) => ({ arrondissement: i + 1 })),
+    ...["92", "93", "94"].map((d) => ({ department: d })),
   ];
   const quartiers = [...quartierNames.keys()].map((id) => ({ quartier: id }));
+  const communes = [...communeNames.keys()].map((id) => ({ commune: id }));
 
   const areaIndependent = (propertyType: string, r: Range): string[] => {
     const base = { propertyType, ...r };
     return [
       `/sales/by-arrondissement?${qs(base)}`,
+      `/sales/by-commune?${qs(base)}`,
       `/sales/by-quartier?${qs(base)}`,
       `/sales/area-trend?${qs({ level: "arrondissement", ...base, granularity: "quarter", window: 1 })}`,
       `/sales/area-trend?${qs({ level: "arrondissement", ...base, granularity: "quarter", window: 4 })}`,
+      `/sales/area-trend?${qs({ level: "commune", ...base, granularity: "quarter", window: 1 })}`,
+      `/sales/area-trend?${qs({ level: "commune", ...base, granularity: "quarter", window: 4 })}`,
       `/sales/area-trend?${qs({ level: "quartier", ...base, granularity: "quarter", window: 4 })}`,
     ];
   };
@@ -84,7 +89,7 @@ function* warmUrls(): Generator<string> {
     yield `/sales/trend?${qs({ propertyType: t, granularity: "month", window: 1 })}`;
     for (const a of areas) {
       yield* areaDependent(t, {}, a, true);
-      if (a["arrondissement"] !== undefined) {
+      if (Object.keys(a).length > 0) {
         yield `/sales/trend?${qs({ propertyType: t, ...a, granularity: "month", window: 1 })}`;
       }
     }
@@ -94,12 +99,17 @@ function* warmUrls(): Generator<string> {
     yield* areaDependent("all", {}, q, true);
     yield `/sales/trend?${qs({ propertyType: "all", ...q, granularity: "month", window: 1 })}`;
   }
-  // 3. Presets (one year, last 12 months) for Paris and arrondissements.
+  // 3. Communes (default range, all property types).
+  for (const c of communes) {
+    yield* areaDependent("all", {}, c, true);
+    yield `/sales/trend?${qs({ propertyType: "all", ...c, granularity: "month", window: 1 })}`;
+  }
+  // 4. Presets (one year, last 12 months) for Paris, arrondissements and departments.
   for (const r of ranges().slice(1)) {
     yield* areaIndependent("all", r);
     for (const a of areas) yield* areaDependent("all", r, a, true);
   }
-  // 4. Dots map for the default window and each arrondissement.
+  // 5. Dots map for the default window and each arrondissement.
   const recent = lastTwelveMonths();
   yield `/sales/points?${qs({ propertyType: "all", ...recent })}`;
 }

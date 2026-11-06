@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how the Paris Property Sales site works and how it is deployed. For the meaning of terms such as Sale, Mutation and Selection, see [`CONTEXT.md`](../CONTEXT.md). For the reasons behind major choices, see the [decision records](adr/).
+This document explains how the Paris & Suburbs Property Sales site works and how it is deployed. For the meaning of terms such as Sale, Mutation and Selection, see [`CONTEXT.md`](../CONTEXT.md). For the reasons behind major choices, see the [decision records](adr/).
 
 ## Overview
 
@@ -9,8 +9,9 @@ The site is one Node.js process. It serves the API and the built dashboard on on
 ```mermaid
 flowchart LR
   subgraph prep["Data preparation on a developer machine"]
-    A["DVF files on data.gouv.fr"] -->|"fetch_dvf.py"| B["Paris rows in data-raw/src"]
+    A["DVF files on data.gouv.fr"] -->|"fetch_dvf.py"| B["Rows of 8 departments in data-raw/src"]
     B -->|"build_paris_sales.py"| C["sales.duckdb"]
+    I["Commune outlines on the web"] -->|"fetch_communes.py"| G
     G["Boundaries in data-raw"] -->|"build_paris_sales.py"| H["Boundary files in git"]
   end
   subgraph server["Server"]
@@ -24,19 +25,21 @@ flowchart LR
 
 ## Data pipeline
 
-The pipeline has three Python scripts, and it runs outside the application. `uv` runs them and installs the `duckdb` package.
+The pipeline has four Python scripts, and it runs outside the application. `uv` runs them and installs the `duckdb` package.
 
-1. `scripts/fetch_dvf.py` finds the latest five-year DVF file on data.gouv.fr by its resource title, streams it, keeps the rows for department 75, and writes `data-raw/src/paris.csv` and `data-raw/src/release.txt`. The download is about 610 MB.
-2. `scripts/build_paris_sales.py` reads `paris.csv`, `release.txt` and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It also assigns each Sale to a Quartier by its coordinates. It writes `sales.duckdb`, which records the release month, to `artifacts/api-server/data/`, and the two boundary files to `artifacts/api-server/boundaries/`.
-3. `scripts/update_data.py` runs the first script and then the second. Both scripts also run alone, so a rebuild does not need another download.
+1. `scripts/fetch_dvf.py` finds the latest five-year DVF file on data.gouv.fr by its resource title, streams it, keeps the rows of Paris (75) and of the departments of the Communes (77, 78, 91, 92, 93, 94 and 95), and writes `data-raw/src/dvf.csv` and `data-raw/src/release.txt`. The download is about 610 MB, and the kept file is 478 MB (2,410,074 rows on the October 2026 release).
+2. `scripts/build_paris_sales.py` reads `dvf.csv`, `release.txt` and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It assigns each Sale to a Quartier or to one of the 135 Communes by its code or coordinates. It writes `sales.duckdb`, which records the release month, to `artifacts/api-server/data/`, and the three boundary files to `artifacts/api-server/boundaries/`. Peak memory of the whole update is about 2.7 GB, measured once.
+3. `scripts/fetch_communes.py` downloads the Commune outlines (Etalab "Contours administratifs", 2026, 50 m level) into `data-raw/communes.geojson`. `update_data.py` does not call it, because boundaries change far less often than Sales. Run it when the list of Communes in `scripts/communes.py` changes.
+4. `scripts/update_data.py` runs the first script and then the second. Both scripts also run alone, so a rebuild does not need another download.
 
-Before the build replaces any file, it checks the new release. The release must have the expected columns. Its Sale count must be within 15% of the previous file. Every Arrondissement and every Quartier must have Sales. Every date must be in ISO format. No Sale may be dated after the release month. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason, exits with an error, and leaves the previous `sales.duckdb` and the boundary files in place.
+Before the build replaces any file, it checks the new release. The release must have the expected columns. The Sale count must be within 15% of the previous file, counted for Paris and for the Communes separately. Every Arrondissement, every Quartier and every Commune must have Sales. A Commune code in a complete department that is on no list fails the release, because a merger or a rename would otherwise make its Sales vanish. Every date must be in ISO format. No Sale may be dated after the release month. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason, exits with an error, and leaves the previous `sales.duckdb` and the boundary files in place.
 
 | Output file | Contents | In git |
 | --- | --- | --- |
 | `data/sales.duckdb` | The Sales, the exclusion counts and the release month | No |
 | `boundaries/arrondissements.geojson` | The boundaries of the 20 Arrondissements | Yes |
 | `boundaries/quartiers.geojson` | The boundaries of the 80 Quartiers | Yes |
+| `boundaries/communes.geojson` | The boundaries of the 135 Communes, under the ODbL | Yes |
 
 A new DVF release can change the figures, because the DGFiP can correct past periods.
 
@@ -72,9 +75,10 @@ sequenceDiagram
 ```
 
 - **Sales file:** `salesData.ts` opens `sales.duckdb` when the process starts. `salesDb.ts` opens it read-only and uses one connection for each query. See [decision record 7](adr/0007-duckdb-rebuilt-for-each-release.md).
+- **Areas:** a request with no Area means Paris. The Areas are the Arrondissement, the Quartier, the Department (92, 93 or 94) and the Commune.
 - **Calculations:** `routes/sales.ts` calls `salesQueries.ts`, which holds all the SQL and calculates each response from the matching Sales. `timeStats.ts` holds the time buckets and the SQL for the Change.
 - **Response cache:** `responseCache.ts` keeps responses in memory, up to 256 MB in total, and removes the least recently used first. The key is the path plus the query after validation, with the same schema the route uses. Unknown parameters and different spellings of a value therefore share one entry, and the cache and the route always agree on what a request means. A path that is not listed in `QUERY_SCHEMAS` is not cached.
-- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. In testing, it stored 2,804 responses in about 22 seconds. The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
+- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. `warmUrls()` produces 4,463 URLs. The time it takes is not yet measured on the new data (TIME_TO_BE_MEASURED_IN_TASK_11). The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
 
 ## Dashboard
 
@@ -129,11 +133,11 @@ Coolify's storage is not a backup, but the data does not need one. The scripts c
 The site is not ready for the public yet. These items must be complete first.
 
 - **Block search engines.** Change `robots.txt` and the `robots` meta tag, and block `/api` as well. Both currently allow indexing.
-- **Make the API private to the site.** Remove the open CORS setting, add rate limits, cap the number of records in one response, and limit exports to what is on screen. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong. Many such requests at once can also stop the server, because each one holds its whole result in memory until it finishes. The 5,000 Sale cap in issue #5 reduces this risk, and the rate limits must bound it.
+- **Make the API private to the site.** Remove the open CORS setting, add rate limits, cap the number of records in one response, and limit exports to what is on screen. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong. Many such requests at once can also stop the server, because each one holds its whole result in memory until it finishes. The 5,000 Sale cap in issue #5 reduces this risk, and the rate limits must bound it. Rerun the burst test after issue #5 and before launch, because the Sales have tripled. Do not make the site public between #4 and #5.
 - **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts.
 - **Self-host the fonts and replace the Esri tiles.** We could not confirm that Esri's tile address can be used on a public site without an account. Choose a map provider with terms that clearly allow public use.
-- **Decide how to handle re-identification through the public DVF file.** Every Sale keeps its `id_mutation`, and the public DVF file lists the same identifier with the house number and the exact coordinates. A Visitor can also match a Sale without the identifier, because date, price, surface and street together identify 128,086 of the 128,114 Sales uniquely. The rounded position and the missing house number therefore do not prevent re-identification. This limit needs a decision before launch.
-- **Design the map for rounded Sale locations.** Several dots stack on one position. 127,850 of the 128,107 points share a position with at least one other point, and the largest stack holds 160 Sales.
+- **Accept the re-identification risk knowingly.** No Sale holds its `id_mutation` any more, so a Visitor cannot join a Sale to the public DVF file by that identifier. Date, price, surface and street together still identify 404,405 of the 404,582 Sales uniquely. We accept this risk, and the DGFiP condition against indirect re-identification is not fully met. [Decision record 6](adr/0006-public-site-limits.md) records it.
+- **Design the map for rounded Sale locations.** Several dots stack on one position. Several Sales share one position, and the stacks are larger now that the Communes are included.
 
 [Decision record 6](adr/0006-public-site-limits.md) explains the location, search engine and API limits.
 
@@ -143,14 +147,13 @@ These items do not block launch.
 
 - French by default, with an English option.
 - A clear statement that the site gives no Valuation, and warnings for small samples.
-- Copy fixes: "Every recorded" in the introduction, "of this selection" in the data note, "Carrez or built surface" on the surface card, and "transactions" in the sales list.
+- Copy fixes: "Carrez or built surface" on the surface card, and "transactions" in the sales list.
 - A warning for a Change over a Period of less than 12 months.
 - A proxy for `/api` in the Vite development server.
 - Removal of the unused template code: `lib/db`, `scripts/src/hello.ts`, the Replit dependencies and the unused UI components.
 
 ## Planned work
 
-This document describes the site as it is today. The next iteration adds the Communes around Paris. It has two parts, in this order, and the public launch follows them.
+This document describes the site as it is today. Only one item remains before the public launch.
 
-1. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
-2. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).
+1. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).

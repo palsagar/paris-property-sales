@@ -1,4 +1,4 @@
-# Paris Property Sales: one container serves the dashboard and the API on one port.
+# Paris & Suburbs Property Sales: one container serves the dashboard and the API on one port.
 FROM node:24-slim AS build
 RUN npm install -g pnpm@10.26.1
 WORKDIR /app

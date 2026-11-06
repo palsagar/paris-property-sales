@@ -171,7 +171,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
         {/* Masthead: one line */}
         <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b-2 border-foreground pb-2">
           <div className="flex flex-wrap items-baseline gap-x-4">
-            <div className="font-display font-bold text-[20px] leading-tight" data-testid="text-title">Paris Property Sales</div>
+            <div className="font-display font-bold text-[20px] leading-tight" data-testid="text-title">Paris & Suburbs Property Sales</div>
             <div className="text-[13px] text-muted-foreground" data-testid="text-coverage">Data to {longMonthLabel(datasetTo)}, {longMonthLabel(releaseMonth)} release</div>
           </div>
           <div className="flex items-center gap-2 print:hidden">
