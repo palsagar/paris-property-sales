@@ -290,7 +290,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
           </div>
 
           <div className="mb-4">
-            <Heatmap data={heatData} rows={rankRows} loading={heat.isLoading || rankLoading} fetching={heat.isFetching} error={heat.isError || rankError} retry={() => { heat.refetch(); byArr.refetch(); byCommune.refetch(); }}
+            <Heatmap data={heatData} rows={rankRows} loading={heat.isLoading || heat.isPlaceholderData || rankLoading} fetching={heat.isFetching} error={heat.isError || rankError} retry={() => { heat.refetch(); byArr.refetch(); byCommune.refetch(); }}
               scale={scale.color} domain={domain} selId={selId} onSelectRow={selectRow} rank={rank} onRank={(r) => patch({ rank: r })} ptype={ptype} travel={travel}
               onSelectPeriod={(p) => { setTravel(p); patch({ mapMode: "level" }); }} isDark={isDark} />
           </div>
