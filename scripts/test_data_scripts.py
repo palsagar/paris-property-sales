@@ -25,7 +25,6 @@ from build_paris_sales import (
     check_release,
     classify_mutation,
     main,
-    read_previous,
     write_database,
 )
 from fetch_dvf import copy_paris_rows, find_release
@@ -208,7 +207,7 @@ def make_sale(**overrides: Any) -> Sale:
         "street": "Rue De Rivoli",
     }
     sale.update(overrides)
-    return sale  # ty: ignore[invalid-return-type]
+    return sale
 
 
 class WriteDatabaseTest(unittest.TestCase):
@@ -438,7 +437,7 @@ class MainTest(unittest.TestCase):
                 with self.assertRaises(SystemExit) as raised:
                     self.run_main()
                 self.assertIsInstance(raised.exception.code, str)
-                self.assertIn(reason, raised.exception.code)
+                self.assertIn(reason, str(raised.exception.code))
                 self.assertEqual(self.ids(), [(f"old{i}",) for i in range(10)])
                 self.assertEqual(os.listdir(self.out), ["sales.duckdb"])
                 self.assertEqual(os.listdir(self.boundaries), [])
@@ -447,7 +446,7 @@ class MainTest(unittest.TestCase):
         self.write_inputs(release=None)
         with self.assertRaises(SystemExit) as raised:
             self.run_main()
-        self.assertIn("fetch_dvf.py", raised.exception.code)
+        self.assertIn("fetch_dvf.py", str(raised.exception.code))
         self.assertEqual(os.listdir(self.out), [])
 
 
