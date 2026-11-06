@@ -16,6 +16,7 @@ Run: uv run scripts/build_paris_sales.py
 import csv
 import json
 import os
+import re
 import tempfile
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -437,6 +438,9 @@ def check_release(
 
 def _is_iso_date(value: str) -> bool:
     """Tell whether a string is a valid ``YYYY-MM-DD`` date."""
+    # Python 3.11 also reads forms such as 20260630 and 2026-W26-2, which sort wrongly.
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
     try:
         date.fromisoformat(value)
     except ValueError:

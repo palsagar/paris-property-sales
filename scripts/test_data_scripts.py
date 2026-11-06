@@ -294,6 +294,13 @@ class CheckReleaseTest(unittest.TestCase):
         bad = [*self.good[:99], make_sale(date="30/06/2026", arr=1, quartier="7510101")]
         self.assertIn("30/06/2026", self.check(bad)[0])
 
+    def test_dates_that_sort_wrongly_or_do_not_exist_fail(self) -> None:
+        # Python 3.11 reads the first two as valid dates, but the site reads dates by character position.
+        for value in ("20260630", "2026-W26-2", "2026-13-45"):
+            with self.subTest(value=value):
+                bad = [*self.good[:99], make_sale(date=value, arr=1, quartier="7510101")]
+                self.assertIn(value, self.check(bad)[0])
+
     def test_no_sales_fails_with_a_reason_and_no_previous_file(self) -> None:
         self.assertIn("No Sales", self.check([], previous=None)[0])
 
