@@ -375,13 +375,14 @@ def check_release(
     previous: tuple[int, str] | None,
     arrondissements: Iterable[int],
     quartiers: Iterable[str],
+    release_month: str,
 ) -> list[str]:
     """Decide whether a new release is safe to replace the existing file.
 
-    The checks are: the release has Sales, every date is in ISO format, the
-    Sale count is within ``MAX_COUNT_CHANGE`` of the previous count, every
-    Arrondissement and Quartier has a Sale, and the end date is not earlier
-    than the previous one.
+    The checks are: the release has Sales, every date is in ISO format, no
+    Sale is dated after the release month, the Sale count is within
+    ``MAX_COUNT_CHANGE`` of the previous count, every Arrondissement and
+    Quartier has a Sale, and the end date is not earlier than the previous one.
 
     Parameters
     ----------
@@ -393,6 +394,8 @@ def check_release(
         Every Arrondissement number of the boundary file.
     quartiers : iterable of str
         Every Quartier id of the boundary file.
+    release_month : str
+        The month of the release, as ``YYYY-MM``. No Sale may be dated after it.
 
     Returns
     -------
@@ -403,7 +406,7 @@ def check_release(
     --------
     .. code-block:: python
 
-        reasons = check_release(sales, (62000, "2026-06-30"), range(1, 21), quartier_ids)
+        reasons = check_release(sales, (62000, "2026-06-30"), range(1, 21), quartier_ids, "2026-10")
         if reasons:
             raise SystemExit("\\n".join(reasons))
     """
@@ -415,6 +418,9 @@ def check_release(
         return [f"Dates not in YYYY-MM-DD format, for example {bad_dates[0]}."]
     reasons: list[str] = []
     end_date = max(s["date"] for s in sales)
+    # One mistyped future date would become the end date and lock out every corrected release.
+    if end_date[:7] > release_month:
+        reasons.append(f"The end date {end_date} is later than the release month {release_month}.")
     if previous is not None:
         count, previous_end = previous
         change = (len(sales) - count) / count
@@ -598,6 +604,7 @@ def main() -> None:
         previous,
         [ft["properties"]["arr"] for ft in arr_geo["features"]],
         [ft["properties"]["id"] for ft in quartier_geo["features"]],
+        release_month,
     )
     if reasons:
         raise SystemExit("\n".join(reasons))

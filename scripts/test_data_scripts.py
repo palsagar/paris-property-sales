@@ -279,8 +279,9 @@ class CheckReleaseTest(unittest.TestCase):
     good = [make_sale(id=str(i), date="2026-06-30", arr=1, quartier="7510101") for i in range(100)]
 
     def check(self, sales: list[Sale], previous: tuple[int, str] | None = (100, "2026-06-30"),
-              arrs: tuple[int, ...] = (1,), quartiers: tuple[str, ...] = ("7510101",)) -> list[str]:
-        return check_release(sales, previous, arrs, quartiers)
+              arrs: tuple[int, ...] = (1,), quartiers: tuple[str, ...] = ("7510101",),
+              release_month: str = "2026-10") -> list[str]:
+        return check_release(sales, previous, arrs, quartiers, release_month)
 
     def test_passes_on_same_release_again_and_on_no_previous_file(self) -> None:
         self.assertEqual(self.check(self.good), [])
@@ -309,6 +310,18 @@ class CheckReleaseTest(unittest.TestCase):
             with self.subTest(value=value):
                 bad = [*self.good[:99], make_sale(date=value, arr=1, quartier="7510101")]
                 self.assertIn(value, self.check(bad)[0])
+
+    def test_sale_dated_after_the_release_month_fails(self) -> None:
+        def with_date(value: str) -> list[Sale]:
+            return [*self.good[:99], make_sale(date=value, arr=1, quartier="7510101")]
+
+        reasons = self.check(with_date("2096-06-30"))
+        self.assertIn("2096-06-30", reasons[0])
+        self.assertIn("2026-10", reasons[0])
+        self.assertEqual(self.check(with_date("2026-10-31")), [])  # last day of the release month
+        self.assertIn("2026-11-01", self.check(with_date("2026-11-01"))[0])
+        # A fresh clone has no previous file, and the check must still run.
+        self.assertIn("2096-06-30", self.check(with_date("2096-06-30"), previous=None)[0])
 
     def test_no_sales_fails_with_a_reason_and_no_previous_file(self) -> None:
         self.assertIn("No Sales", self.check([], previous=None)[0])
@@ -415,6 +428,7 @@ class MainTest(unittest.TestCase):
             ("count more than 15% away", {"count": 5}, "Sale count"),
             ("Arrondissement with no Sales", {"arrs": (1, 2)}, "Arrondissement"),
             ("earlier end date", {"date": "2026-01-01"}, "end date"),
+            ("Sale dated after the release month", {"date": "2096-06-30"}, "2096-06-30"),
             ("header with no rows", {"count": 0}, "No Sales"),
         ]
         for name, inputs, reason in cases:

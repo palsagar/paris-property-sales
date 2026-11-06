@@ -30,7 +30,7 @@ The pipeline has three Python scripts, and it runs outside the application. `uv`
 2. `scripts/build_paris_sales.py` reads `paris.csv`, `release.txt` and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It also assigns each Sale to a Quartier by its coordinates. It writes `sales.duckdb`, which records the release month, to `artifacts/api-server/data/`, and the two boundary files to `artifacts/api-server/boundaries/`.
 3. `scripts/update_data.py` runs the first script and then the second. Both scripts also run alone, so a rebuild does not need another download.
 
-Before the build replaces any file, it checks the new release. The release must have the expected columns. Its Sale count must be within 15% of the previous file. Every Arrondissement and every Quartier must have Sales. Every date must be in ISO format. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason, exits with an error, and leaves the previous `sales.duckdb` and the boundary files in place.
+Before the build replaces any file, it checks the new release. The release must have the expected columns. Its Sale count must be within 15% of the previous file. Every Arrondissement and every Quartier must have Sales. Every date must be in ISO format. No Sale may be dated after the release month. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason, exits with an error, and leaves the previous `sales.duckdb` and the boundary files in place.
 
 | Output file | Contents | In git |
 | --- | --- | --- |
