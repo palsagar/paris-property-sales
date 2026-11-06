@@ -39,7 +39,7 @@ export function parseView(search: string): ViewState {
     q && /^\d{7}$/.test(q) ? { kind: "q", id: q }
     : commune && /^\d{5}$/.test(commune) ? { kind: "commune", id: commune }
     : dept === "92" || dept === "93" || dept === "94" ? { kind: "department", id: dept as DepartmentId }
-    : arr >= 1 && arr <= 20 ? { kind: "arr", arr }
+    : Number.isInteger(arr) && arr >= 1 && arr <= 20 ? { kind: "arr", arr }
     : { kind: "paris" };
   return {
     ptype: t === "Appartement" || t === "Maison" ? t : "all",

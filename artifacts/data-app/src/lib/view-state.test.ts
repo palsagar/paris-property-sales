@@ -47,3 +47,8 @@ test("a link to an Area that does not exist", () => {
   assert.deepEqual(v.area, { kind: "commune", id: "99999" });
   assert.equal(v.rank, "major");
 });
+
+test("a link with a fractional Arrondissement shows All Paris", () => {
+  assert.deepEqual(parseView("?arr=1.5").area, { kind: "paris" });
+  assert.deepEqual(parseView("?arr=7").area, { kind: "arr", arr: 7 });
+});
