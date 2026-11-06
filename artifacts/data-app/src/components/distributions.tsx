@@ -6,6 +6,7 @@ import { BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Toolti
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, TipBox, useChartColors } from "@/components/ui-bits";
 import { eur, eurShort, sqm, sqmOrTooFew, num, kShort, orTooFew, houseShareLabel, TOO_FEW } from "@/lib/fmt";
+import { binStart, binTick } from "@/lib/histogram";
 import type { Filters } from "@/components/hero-trend";
 
 function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; color: string }) {
@@ -15,8 +16,8 @@ function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribu
     return <div className="flex items-center justify-center text-muted-foreground text-sm h-[340px]">{TOO_FEW}</div>;
   }
   const share = houseShareLabel(houseShare);
-  const data = dist.bins.map((b) => ({ ...b, mid: (b.from + b.to) / 2, label: kShort(b.from) }));
-  const binOf = (v: number) => data.find((b) => v >= b.from && v < b.to)?.label ?? data[data.length - 1]?.label;
+  // The numeric `from` is the category key: it is unique, so the reference lines find their bin, and the labels may repeat or not.
+  const data = dist.bins.map((b) => ({ ...b, mid: (b.from + b.to) / 2 }));
   // P25/P75 labels sit inside the plot, on the outer side of their line, so they never collide with the Median label on top.
   const refs: [string, number, string, "insideTopRight" | "top" | "insideTopLeft", number][] = [
     ["P25", p25, c.second, "insideTopRight", 1.25], ["Median", median, c.accent, "top", 2], ["P75", p75, c.second, "insideTopLeft", 1.25],
@@ -26,7 +27,7 @@ function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribu
       <ResponsiveContainer width="100%" height={260} debounce={0}>
         <BarChart data={data} margin={{ top: 22, right: 8, left: 0, bottom: 0 }} barCategoryGap={1}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: c.tick }} stroke={c.tick} interval="preserveStartEnd" minTickGap={18} />
+          <XAxis dataKey="from" tickFormatter={(v: number) => binTick(v, dist.bins)} tick={{ fontSize: 11, fill: c.tick }} stroke={c.tick} interval="preserveStartEnd" minTickGap={18} />
           <YAxis tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={44} />
           <Tooltip isAnimationActive={false} cursor={{ fill: c.cursor }}
             content={({ active, payload }) => active && payload?.length ? (
@@ -36,7 +37,7 @@ function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribu
             {data.map((d, i) => <Cell key={i} fill={color} fillOpacity={d.mid >= p25 && d.mid <= p75 ? 0.9 : 0.4} />)}
           </Bar>
           {refs.map(([n, v, col, pos, w]) => (
-            <ReferenceLine key={n} x={binOf(v)} stroke={col} strokeDasharray={n === "Median" ? undefined : "4 3"} strokeWidth={w}
+            <ReferenceLine key={n} x={binStart(dist.bins, v)} stroke={col} strokeDasharray={n === "Median" ? undefined : "4 3"} strokeWidth={w}
               label={{ value: n, position: pos, fill: col, fontSize: 10.5, fontWeight: 600, offset: n === "Median" ? 6 : 4 }} />
           ))}
         </BarChart>
