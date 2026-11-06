@@ -525,7 +525,7 @@ def check_release(
     seen_commune = {s["commune"] for s in sales}
     empty_arr = sorted(set(arrondissements) - seen_arr)
     if empty_arr:
-        reasons.append(f"Arrondissements with no Sales: {', '.join(map(str, empty_arr))}.")
+        reasons.append(f"Arrondissements with no Sales: {', '.join(str(a) for a in empty_arr)}.")
     empty_quartier = sorted(set(quartiers) - seen_quartier)
     if empty_quartier:
         reasons.append(f"Quartiers with no Sales: {', '.join(empty_quartier)}.")

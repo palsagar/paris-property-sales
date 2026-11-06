@@ -13,7 +13,7 @@ import json
 import os
 import tempfile
 import unittest
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
 import build_paris_sales
@@ -291,7 +291,7 @@ def make_sale(**overrides: Any) -> Sale:
         "street": "Rue De Rivoli",
     }
     sale.update(overrides)
-    return sale
+    return cast(Sale, sale)
 
 
 class AssignIdsTest(unittest.TestCase):
