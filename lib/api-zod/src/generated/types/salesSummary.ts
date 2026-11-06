@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { YearRange } from './yearRange';
 
 export interface SalesSummary {
   count: number;
@@ -28,6 +29,10 @@ export interface SalesSummary {
   source: string;
   /** Residential transactions in the raw data that were left out (multi-property sales, commercial premises, outliers) */
   excludedCount: number;
+  /** Month of the DVF release the data comes from (YYYY-MM) */
+  releaseMonth: string;
+  /** One range per calendar year of the dataset, oldest first */
+  years: YearRange[];
   /** Length in months of the start and end windows used for the change figures */
   changeWindowMonths: number;
   /**

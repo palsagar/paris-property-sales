@@ -11,7 +11,7 @@ tags:
   - name: health
     description: Health operations
   - name: sales
-    description: Paris residential property sales since 2022 (DVF open data)
+    description: Paris residential property sales (DVF open data)
   - name: geo
     description: Paris administrative boundaries
 paths:
@@ -376,6 +376,8 @@ components:
         - datasetTo
         - source
         - excludedCount
+        - releaseMonth
+        - years
         - startMedianPricePerSqm
         - endMedianPricePerSqm
         - changePct
@@ -420,6 +422,14 @@ components:
         excludedCount:
           type: integer
           description: Residential transactions in the raw data that were left out (multi-property sales, commercial premises, outliers)
+        releaseMonth:
+          type: string
+          description: Month of the DVF release the data comes from (YYYY-MM)
+        years:
+          type: array
+          description: One range per calendar year of the dataset, oldest first
+          items:
+            $ref: "#/components/schemas/YearRange"
         changeWindowMonths:
           type: integer
           description: Length in months of the start and end windows used for the change figures
@@ -439,6 +449,19 @@ components:
         priceChangePct:
           type: ["number", "null"]
           description: Percentage change of the median purchase price between the start and end windows
+    YearRange:
+      type: object
+      required: [label, from, to]
+      properties:
+        label:
+          type: string
+          description: Year, with its months when the year is Partial (for example "2026, Jan–Jun")
+        from:
+          type: string
+          description: First day of the range inside the dataset (YYYY-MM-DD)
+        to:
+          type: string
+          description: Last day of the range inside the dataset (YYYY-MM-DD)
     DistributionBin:
       type: object
       required: [from, to, count]

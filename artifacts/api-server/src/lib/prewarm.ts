@@ -1,5 +1,5 @@
 import { logger } from "./logger";
-import { datasetRange, quartierNames } from "./salesData";
+import { datasetRange, datasetYears, quartierNames } from "./salesData";
 
 const PAGE = 15;
 const TYPES = ["all", "Appartement", "Maison"] as const;
@@ -14,11 +14,11 @@ function lastTwelveMonths(): { from: string; to: string } {
 type Range = { from?: string; to?: string };
 
 function ranges(): Range[] {
-  const years = [2022, 2023, 2024, 2025, 2026].map((y) => ({
-    from: `${y}-01-01`,
-    to: `${y}-12-31`,
-  }));
-  return [{}, ...years, lastTwelveMonths()];
+  return [
+    {},
+    ...datasetYears.map(({ from, to }) => ({ from, to })),
+    lastTwelveMonths(),
+  ];
 }
 
 function qs(params: Record<string, string | number | undefined>): string {

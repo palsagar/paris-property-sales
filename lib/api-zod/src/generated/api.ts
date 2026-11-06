@@ -52,6 +52,12 @@ export const GetSalesSummaryResponse = zod.object({
   "datasetTo": zod.string().describe('Date of the latest sale in the whole dataset'),
   "source": zod.string(),
   "excludedCount": zod.number().int().describe('Residential transactions in the raw data that were left out (multi-property sales, commercial premises, outliers)'),
+  "releaseMonth": zod.string().describe('Month of the DVF release the data comes from (YYYY-MM)'),
+  "years": zod.array(zod.object({
+  "label": zod.string().describe('Year, with its months when the year is Partial (for example "2026, Jan–Jun")'),
+  "from": zod.string().describe('First day of the range inside the dataset (YYYY-MM-DD)'),
+  "to": zod.string().describe('Last day of the range inside the dataset (YYYY-MM-DD)')
+})).describe('One range per calendar year of the dataset, oldest first'),
   "changeWindowMonths": zod.number().int().describe('Length in months of the start and end windows used for the change figures'),
   "startMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the first changeWindowMonths months of the selected range (null if fewer than 5 sales)'),
   "endMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the last changeWindowMonths months of the selected range (null if fewer than 5 sales)'),

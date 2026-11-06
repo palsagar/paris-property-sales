@@ -9,6 +9,15 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface YearRange {
+  /** Year, with its months when the year is Partial (for example "2026, Jan–Jun") */
+  label: string;
+  /** First day of the range inside the dataset (YYYY-MM-DD) */
+  from: string;
+  /** Last day of the range inside the dataset (YYYY-MM-DD) */
+  to: string;
+}
+
 export interface SalesSummary {
   count: number;
   /** Sum of all purchase prices in euros */
@@ -31,6 +40,10 @@ export interface SalesSummary {
   source: string;
   /** Residential transactions in the raw data that were left out (multi-property sales, commercial premises, outliers) */
   excludedCount: number;
+  /** Month of the DVF release the data comes from (YYYY-MM) */
+  releaseMonth: string;
+  /** One range per calendar year of the dataset, oldest first */
+  years: YearRange[];
   /** Length in months of the start and end windows used for the change figures */
   changeWindowMonths: number;
   /**

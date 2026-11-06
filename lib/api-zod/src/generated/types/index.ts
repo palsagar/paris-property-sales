@@ -39,3 +39,4 @@ export * from './transaction';
 export * from './transactionPage';
 export * from './trendPoint';
 export * from './windowParameter';
+export * from './yearRange';

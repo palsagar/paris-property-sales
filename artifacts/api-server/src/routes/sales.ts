@@ -25,6 +25,7 @@ import {
   arrondissementGeo,
   datasetMeta,
   datasetRange,
+  datasetYears,
   quartierGeo,
   quartierNames,
   salesDb,
@@ -84,6 +85,8 @@ router.get("/sales/summary", async (req, res): Promise<void> => {
       datasetTo: datasetRange.to,
       source: datasetMeta.source,
       excludedCount: datasetMeta.excludedCount,
+      releaseMonth: datasetMeta.releaseMonth,
+      years: datasetYears,
       changeWindowMonths: windows?.months ?? 0,
     }),
   );
