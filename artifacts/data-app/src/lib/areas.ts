@@ -103,6 +103,6 @@ const SHORT_FORMS: Record<string, string> = { st: "saint", ste: "sainte" };
  * match lets "evry" find Ville-d'Avray first, and Enter would then select it.
  */
 export function searchScore(value: string, search: string): number {
-  const words = plain(search).toLowerCase().split(/[\s-]+/).filter(Boolean).map((w) => SHORT_FORMS[w] ?? w);
+  const words = plain(search).replace(/’/g, "'").toLowerCase().split(/[\s-]+/).filter(Boolean).map((w) => SHORT_FORMS[w] ?? w);
   return words.every((w) => value.includes(w)) ? 1 : 0;
 }

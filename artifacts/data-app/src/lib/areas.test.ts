@@ -73,6 +73,12 @@ test("searchScore needs every typed word in the name, and takes no loose fuzzy m
   assert.equal(searchScore(searchValue("Quinze-Vingts", "7511201"), "zzzz"), 0);
 });
 
+test("searchScore accepts a curly apostrophe", () => {
+  const lhay = searchValue("L'Haÿ-les-Roses", "94038");
+  assert.equal(searchScore(lhay, "l’hay"), 1);
+  assert.equal(searchScore(lhay, "l'hay"), 1);
+});
+
 test("searchScore accepts St and Ste for Saint and Sainte", () => {
   assert.equal(searchScore(searchValue("Saint-Maur-des-Fossés", "94068"), "st maur"), 1);
   assert.equal(searchScore(searchValue("Saint-Denis", "93066"), "st denis"), 1);
