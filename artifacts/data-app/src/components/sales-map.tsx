@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -12,7 +12,7 @@ const reduceMotion = () => typeof window !== "undefined" && window.matchMedia("(
 // Far enough out to frame Paris and the nearby Communes; Fontainebleau and Meaux need a zoom out.
 const HOME = { center: [48.85, 2.38] as [number, number], zoom: 11 };
 
-function PointsLayer({ points, scale }: { points: SalePoint[]; scale: (v: number) => string }) {
+function PointsLayer({ points, scale, boundaries }: { points: SalePoint[]; scale: (v: number) => string; boundaries: RefObject<L.GeoJSON | null> }) {
   const map = useMap();
   useEffect(() => {
     const group = L.layerGroup();
@@ -22,11 +22,13 @@ function PointsLayer({ points, scale }: { points: SalePoint[]; scale: (v: number
         () => `<div class="pt-title">${p.address}</div><div class="pt-sub">${p.areaName}</div><div>${p.type === "Maison" ? "House" : "Apartment"} of ${num(p.surface)} m², sold on ${p.date.slice(0, 10)}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`,
         { className: "pt", sticky: true }
       );
+      // The dot takes the click, so pass it to the boundary under it. `_containsPoint` is Leaflet's private hit test.
+      m.on("click", (e) => (boundaries.current?.getLayers() as (L.Layer & { _containsPoint(p: L.Point): boolean })[] | undefined)?.find((l) => l._containsPoint(e.layerPoint))?.fire("click"));
       group.addLayer(m);
     }
     group.addTo(map);
     return () => { group.remove(); };
-  }, [points, scale, map]);
+  }, [points, scale, map, boundaries]);
   return null;
 }
 
@@ -109,7 +111,7 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
           }}
         />
       )}
-      {points && bounds && <PointsLayer points={points} scale={pointScale} />}
+      {points && bounds && <PointsLayer points={points} scale={pointScale} boundaries={geoRef} />}
     </MapContainer>
   );
 }

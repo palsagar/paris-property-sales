@@ -58,7 +58,7 @@ export function Ranking({ stats, trend, loading, fetching, error, retry, scale, 
                 return (
                   <button key={s.id} onClick={() => onSelect(statArea(s))} data-testid={`row-rank-${s.id}`}
                     title={m == null ? `${s.name}: ${TOO_FEW}, ${num(s.count)} sales` : `${s.name}: ${sqm(m)}, median price ${eur(s.medianPrice ?? 0)}, ${num(s.count)} sales`}
-                    className={`w-full grid grid-cols-[18px_110px_minmax(60px,1fr)_40px_34px_52px_56px] items-center gap-1.5 px-1 py-[3px] rounded text-left transition-colors ${sel ? "bg-primary/10 ring-1 ring-primary/40" : selId ? "text-muted-foreground hover:text-foreground hover:bg-muted/60" : "hover:bg-muted/60"}`}>
+                    className={`w-full grid grid-cols-[18px_110px_minmax(60px,1fr)_42px_34px_52px_56px] items-center gap-1.5 px-1 py-[3px] rounded text-left transition-colors ${sel ? "bg-primary/10 ring-1 ring-primary/40" : selId ? "text-muted-foreground hover:text-foreground hover:bg-muted/60" : "hover:bg-muted/60"}`}>
                     <span className="font-num text-[11.5px] text-muted-foreground text-right">{i + 1}</span>
                     <span className="font-num text-[12px] font-medium truncate">{s.arrondissement != null ? arrLabel(s.arrondissement) : s.name}</span>
                     {m == null ? <span className="font-num text-[10.5px] text-muted-foreground truncate">{TOO_FEW}</span> : (
@@ -68,7 +68,7 @@ export function Ranking({ stats, trend, loading, fetching, error, retry, scale, 
                         <span className="absolute left-1 top-1/2 -translate-y-1/2 font-num text-[10.5px] font-medium" style={{ color: scale.index(m) >= half ? c.paper : c.ink }}>{num(m)}</span>
                       </span>
                     )}
-                    <span className="font-num text-[11.5px] text-muted-foreground text-right">{num(s.count)}</span>
+                    <span className="font-num text-[11.5px] text-muted-foreground text-right whitespace-nowrap">{num(s.count)}</span>
                     <span className={`font-num text-[11px] text-right ${warn ? "text-primary font-semibold" : "text-muted-foreground"}`} title={warn ?? undefined}>{showShare ? houseShareLabel(s.houseShare)?.replace(" houses", "") : ""}</span>
                     <span className="text-right"><DeltaChip value={s.changePct} size="xs" /></span>
                     <Sparkline values={vals} color={sel ? c.accent : c.tick} w={56} />
