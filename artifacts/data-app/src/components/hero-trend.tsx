@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, type PropertyTypeParameter } from "@workspace/api-client-react";
+import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, type PropertyTypeParameter, type YearRange } from "@workspace/api-client-react";
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, TipBox, useChartColors } from "@/components/ui-bits";
 import { eur, sqm, num, pct } from "@/lib/fmt";
+import { yearBucketLabel } from "@/lib/period";
 
 export type Filters = { propertyType: PropertyTypeParameter; arrondissement?: number; quartier?: string; from?: string; to?: string };
 
@@ -23,8 +24,8 @@ function Switch({ on, onClick, label, disabled, testId }: { on: boolean; onClick
   );
 }
 
-export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGran, isDark }: {
-  filters: Filters; areaName: string; hasArea: boolean; isQuartier: boolean; gran: GranularityParameter; setGran: (g: GranularityParameter) => void; isDark: boolean;
+export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGran, isDark, years }: {
+  filters: Filters; areaName: string; hasArea: boolean; isQuartier: boolean; gran: GranularityParameter; setGran: (g: GranularityParameter) => void; isDark: boolean; years: YearRange[];
 }) {
   const c = useChartColors(isDark);
   const [override, setOverride] = useState<boolean | null>(null);
@@ -45,12 +46,12 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
       const prevKey = `${Number(p.period.slice(0, 4)) - 1}${p.period.slice(4)}`;
       const prev = byP.get(prevKey);
       return {
-        ...p, band: [p.p25PricePerSqm, p.p75PricePerSqm] as [number, number],
+        ...p, shown: gran === "year" ? yearBucketLabel(p.period, p.label, years) : p.label, band: [p.p25PricePerSqm, p.p75PricePerSqm] as [number, number],
         paris: paris.get(p.period), low: p.count < 10,
         yoy: prev && prev.medianPricePerSqm ? ((p.medianPricePerSqm - prev.medianPricePerSqm) / prev.medianPricePerSqm) * 100 : null,
       };
     });
-  }, [q.data, all.data, hasArea]);
+  }, [q.data, all.data, hasArea, gran, years]);
 
   // Without the range, the y-axis is fitted to the median (and the All Paris line) so its movement is readable.
   // With the range on, the axis covers P25 to P75 plus 40% of that span on each side, so the range reads as a
@@ -72,7 +73,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
   return (
     <ChartCard testId="trend" title={`Price per m² over time in ${areaName}`} isDark={isDark}
       loading={q.isLoading} fetching={q.isFetching || all.isFetching}
-      csv={data.map(({ band: _b, ...r }) => r)} csvName="price-trend.csv"
+      csv={data.map(({ band: _b, shown: _s, ...r }) => r)} csvName="price-trend.csv"
       desc={<>The line is the median price per m² for each {gran}{hasArea && <>; the dashed line is All Paris</>}. The strip below counts sales. {smooth ? `Each point averages ${win} periods to reduce noise.` : ""}</>}
       right={
         <>
@@ -88,7 +89,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
           <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
             <ComposedChart data={data} syncId="trend" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
-              <XAxis dataKey="label" hide />
+              <XAxis dataKey="shown" hide />
               <YAxis tickFormatter={(v: number) => `${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={Y_W} domain={domain} allowDataOverflow tickCount={5} />
               <Tooltip isAnimationActive={false} cursor={{ stroke: c.tick, strokeDasharray: "3 3" }}
                 content={({ active, payload }) => {
@@ -102,7 +103,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
                   ];
                   if (d.yoy != null) rows.push(["Change on a year earlier", pct(d.yoy)]);
                   if (d.paris != null) rows.push(["All Paris", sqm(d.paris), c.second]);
-                  return <TipBox title={d.label} rows={rows} note={d.low ? "Fewer than 10 sales in this period, so treat the figure with care." : undefined} />;
+                  return <TipBox title={d.shown} rows={rows} note={d.low ? "Fewer than 10 sales in this period, so treat the figure with care." : undefined} />;
                 }} />
               {showBand && <Area dataKey="band" stroke="none" fill={c.accent} fillOpacity={0.06} isAnimationActive={false} type="linear" activeDot={false} />}
               {showBand && <Line dataKey="p25PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
@@ -117,7 +118,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
           </ResponsiveContainer>
           <ResponsiveContainer width="100%" height={STRIP_H} debounce={0}>
             <BarChart data={data} syncId="trend" margin={{ top: 6, right: 8, left: 0, bottom: 0 }} barCategoryGap="18%">
-              <XAxis dataKey="label" tick={{ fontSize: 11.5, fill: c.tick }} stroke={c.tick} minTickGap={24} />
+              <XAxis dataKey="shown" tick={{ fontSize: 11.5, fill: c.tick }} stroke={c.tick} minTickGap={24} />
               <YAxis width={Y_W} tick={false} axisLine={false} domain={[0, "dataMax"]}
                 label={{ value: "Sales", position: "insideRight", fill: c.tick, fontSize: 11, offset: 6 }} />
               <Tooltip content={() => null} cursor={{ fill: c.cursor }} isAnimationActive={false} />

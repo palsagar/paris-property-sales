@@ -33,3 +33,9 @@ export function nearestValidPeriod(
   const newTo = to && month(to) > month(datasetTo) ? datasetTo : to;
   return { from: newFrom, to: newTo, moved: newFrom !== from || newTo !== to };
 }
+
+// In the Year view, a Partial year must show its months, such as "2021, Jul–Dec". The trend
+// bucket only carries the plain year, so this takes the label from the dataset's year ranges.
+export function yearBucketLabel(period: string, label: string, years: { label: string; from: string }[]): string {
+  return years.find((y) => y.from.slice(0, 4) === period.slice(0, 4))?.label ?? label;
+}

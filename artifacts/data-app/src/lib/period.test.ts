@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nearestValidPeriod } from "./period";
+import { nearestValidPeriod, yearBucketLabel } from "./period";
 
 const D = ["2022-01-03", "2026-06-30"] as const;
 
@@ -32,4 +32,11 @@ test("a long Period wholly before the data stops at the end of the data", () => 
 
 test("a reversed Period inside the data stays as the link gave it", () => {
   assert.deepEqual(nearestValidPeriod("2025-01-01", "2024-01-01", ...D), { from: "2025-01-01", to: "2024-01-01", moved: false });
+});
+
+test("a Year bucket takes the label of its year range, which names the months of a Partial year", () => {
+  const years = [{ label: "2021, Jul–Dec", from: "2021-07-01" }, { label: "2022", from: "2022-01-03" }];
+  assert.equal(yearBucketLabel("2021", "2021", years), "2021, Jul–Dec");
+  assert.equal(yearBucketLabel("2022", "2022", years), "2022");
+  assert.equal(yearBucketLabel("2030", "2030", years), "2030");
 });

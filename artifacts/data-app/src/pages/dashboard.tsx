@@ -247,7 +247,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
           <Kpis s={summary.data} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
 
           <div className="mb-4">
-            <HeroTrend filters={filters} areaName={areaName} hasArea={area.kind !== "all"} isQuartier={area.kind === "q"} gran={gran} setGran={(g) => patch({ gran: g })} isDark={isDark} />
+            <HeroTrend filters={filters} areaName={areaName} hasArea={area.kind !== "all"} isQuartier={area.kind === "q"} gran={gran} setGran={(g) => patch({ gran: g })} isDark={isDark} years={years} />
           </div>
 
           <div className="mb-4">
