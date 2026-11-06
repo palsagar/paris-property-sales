@@ -12,7 +12,7 @@ const reduceMotion = () => typeof window !== "undefined" && window.matchMedia("(
 // Far enough out to frame Paris and the nearby Communes; Fontainebleau and Meaux need a zoom out.
 const HOME = { center: [48.85, 2.38] as [number, number], zoom: 11 };
 
-function PointsLayer({ points, scale, boundaries }: { points: SalePoint[]; scale: (v: number) => string; boundaries: RefObject<L.GeoJSON | null> }) {
+function PointsLayer({ points, scale, boundaries, stateOf }: { points: SalePoint[]; scale: (v: number) => string; boundaries: RefObject<L.GeoJSON | null>; stateOf: RefObject<(p: MapFeature) => { selected: boolean; focus: boolean }> }) {
   const map = useMap();
   useEffect(() => {
     const group = L.layerGroup();
@@ -24,12 +24,17 @@ function PointsLayer({ points, scale, boundaries }: { points: SalePoint[]; scale
       );
       // The dot takes the click, so pass it to the boundary under the dot's centre. Leaflet gives a marker event the
       // marker's own `layerPoint`, not the pointer's, so the hit test uses that centre. `_containsPoint` is Leaflet's private hit test.
-      m.on("click", (e) => (boundaries.current?.getLayers() as (L.Layer & { _containsPoint(p: L.Point): boolean })[] | undefined)?.find((l) => l._containsPoint(e.layerPoint))?.fire("click"));
+      // A dot only selects: a click on a dot inside the selected Area must not click the Area off.
+      m.on("click", (e) => {
+        const hit = (boundaries.current?.getLayers() as (L.GeoJSON & { _containsPoint(p: L.Point): boolean })[] | undefined)?.find((l) => l._containsPoint(e.layerPoint));
+        const props = (hit?.feature as GeoJSON.Feature | undefined)?.properties as MapFeature | undefined;
+        if (hit && props && !stateOf.current(props).selected) hit.fire("click");
+      });
       group.addLayer(m);
     }
     group.addTo(map);
     return () => { group.remove(); };
-  }, [points, scale, map, boundaries]);
+  }, [points, scale, map, boundaries, stateOf]);
   return null;
 }
 
@@ -112,7 +117,7 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
           }}
         />
       )}
-      {points && bounds && <PointsLayer points={points} scale={pointScale} boundaries={geoRef} />}
+      {points && bounds && <PointsLayer points={points} scale={pointScale} boundaries={geoRef} stateOf={stateRef} />}
     </MapContainer>
   );
 }
