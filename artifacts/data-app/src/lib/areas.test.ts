@@ -72,3 +72,10 @@ test("searchScore needs every typed word in the name, and takes no loose fuzzy m
   assert.equal(searchScore(searchValue("Saint-Germain-l'Auxerrois", "7510101"), "saint maur"), 0);
   assert.equal(searchScore(searchValue("Quinze-Vingts", "7511201"), "zzzz"), 0);
 });
+
+test("searchScore accepts St and Ste for Saint and Sainte", () => {
+  assert.equal(searchScore(searchValue("Saint-Maur-des-Fossés", "94068"), "st maur"), 1);
+  assert.equal(searchScore(searchValue("Saint-Denis", "93066"), "st denis"), 1);
+  assert.equal(searchScore(searchValue("Sainte-Marguerite", "7511102"), "ste marguerite"), 1);
+  assert.equal(searchScore(searchValue("Saint-Denis", "93066"), "ste denis"), 0);
+});

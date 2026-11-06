@@ -95,11 +95,14 @@ export function searchValue(name: string, id: string): string {
   return [name, plain(name), id, OLD_NAMES[id] ?? ""].join(" ").toLowerCase();
 }
 
+/** The usual French short forms of a typed word. */
+const SHORT_FORMS: Record<string, string> = { st: "saint", ste: "sainte" };
+
 /**
  * The search box's filter: 1 when the value holds every word typed, else 0. The search component's own fuzzy
  * match lets "evry" find Ville-d'Avray first, and Enter would then select it.
  */
 export function searchScore(value: string, search: string): number {
-  const words = plain(search).toLowerCase().split(/[\s-]+/).filter(Boolean);
+  const words = plain(search).toLowerCase().split(/[\s-]+/).filter(Boolean).map((w) => SHORT_FORMS[w] ?? w);
   return words.every((w) => value.includes(w)) ? 1 : 0;
 }
