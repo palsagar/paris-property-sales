@@ -14,6 +14,7 @@ const departmentOption = ([id, name]: [DepartmentId, string]): Option => ({ id, 
 
 export function AreaSearch({ quartiers, communes, area, onSelect }: { quartiers: QMeta[]; communes: CommuneMeta[]; area: Area; onSelect: (a: Area) => void }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const groups = useMemo(() => {
     const qOption = (q: QMeta): Option => ({ id: q.id, name: q.name, area: { kind: "q", id: q.id } });
     const communesOf = (group: RankGroup) => communes.filter((c) => c.group === group).map((c): Option => ({ id: c.id, name: c.name, area: { kind: "commune", id: c.id } }));
@@ -26,10 +27,16 @@ export function AreaSearch({ quartiers, communes, area, onSelect }: { quartiers:
     ];
     return out;
   }, [quartiers, communes]);
+  // The search component sorts the items inside a group but not the groups, so a typed text puts the group with the best match first.
+  const shownGroups = useMemo(() => {
+    if (!search) return groups;
+    const best = (options: Option[]) => Math.max(...options.map((o) => searchScore(searchValue(o.name, o.id), search)));
+    return groups.map((g) => [g, best(g[1])] as const).sort((a, b) => b[1] - a[1]).map(([g]) => g);
+  }, [groups, search]);
   const selected = area.kind === "department" || area.kind === "q" || area.kind === "commune" ? area.id : undefined;
   const cur = groups.flatMap(([, options]) => options).find((o) => o.id === selected);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch(""); }}>
       <PopoverTrigger asChild>
         <button data-testid="button-area-search" className={`h-7 px-2.5 rounded-md border text-[13px] flex items-center gap-1.5 transition-colors ${cur ? "border-primary/50 text-primary bg-primary/5" : "bg-card hover:bg-muted"}`}>
           <Search className="w-3.5 h-3.5" />{cur ? cur.name : "Find a quartier or commune"}
@@ -37,10 +44,10 @@ export function AreaSearch({ quartiers, communes, area, onSelect }: { quartiers:
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[300px]" align="start">
         <Command filter={searchScore}>
-          <CommandInput placeholder="Search quartiers and communes..." data-testid="input-area-search" />
+          <CommandInput value={search} onValueChange={setSearch} placeholder="Search quartiers and communes..." data-testid="input-area-search" />
           <CommandList className="max-h-[340px]">
             <CommandEmpty>Nothing matches that name.</CommandEmpty>
-            {groups.map(([heading, options]) => (
+            {shownGroups.map(([heading, options]) => (
               <CommandGroup key={heading} heading={heading}>
                 {options.map((o) => (
                   <CommandItem key={o.id} value={searchValue(o.name, o.id)} onSelect={() => { onSelect(o.area); setOpen(false); }} data-testid={`option-area-${o.id}`}>
