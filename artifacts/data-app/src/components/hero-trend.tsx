@@ -3,10 +3,11 @@ import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, 
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, TipBox, useChartColors } from "@/components/ui-bits";
-import { eur, sqm, num, pct } from "@/lib/fmt";
+import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, TOO_FEW } from "@/lib/fmt";
+import { keepInSameArea, type areaParams } from "@/lib/areas";
 import { yearBucketLabel } from "@/lib/period";
 
-export type Filters = { propertyType: PropertyTypeParameter; arrondissement?: number; quartier?: string; from?: string; to?: string };
+export type Filters = ReturnType<typeof areaParams> & { propertyType: PropertyTypeParameter; from?: string; to?: string };
 
 const PLOT_H = 260;
 const STRIP_H = 64; // 40px of bars plus the x-axis labels
@@ -34,7 +35,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
   const smooth = gran === "year" ? false : override ?? (gran === "month" || isQuartier);
   const win = smooth ? 3 : 1;
   const params = { ...filters, granularity: gran, window: win };
-  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params) } });
+  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(filters) } });
   const allP = { propertyType: filters.propertyType, from: filters.from, to: filters.to, granularity: gran, window: win };
   const all = useGetSalesTrend(allP, { query: { queryKey: getGetSalesTrendQueryKey(allP), enabled: hasArea } });
 
@@ -46,9 +47,9 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
       const prevKey = `${Number(p.period.slice(0, 4)) - 1}${p.period.slice(4)}`;
       const prev = byP.get(prevKey);
       return {
-        ...p, shown: gran === "year" ? yearBucketLabel(p.period, p.label, years) : p.label, band: [p.p25PricePerSqm, p.p75PricePerSqm] as [number, number],
-        paris: paris.get(p.period), low: p.count < 10,
-        yoy: prev && prev.medianPricePerSqm ? ((p.medianPricePerSqm - prev.medianPricePerSqm) / prev.medianPricePerSqm) * 100 : null,
+        ...p, shown: gran === "year" ? yearBucketLabel(p.period, p.label, years) : p.label, band: [p.p25PricePerSqm, p.p75PricePerSqm] as [number | null, number | null],
+        paris: paris.get(p.period), low: p.count > 0 && p.count < 10,
+        yoy: prev && prev.medianPricePerSqm && p.medianPricePerSqm != null ? ((p.medianPricePerSqm - prev.medianPricePerSqm) / prev.medianPricePerSqm) * 100 : null,
       };
     });
   }, [q.data, all.data, hasArea, gran, years]);
@@ -62,13 +63,14 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
     let lo = Math.min(...line), hi = Math.max(...line);
     let pad = Math.max((hi - lo) * 0.25, 250);
     if (showBand) {
-      lo = Math.min(lo, ...data.map((d) => d.p25PricePerSqm));
-      hi = Math.max(hi, ...data.map((d) => d.p75PricePerSqm));
+      lo = Math.min(lo, ...data.map((d) => d.p25PricePerSqm).filter((x) => x != null));
+      hi = Math.max(hi, ...data.map((d) => d.p75PricePerSqm).filter((x) => x != null));
       pad = (hi - lo) * 0.4;
     }
     return [Math.max(0, Math.floor((lo - pad) / 500) * 500), Math.ceil((hi + pad) / 500) * 500];
   }, [data, showBand]);
   const lowN = data.filter((d) => d.low).length;
+  const noMedian = data.every((d) => d.medianPricePerSqm == null);
 
   return (
     <ChartCard testId="trend" title={`Price per m² over time in ${areaName}`} isDark={isDark}
@@ -86,24 +88,27 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
         <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H + STRIP_H }}>No sales match this selection. Try a longer period or a larger area.</div>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
+          {noMedian ? <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H }}>{TOO_FEW}</div> : <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
             <ComposedChart data={data} syncId="trend" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
               <XAxis dataKey="shown" hide />
               <YAxis tickFormatter={(v: number) => `${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={Y_W} domain={domain} allowDataOverflow tickCount={5} />
-              <Tooltip isAnimationActive={false} cursor={{ stroke: c.tick, strokeDasharray: "3 3" }}
+              <Tooltip filterNull={false} isAnimationActive={false} cursor={{ stroke: c.tick, strokeDasharray: "3 3" }}
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload as (typeof data)[number];
+                  if (d.count === 0) return <TipBox title={d.shown} rows={[["Sales", "No sales"]]} />;
                   const rows: [string, string, string?][] = [
-                    ["Median per m²", sqm(d.medianPricePerSqm), c.accent],
-                    ["P25 to P75", `${num(d.p25PricePerSqm)} to ${num(d.p75PricePerSqm)}`],
-                    ["Median price", eur(d.medianPrice)],
+                    ["Median per m²", sqmOrTooFew(d.medianPricePerSqm), c.accent],
+                    ["P25 to P75", d.p25PricePerSqm != null && d.p75PricePerSqm != null ? `${num(d.p25PricePerSqm)} to ${num(d.p75PricePerSqm)}` : TOO_FEW],
+                    ["Median price", orTooFew(d.medianPrice, eur)],
                     ["Sales", num(d.count)],
                   ];
+                  const share = filters.propertyType === "all" ? houseShareLabel(d.houseShare) : null;
+                  if (share) rows.push(["House share", share]);
                   if (d.yoy != null) rows.push(["Change on a year earlier", pct(d.yoy)]);
                   if (d.paris != null) rows.push(["All Paris", sqm(d.paris), c.second]);
-                  return <TipBox title={d.shown} rows={rows} note={d.low ? "Fewer than 10 sales in this period, so treat the figure with care." : undefined} />;
+                  return <TipBox title={d.shown} rows={rows} note={d.low && d.medianPricePerSqm != null ? "Fewer than 10 sales in this period, so treat the figure with care." : undefined} />;
                 }} />
               {showBand && <Area dataKey="band" stroke="none" fill={c.accent} fillOpacity={0.06} isAnimationActive={false} type="linear" activeDot={false} />}
               {showBand && <Line dataKey="p25PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
@@ -111,11 +116,11 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
               {hasArea && <Line dataKey="paris" stroke={c.second} strokeWidth={1.6} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls />}
               <Line dataKey="medianPricePerSqm" stroke={c.accent} strokeWidth={2.5} isAnimationActive={false} type="linear"
                 activeDot={{ r: 5, stroke: c.bg, strokeWidth: 2 }}
-                dot={(p: { cx?: number; cy?: number; index?: number; payload?: { low: boolean } }) =>
-                  p.payload?.low ? <circle key={p.index} cx={p.cx} cy={p.cy} r={4} fill={c.bg} stroke={c.accent} strokeWidth={1.5} strokeDasharray="2 1.5" />
+                dot={(p: { cx?: number; cy?: number | null; index?: number; payload?: { low: boolean } }) =>
+                  p.cy == null ? <g key={p.index} /> : p.payload?.low ? <circle key={p.index} cx={p.cx} cy={p.cy} r={4} fill={c.bg} stroke={c.accent} strokeWidth={1.5} strokeDasharray="2 1.5" />
                     : <circle key={p.index} cx={p.cx} cy={p.cy} r={data.length > 30 ? 0 : 2.5} fill={c.accent} />} />
             </ComposedChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>}
           <ResponsiveContainer width="100%" height={STRIP_H} debounce={0}>
             <BarChart data={data} syncId="trend" margin={{ top: 6, right: 8, left: 0, bottom: 0 }} barCategoryGap="18%">
               <XAxis dataKey="shown" tick={{ fontSize: 11.5, fill: c.tick }} stroke={c.tick} minTickGap={24} />

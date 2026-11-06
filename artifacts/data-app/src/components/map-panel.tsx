@@ -2,51 +2,56 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetSalesByQuartier, getGetSalesByQuartierQueryKey, useGetAreaTrend, getGetAreaTrendQueryKey,
   useGetSalesPoints, getGetSalesPointsQueryKey,
-  type AreaStat, type GeoFeatureCollection, type PropertyTypeParameter,
+  type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter, type SalePoint,
 } from "@workspace/api-client-react";
 import { Play, Pause, RotateCcw } from "lucide-react";
+import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SalesMap, type FeatureProps } from "@/components/sales-map";
-import { ChartCard, ErrorState, GradientLegend, Segmented } from "@/components/ui-bits";
-import { eur, sqm, num, arrLabel, pct, makeDivScale, monthsBefore, monthsBetween, rangeLabel } from "@/lib/fmt";
-import type { Area, MapLevel, MapMode } from "@/lib/view-state";
+import { SalesMap } from "@/components/sales-map";
+import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend } from "@/components/ui-bits";
+import { eur, sqm, num, arrLabel, pct, makeDivScale, monthsBefore, monthsBetween, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
+import { DEPARTMENT_NAMES, featureState, keepInSameArea, pointArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
+import type { StepScale } from "@/lib/colour-scale";
+import type { MapLevel, MapMode } from "@/lib/view-state";
 
 export function MapPanel(props: {
   isDark: boolean; ptype: PropertyTypeParameter; from?: string; to?: string; datasetFrom: string; datasetTo: string;
-  area: Area; selArr?: number; areaParams: { arrondissement?: number; quartier?: string };
+  area: Area; selArr?: number; areaParams: ReturnType<typeof areaParams>;
   mode: MapMode; setMode: (m: MapMode) => void; level: MapLevel; setLevel: (l: MapLevel) => void;
-  arrStats: AreaStat[]; arrLoading: boolean; arrError: boolean; retryArr: () => void;
-  arrBounds?: GeoFeatureCollection; qBounds?: GeoFeatureCollection;
-  scale: (v: number) => string; domain: [number, number];
+  arrStats: AreaStat[]; communeStats: AreaStat[]; statsLoading: boolean; statsError: boolean; retryStats: () => void;
+  arrTrend: AreaTrendPoint[]; communeTrend: AreaTrendPoint[]; trendFetching: boolean;
+  arrBounds?: GeoFeatureCollection; qBounds?: GeoFeatureCollection; communeBounds?: GeoFeatureCollection;
+  scale: StepScale;
   travel: string | null; setTravel: (p: string | null) => void;
-  onSelect: (p: FeatureProps, level: MapLevel) => void;
+  onSelect: (p: MapFeature) => void; onSelectArea: (a: Area) => void;
 }) {
-  const { isDark, ptype, from, to, datasetFrom, datasetTo, area, selArr, areaParams, mode, setMode, level, setLevel, arrStats, scale, domain, travel, setTravel } = props;
+  const { isDark, ptype, from, to, datasetFrom, datasetTo, area, selArr, areaParams: areaP, mode, setMode, level, setLevel, arrStats, communeStats, arrTrend, communeTrend, scale, travel, setTravel } = props;
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
 
   const qp = { propertyType: ptype, from, to };
   const qStats = useGetSalesByQuartier(qp, { query: { queryKey: getGetSalesByQuartierQueryKey(qp), enabled: level === "quartier" && mode !== "dots" } });
-  const lvl = level === "quartier" ? ("quartier" as const) : ("arrondissement" as const);
-  const tp = { level: lvl, propertyType: ptype, from, to, granularity: "quarter" as const, window: 4 };
-  const travelQ = useGetAreaTrend(tp, { query: { queryKey: getGetAreaTrendQueryKey(tp), enabled: mode === "level" } });
+  const tp = { level: "quartier" as const, propertyType: ptype, from, to, granularity: "quarter" as const, window: 4 };
+  const qTrend = useGetAreaTrend(tp, { query: { queryKey: getGetAreaTrendQueryKey(tp), enabled: level === "quartier" && mode === "level" } });
 
   // Points: default to the latest 12 months of the range.
   const [dotsFull, setDotsFull] = useState(false);
   const long = monthsBetween(ef, et) > 12;
   const dotsFrom = long && !dotsFull ? monthsBefore(et, 11) : from;
-  const pp = { propertyType: ptype, ...areaParams, from: dotsFrom, to };
-  const points = useGetSalesPoints(pp, { query: { queryKey: getGetSalesPointsQueryKey(pp), enabled: mode === "dots" } });
+  const pp = { propertyType: ptype, ...areaP, from: dotsFrom, to };
+  const points = useGetSalesPoints(pp, { query: { queryKey: getGetSalesPointsQueryKey(pp), enabled: mode === "dots", placeholderData: keepInSameArea(areaP) } });
 
-  const stats = level === "quartier" ? qStats.data ?? [] : arrStats;
+  // Paris at the chosen level, with the Communes always around it.
+  const stats = useMemo(() => [...(level === "quartier" ? qStats.data ?? [] : arrStats), ...communeStats], [level, qStats.data, arrStats, communeStats]);
   const statById = useMemo(() => new Map(stats.map((s) => [String(s.id), s])), [stats]);
 
+  const trendRows = useMemo(() => [...(level === "quartier" ? qTrend.data ?? [] : arrTrend), ...communeTrend], [level, qTrend.data, arrTrend, communeTrend]);
   const { periods, labels, byKey } = useMemo(() => {
-    const byKey = new Map<string, { v: number; n: number }>();
+    const byKey = new Map<string, { v: number | null; n: number; h: number | null }>();
     const per = new Map<string, string>();
-    for (const r of travelQ.data ?? []) { byKey.set(`${r.id}|${r.period}`, { v: r.medianPricePerSqm, n: r.count }); per.set(r.period, r.label); }
+    for (const r of trendRows) { byKey.set(`${r.id}|${r.period}`, { v: r.medianPricePerSqm, n: r.count, h: r.houseShare }); per.set(r.period, r.label); }
     const periods = [...per.keys()].sort();
     return { periods, labels: per, byKey };
-  }, [travelQ.data]);
+  }, [trendRows]);
   const travelOn = mode === "level" && travel != null && periods.includes(travel);
   const travelLabel = travelOn ? labels.get(travel!) : null;
 
@@ -74,57 +79,86 @@ export function MapPanel(props: {
 
   const fillFor = (id: string) => {
     if (mode === "change") { const s = statById.get(id); return s?.changePct != null ? divScale(s.changePct) : null; }
-    if (travelOn) { const r = byKey.get(`${id}|${travel}`); return r ? scale(r.v) : null; }
-    const s = statById.get(id); return s ? scale(s.medianPricePerSqm) : null;
+    const v = travelOn ? byKey.get(`${id}|${travel}`)?.v : statById.get(id)?.medianPricePerSqm;
+    return v != null ? scale.color(v) : null;
   };
-  const tooltipFor = (id: string, p: FeatureProps) => {
-    const s = statById.get(id);
-    const head = `<div class="pt-title">${p.name}</div>` + (level === "quartier" ? `<div class="pt-sub">${arrLabel(p.arr)} arrondissement</div>` : "");
+  // House share says nothing once one property type is selected.
+  const shareLines = (share: number | null | undefined) => {
+    if (ptype !== "all") return "";
+    const label = houseShareLabel(share), warning = houseShareWarning(share);
+    return (label ? `<div>${label}</div>` : "") + (warning ? `<div class="pt-sub" style="white-space:normal;width:250px">${warning}</div>` : "");
+  };
+  const tooltipFor = (id: string, p: MapFeature) => {
+    const title = `<div class="pt-title">${escapeHtml(p.name)}</div>`;
+    if (mode === "dots") return title;
+    const sub = p.group ? (p.group === "major" ? "Major town" : DEPARTMENT_NAMES[p.group as DepartmentId]) : p.id ? `${arrLabel(p.arr as number)} arrondissement` : "";
+    const head = title + (sub ? `<div class="pt-sub">${sub}</div>` : "");
     if (travelOn) {
       const r = byKey.get(`${id}|${travel}`);
-      return head + `<div class="pt-em">4 quarters to ${travelLabel}</div>` + (r ? `<div>Median <b>${sqm(r.v)}</b></div><div>${num(r.n)} sales</div>` : "<div>Too few sales to show a median</div>");
+      return head + `<div class="pt-em">4 quarters to ${travelLabel}</div>` + (r?.v != null ? `<div>Median <b>${sqm(r.v)}</b></div>` : `<div>${TOO_FEW}</div>`) + shareLines(r?.h) + (r ? `<div>${num(r.n)} sales</div>` : "");
     }
+    const s = statById.get(id);
     if (!s) return head + "<div>No sales in this period</div>";
-    return head + `<div class="pt-sub" style="margin-top:4px">${rangeLabel(ef, et)}</div><div>Median <b>${sqm(s.medianPricePerSqm)}</b></div><div>Median price ${eur(s.medianPrice)}</div><div>${num(s.count)} sales</div>` +
+    return head + `<div class="pt-sub" style="margin-top:4px">${rangeLabel(ef, et)}</div>` + (s.medianPricePerSqm != null ? `<div>Median <b>${sqm(s.medianPricePerSqm)}</b></div>` : `<div>${TOO_FEW}</div>`) + shareLines(s.houseShare) +
+      (s.medianPrice != null ? `<div>Median price ${eur(s.medianPrice)}</div>` : "") + `<div>${num(s.count)} sales</div>` +
       `<div>Change over the period <b>${s.changePct != null ? pct(s.changePct) : "not shown, too few sales"}</b></div>` +
       (s.startMedianPricePerSqm != null && s.endMedianPricePerSqm != null ? `<div class="pt-sub">From ${num(s.startMedianPricePerSqm)} to ${num(s.endMedianPricePerSqm)} EUR/m²</div>` : "");
   };
 
-  const bounds = level === "quartier" && mode !== "dots" ? props.qBounds : props.arrBounds;
-  const focusFeature = useMemo(() => {
-    if (area.kind === "q") return (props.qBounds?.features.find((f) => (f as { properties: FeatureProps }).properties.id === area.id) as object) ?? null;
-    if (area.kind === "arr") return (props.arrBounds?.features.find((f) => (f as { properties: FeatureProps }).properties.arr === area.arr) as object) ?? null;
-    return null;
-  }, [area, props.qBounds, props.arrBounds]);
+  // A dot names and selects the Area recorded on its Sale, which the rounded position can place across a boundary.
+  const quartierNames = useMemo(() => new Map((props.qBounds?.features ?? []).map((f) => {
+    const q = (f as { properties: MapFeature }).properties;
+    return [q.id, q.name];
+  })), [props.qBounds]);
+  const pointName = (p: SalePoint) => (level === "quartier" && p.quartier != null && quartierNames.get(p.quartier)) || p.areaName;
+  // A dot only selects: a click on a dot in the selected Area must not click the Area off.
+  const selectPoint = (p: SalePoint) => {
+    const a = pointArea(p, level);
+    if (JSON.stringify(a) !== JSON.stringify(area)) props.onSelectArea(a);
+  };
 
-  const styleKey = `${mode}-${level}-${travelOn ? travel : "avg"}-${stats.length}-${stats.reduce((a, s) => a + s.count, 0)}-${periods.length}-${domain.join()}`;
-  const loading = props.arrLoading || (level === "quartier" && mode !== "dots" && qStats.isLoading) || (mode === "dots" && points.isLoading);
-  const fetching = qStats.isFetching || travelQ.isFetching || points.isFetching;
-  const csv = mode === "dots" ? points.data ?? [] : travelOn ? (travelQ.data ?? []).filter((r) => r.period === travel) : stats;
+  const parisBounds = level === "quartier" && mode !== "dots" ? props.qBounds : props.arrBounds;
+  const bounds = useMemo(() => (parisBounds && props.communeBounds ? { ...parisBounds, features: [...props.communeBounds.features, ...parisBounds.features] } : undefined), [parisBounds, props.communeBounds]);
+  const focusFeature = useMemo(() => {
+    const features = (b?: GeoFeatureCollection) => (b?.features ?? []) as { properties: MapFeature }[];
+    if (area.kind === "q") return features(props.qBounds).find((f) => f.properties.id === area.id) ?? null;
+    if (area.kind === "arr") return features(props.arrBounds).find((f) => f.properties.arr === area.arr) ?? null;
+    if (area.kind === "commune") return features(props.communeBounds).find((f) => f.properties.id === area.id) ?? null;
+    if (area.kind === "department") {
+      const inDept = features(props.communeBounds).filter((f) => f.properties.group === area.id);
+      return inDept.length ? { type: "FeatureCollection", features: inDept } : null;
+    }
+    return null;
+  }, [area, props.qBounds, props.arrBounds, props.communeBounds]);
+
+  const styleKey = `${mode}-${level}-${travelOn ? travel : "avg"}-${stats.length}-${stats.reduce((a, s) => a + s.count, 0)}-${periods.length}-${scale.thresholds.join()}-${JSON.stringify(area)}`;
+  const loading = props.statsLoading || (level === "quartier" && mode !== "dots" && qStats.isLoading) || (mode === "dots" && points.isLoading);
+  const fetching = qStats.isFetching || qTrend.isFetching || props.trendFetching || points.isFetching;
+  const csv = mode === "dots" ? points.data ?? [] : travelOn ? trendRows.filter((r) => r.period === travel) : stats;
 
   return (
     <ChartCard testId="map" title={mode === "change" ? "Change in price per m², by area" : mode === "dots" ? "Individual sales on the map" : "Median price per m², by area"}
-      isDark={isDark} loading={loading} fetching={fetching} csv={csv as object[]} csvName={`paris-map-${mode}-${level}.csv`}
-      desc={mode === "change" ? "Median price per m² at the end of the period compared with the start. Click an area to select it for the whole page." :
-        mode === "dots" ? "Each dot is one sale, coloured by its price per m²." : "Click an area to select it for the whole page. Use the slider under the map to step through quarters."}
+      isDark={isDark} loading={loading} fetching={fetching} csv={csv as object[]} csvName={`map-${mode}-${level}.csv`}
+      desc={mode === "change" ? "Median price per m² at the end of the period compared with the start. Communes appear around Paris at each level. Click an area to select it for the whole page." :
+        mode === "dots" ? "Each dot is one sale in the selected area, coloured by its price per m². Click an area to select it for the whole page." : "Communes appear around Paris at each level. Click an area to select it for the whole page. Use the slider under the map to step through quarters."}
       right={<>
         <Segmented label="Map mode" testId="map-mode" value={mode} onChange={setMode} options={[["level", "Price level"], ["change", "Price change"], ["dots", "Sales"]]} />
         {mode !== "dots" && <Segmented label="Map areas" testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
       </>}>
       <div className="relative h-[400px] md:h-[clamp(380px,calc(100dvh-300px),620px)] rounded-md overflow-hidden border">
-        {props.arrError ? <ErrorState onRetry={props.retryArr} /> : (
+        {props.statsError ? <ErrorState onRetry={props.retryStats} /> : (
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
-            selArr={selArr} selQ={area.kind === "q" ? area.id : undefined} styleKey={styleKey}
-            onSelect={(p) => props.onSelect(p, mode === "dots" ? "arr" : level)} outlineOnly={mode === "dots"}
-            points={mode === "dots" ? points.data ?? [] : undefined} pointScale={scale} focusFeature={focusFeature} />
+            stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}
+            onSelect={props.onSelect} outlineOnly={mode === "dots"}
+            points={mode === "dots" ? points.data ?? [] : undefined} pointScale={scale.color} pointName={pointName} onSelectPoint={selectPoint} focusFeature={focusFeature} />
         )}
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
         <div className="absolute left-3 bottom-3 z-[400] rounded-md bg-card border px-3 py-2">
           {mode === "change" ? (
             <GradientLegend title={<>Change in price per m², {rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} />
           ) : (
-            <GradientLegend title={<>Median price per m², <span className="font-semibold text-primary">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per sale" : rangeLabel(ef, et)}</span></>}
-              min={domain[0]} max={domain[1]} scale={scale} fmt={(n) => `${num(n)}`} />
+            <StepLegend title={<>Median price per m², <span className="font-semibold text-primary">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per sale" : rangeLabel(ef, et)}</span></>}
+              scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
           )}
           {mode === "dots" && points.data && <div className="text-[12px] mt-1 text-muted-foreground font-num">{num(points.data.length)} sales plotted</div>}
         </div>

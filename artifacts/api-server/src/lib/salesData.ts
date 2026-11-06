@@ -57,8 +57,7 @@ const [excluded] = await salesDb.query<{ total: number }>(
     'has_commercial_premises',
     'out_of_range_price_or_surface',
     'out_of_range_price_per_sqm',
-    'missing_price_or_surface',
-    'bad_arrondissement'
+    'missing_price_or_surface'
   )`,
 );
 
@@ -77,5 +76,21 @@ export const quartierNames = new Map<string, string>(
   quartierGeo.features.map((f) => [
     String(f.properties["id"]),
     String(f.properties["name"]),
+  ]),
+);
+
+export const communeGeo = readBoundaries("communes.geojson");
+
+export const communeNames = new Map<string, string>(
+  communeGeo.features.map((f) => [
+    String(f.properties["id"]),
+    String(f.properties["name"]),
+  ]),
+);
+
+export const communeGroups = new Map<string, string>(
+  communeGeo.features.map((f) => [
+    String(f.properties["id"]),
+    String(f.properties["group"]),
   ]),
 );

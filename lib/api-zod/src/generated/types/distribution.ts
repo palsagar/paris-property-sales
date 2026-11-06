@@ -9,10 +9,34 @@ import type { DistributionBin } from './distributionBin';
 
 export interface Distribution {
   bins: DistributionBin[];
-  median: number;
-  mean: number;
-  p10: number;
-  p25: number;
-  p75: number;
-  p90: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  median: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  mean: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p10: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p25: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p75: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p90: number | null;
 }

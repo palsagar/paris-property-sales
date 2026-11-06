@@ -11,9 +11,9 @@ tags:
   - name: health
     description: Health operations
   - name: sales
-    description: Paris residential property sales (DVF open data)
+    description: Residential property sales in Paris and its suburbs (DVF open data)
   - name: geo
-    description: Paris administrative boundaries
+    description: Administrative boundaries of Paris and its Communes
 paths:
   /healthz:
     get:
@@ -37,6 +37,8 @@ paths:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
         - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/Department"
+        - $ref: "#/components/parameters/Commune"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
       responses:
@@ -55,6 +57,8 @@ paths:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
         - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/Department"
+        - $ref: "#/components/parameters/Commune"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
       responses:
@@ -73,6 +77,8 @@ paths:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
         - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/Department"
+        - $ref: "#/components/parameters/Commune"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
       responses:
@@ -96,6 +102,8 @@ paths:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
         - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/Department"
+        - $ref: "#/components/parameters/Commune"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Granularity"
@@ -113,9 +121,10 @@ paths:
     get:
       operationId: getAreaTrend
       tags: [sales]
-      summary: Median price per m2 over time for every arrondissement or quartier
+      summary: Median price per m2 over time for every arrondissement, quartier or commune
       description: >
-        Long-format table with one row per area and period. Used for the map time slider
+        Long-format table with one row per area and period. The commune level lists the
+        Communes and no Paris Sale. Used for the map time slider
         and the arrondissement by period heat map. The window parameter pools neighbouring
         periods exactly as for the trend endpoint.
       parameters:
@@ -124,7 +133,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [arrondissement, quartier]
+            enum: [arrondissement, quartier, commune]
             default: arrondissement
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/From"
@@ -149,6 +158,8 @@ paths:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
         - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/Department"
+        - $ref: "#/components/parameters/Commune"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
       responses:
@@ -196,6 +207,24 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AreaStat"
+  /sales/by-commune:
+    get:
+      operationId: getSalesByCommune
+      tags: [sales]
+      summary: Price statistics and price change for each Commune with Sales
+      parameters:
+        - $ref: "#/components/parameters/PropertyType"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+      responses:
+        "200":
+          description: Stats by commune
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AreaStat"
   /sales/points:
     get:
       operationId: getSalesPoints
@@ -205,6 +234,8 @@ paths:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
         - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/Department"
+        - $ref: "#/components/parameters/Commune"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
       responses:
@@ -225,6 +256,8 @@ paths:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
         - $ref: "#/components/parameters/Quartier"
+        - $ref: "#/components/parameters/Department"
+        - $ref: "#/components/parameters/Commune"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - name: sortBy
@@ -287,6 +320,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GeoFeatureCollection"
+  /geo/communes:
+    get:
+      operationId: getCommuneBoundaries
+      tags: [geo]
+      summary: GeoJSON boundaries of the Communes
+      responses:
+        "200":
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoFeatureCollection"
 components:
   parameters:
     PropertyType:
@@ -302,7 +347,7 @@ components:
       name: arrondissement
       in: query
       required: false
-      description: Restrict to one arrondissement (1 to 20).
+      description: Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
       schema:
         type: integer
         minimum: 1
@@ -315,6 +360,22 @@ components:
       schema:
         type: string
         pattern: "^[0-9]{7}$"
+    Department:
+      name: department
+      in: query
+      required: false
+      description: Restrict to one Department. Only the three suburban Departments are Areas.
+      schema:
+        type: string
+        enum: ["92", "93", "94"]
+    Commune:
+      name: commune
+      in: query
+      required: false
+      description: Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+      schema:
+        type: string
+        pattern: "^[0-9]{5}$"
     From:
       name: from
       in: query
@@ -385,22 +446,31 @@ components:
         - endMedianPrice
         - priceChangePct
         - changeWindowMonths
+        - houseShare
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         count:
           type: integer
         totalVolume:
           type: number
           description: Sum of all purchase prices in euros
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         averagePrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         averagePricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianSurface:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         minPrice:
           type: number
         maxPrice:
@@ -481,21 +551,30 @@ components:
           items:
             $ref: "#/components/schemas/DistributionBin"
         median:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         mean:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p10:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p25:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p75:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p90:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     TrendPoint:
       type: object
-      required: [period, label, count, medianPrice, medianPricePerSqm, p25PricePerSqm, p75PricePerSqm]
+      required: [period, label, count, medianPrice, medianPricePerSqm, p25PricePerSqm, p75PricePerSqm, houseShare]
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         period:
           type: string
           description: Start date of the bucket (YYYY-MM-DD)
@@ -506,20 +585,27 @@ components:
           type: integer
           description: Number of sales pooled into this point
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p25PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p75PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     AreaTrendPoint:
       type: object
-      required: [id, period, label, count, medianPricePerSqm]
+      required: [id, period, label, count, medianPricePerSqm, houseShare]
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         id:
           type: string
-          description: Arrondissement number as a string, or INSEE quartier code
+          description: Arrondissement number as a string, INSEE quartier code, or INSEE commune code
         period:
           type: string
           description: Start date of the bucket (YYYY-MM-DD)
@@ -528,27 +614,35 @@ components:
         count:
           type: integer
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     RoomsStat:
       type: object
-      required: [rooms, count, medianPrice, medianPricePerSqm, medianSurface]
+      required: [rooms, count, medianPrice, medianPricePerSqm, medianSurface, houseShare]
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         rooms:
           type: integer
           description: Number of main rooms; 5 means 5 or more
         count:
           type: integer
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianSurface:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     AreaStat:
       type: object
       required:
         - id
         - name
+        - group
         - arrondissement
         - count
         - medianPrice
@@ -559,26 +653,40 @@ components:
         - startMedianPricePerSqm
         - endMedianPricePerSqm
         - changePct
+        - houseShare
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         id:
           type: string
-          description: Arrondissement number (1 to 20) as a string, or the INSEE quartier code
+          description: Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code
         name:
           type: string
+        group:
+          type: string
+          enum: [paris, "92", "93", "94", major]
+          description: Where the Area sits. Paris, one of the three Departments, or a Major town.
         arrondissement:
-          type: integer
+          type: ["integer", "null"]
+          description: The Arrondissement number, or null for a Commune
         count:
           type: integer
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p25PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p75PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianSurface:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         startMedianPricePerSqm:
           type: ["number", "null"]
           description: Median price per m2 over the first months of the selected range (null if fewer than 5 sales)
@@ -590,7 +698,7 @@ components:
           description: Percentage change between the start and end windows (null when either window has fewer than 5 sales)
     SalePoint:
       type: object
-      required: [id, lon, lat, price, surface, pricePerSqm, arrondissement, date, type, address]
+      required: [id, lon, lat, price, surface, pricePerSqm, arrondissement, commune, quartier, areaName, date, type, address]
       properties:
         id:
           type: string
@@ -605,7 +713,15 @@ components:
         pricePerSqm:
           type: number
         arrondissement:
-          type: integer
+          type: ["integer", "null"]
+        commune:
+          type: ["string", "null"]
+        quartier:
+          type: ["string", "null"]
+          description: Id of the Quartier, for a Sale in Paris
+        areaName:
+          type: string
+          description: Name of the Arrondissement or Commune
         date:
           type: string
         type:
@@ -614,7 +730,7 @@ components:
           type: string
     Transaction:
       type: object
-      required: [id, date, type, address, arrondissement, quartierName, price, surface, pricePerSqm, rooms]
+      required: [id, date, type, address, arrondissement, commune, communeName, quartierName, price, surface, pricePerSqm, rooms]
       properties:
         id:
           type: string
@@ -625,7 +741,12 @@ components:
         address:
           type: string
         arrondissement:
-          type: integer
+          type: ["integer", "null"]
+        commune:
+          type: ["string", "null"]
+          description: INSEE commune code, null in Paris
+        communeName:
+          type: ["string", "null"]
         quartierName:
           type: ["string", "null"]
         price:

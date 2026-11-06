@@ -24,26 +24,30 @@ export const getSalesSummaryQueryPropertyTypeDefault = `all`;
 export const getSalesSummaryQueryArrondissementMax = 20;
 
 export const getSalesSummaryQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
+export const getSalesSummaryQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
 export const getSalesSummaryQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getSalesSummaryQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const GetSalesSummaryQueryParams = zod.object({
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getSalesSummaryQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
-  "arrondissement": zod.coerce.number().int().min(1).max(getSalesSummaryQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20).'),
+  "arrondissement": zod.coerce.number().int().min(1).max(getSalesSummaryQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.'),
   "quartier": zod.coerce.string().regex(getSalesSummaryQueryQuartierRegExp).optional().describe('Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).'),
+  "department": zod.enum(['92', '93', '94']).optional().describe('Restrict to one Department. Only the three suburban Departments are Areas.'),
+  "commune": zod.coerce.string().regex(getSalesSummaryQueryCommuneRegExp).optional().describe('Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).'),
   "from": zod.coerce.string().regex(getSalesSummaryQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(getSalesSummaryQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.')
 })
 
 export const GetSalesSummaryResponse = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "count": zod.number().int(),
   "totalVolume": zod.number().describe('Sum of all purchase prices in euros'),
-  "medianPrice": zod.number(),
-  "averagePrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "averagePricePerSqm": zod.number(),
-  "medianSurface": zod.number(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "averagePrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "averagePricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "minPrice": zod.number(),
   "maxPrice": zod.number(),
   "periodFrom": zod.string().describe('Date of the earliest selected sale (YYYY-MM-DD)'),
@@ -75,14 +79,17 @@ export const getPriceDistributionQueryPropertyTypeDefault = `all`;
 export const getPriceDistributionQueryArrondissementMax = 20;
 
 export const getPriceDistributionQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
+export const getPriceDistributionQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
 export const getPriceDistributionQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getPriceDistributionQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const GetPriceDistributionQueryParams = zod.object({
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getPriceDistributionQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
-  "arrondissement": zod.coerce.number().int().min(1).max(getPriceDistributionQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20).'),
+  "arrondissement": zod.coerce.number().int().min(1).max(getPriceDistributionQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.'),
   "quartier": zod.coerce.string().regex(getPriceDistributionQueryQuartierRegExp).optional().describe('Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).'),
+  "department": zod.enum(['92', '93', '94']).optional().describe('Restrict to one Department. Only the three suburban Departments are Areas.'),
+  "commune": zod.coerce.string().regex(getPriceDistributionQueryCommuneRegExp).optional().describe('Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).'),
   "from": zod.coerce.string().regex(getPriceDistributionQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(getPriceDistributionQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.')
 })
@@ -93,12 +100,12 @@ export const GetPriceDistributionResponse = zod.object({
   "to": zod.number(),
   "count": zod.number().int()
 })),
-  "median": zod.number(),
-  "mean": zod.number(),
-  "p10": zod.number(),
-  "p25": zod.number(),
-  "p75": zod.number(),
-  "p90": zod.number()
+  "median": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "mean": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p10": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p90": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 
 
@@ -109,14 +116,17 @@ export const getPricePerSqmDistributionQueryPropertyTypeDefault = `all`;
 export const getPricePerSqmDistributionQueryArrondissementMax = 20;
 
 export const getPricePerSqmDistributionQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
+export const getPricePerSqmDistributionQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
 export const getPricePerSqmDistributionQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getPricePerSqmDistributionQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const GetPricePerSqmDistributionQueryParams = zod.object({
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getPricePerSqmDistributionQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
-  "arrondissement": zod.coerce.number().int().min(1).max(getPricePerSqmDistributionQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20).'),
+  "arrondissement": zod.coerce.number().int().min(1).max(getPricePerSqmDistributionQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.'),
   "quartier": zod.coerce.string().regex(getPricePerSqmDistributionQueryQuartierRegExp).optional().describe('Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).'),
+  "department": zod.enum(['92', '93', '94']).optional().describe('Restrict to one Department. Only the three suburban Departments are Areas.'),
+  "commune": zod.coerce.string().regex(getPricePerSqmDistributionQueryCommuneRegExp).optional().describe('Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).'),
   "from": zod.coerce.string().regex(getPricePerSqmDistributionQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(getPricePerSqmDistributionQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.')
 })
@@ -127,12 +137,12 @@ export const GetPricePerSqmDistributionResponse = zod.object({
   "to": zod.number(),
   "count": zod.number().int()
 })),
-  "median": zod.number(),
-  "mean": zod.number(),
-  "p10": zod.number(),
-  "p25": zod.number(),
-  "p75": zod.number(),
-  "p90": zod.number()
+  "median": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "mean": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p10": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p90": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 
 
@@ -144,6 +154,7 @@ export const getSalesTrendQueryPropertyTypeDefault = `all`;
 export const getSalesTrendQueryArrondissementMax = 20;
 
 export const getSalesTrendQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
+export const getSalesTrendQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
 export const getSalesTrendQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getSalesTrendQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getSalesTrendQueryGranularityDefault = `quarter`;
@@ -154,8 +165,10 @@ export const getSalesTrendQueryWindowMax = 12;
 
 export const GetSalesTrendQueryParams = zod.object({
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getSalesTrendQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
-  "arrondissement": zod.coerce.number().int().min(1).max(getSalesTrendQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20).'),
+  "arrondissement": zod.coerce.number().int().min(1).max(getSalesTrendQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.'),
   "quartier": zod.coerce.string().regex(getSalesTrendQueryQuartierRegExp).optional().describe('Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).'),
+  "department": zod.enum(['92', '93', '94']).optional().describe('Restrict to one Department. Only the three suburban Departments are Areas.'),
+  "commune": zod.coerce.string().regex(getSalesTrendQueryCommuneRegExp).optional().describe('Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).'),
   "from": zod.coerce.string().regex(getSalesTrendQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(getSalesTrendQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.'),
   "granularity": zod.enum(['month', 'quarter', 'year']).default(getSalesTrendQueryGranularityDefault).describe('Size of each time bucket.'),
@@ -163,20 +176,21 @@ export const GetSalesTrendQueryParams = zod.object({
 })
 
 export const GetSalesTrendResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "period": zod.string().describe('Start date of the bucket (YYYY-MM-DD)'),
   "label": zod.string().describe('Human label, for example "2024-03", "2024 Q2" or "2024"'),
   "count": zod.number().int().describe('Number of sales pooled into this point'),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "p25PricePerSqm": zod.number(),
-  "p75PricePerSqm": zod.number()
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 export const GetSalesTrendResponse = zod.array(GetSalesTrendResponseItem)
 
 
 /**
- * Long-format table with one row per area and period. Used for the map time slider and the arrondissement by period heat map. The window parameter pools neighbouring periods exactly as for the trend endpoint.
- * @summary Median price per m2 over time for every arrondissement or quartier
+ * Long-format table with one row per area and period. The commune level lists the Communes and no Paris Sale. Used for the map time slider and the arrondissement by period heat map. The window parameter pools neighbouring periods exactly as for the trend endpoint.
+ * @summary Median price per m2 over time for every arrondissement, quartier or commune
  */
 export const getAreaTrendQueryLevelDefault = `arrondissement`;
 export const getAreaTrendQueryPropertyTypeDefault = `all`;
@@ -189,7 +203,7 @@ export const getAreaTrendQueryWindowMax = 12;
 
 
 export const GetAreaTrendQueryParams = zod.object({
-  "level": zod.enum(['arrondissement', 'quartier']).default(getAreaTrendQueryLevelDefault),
+  "level": zod.enum(['arrondissement', 'quartier', 'commune']).default(getAreaTrendQueryLevelDefault),
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getAreaTrendQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
   "from": zod.coerce.string().regex(getAreaTrendQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(getAreaTrendQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.'),
@@ -198,11 +212,12 @@ export const GetAreaTrendQueryParams = zod.object({
 })
 
 export const GetAreaTrendResponseItem = zod.object({
-  "id": zod.string().describe('Arrondissement number as a string, or INSEE quartier code'),
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
+  "id": zod.string().describe('Arrondissement number as a string, INSEE quartier code, or INSEE commune code'),
   "period": zod.string().describe('Start date of the bucket (YYYY-MM-DD)'),
   "label": zod.string(),
   "count": zod.number().int(),
-  "medianPricePerSqm": zod.number()
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 export const GetAreaTrendResponse = zod.array(GetAreaTrendResponseItem)
 
@@ -214,24 +229,28 @@ export const getSalesByRoomsQueryPropertyTypeDefault = `all`;
 export const getSalesByRoomsQueryArrondissementMax = 20;
 
 export const getSalesByRoomsQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
+export const getSalesByRoomsQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
 export const getSalesByRoomsQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getSalesByRoomsQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const GetSalesByRoomsQueryParams = zod.object({
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getSalesByRoomsQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
-  "arrondissement": zod.coerce.number().int().min(1).max(getSalesByRoomsQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20).'),
+  "arrondissement": zod.coerce.number().int().min(1).max(getSalesByRoomsQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.'),
   "quartier": zod.coerce.string().regex(getSalesByRoomsQueryQuartierRegExp).optional().describe('Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).'),
+  "department": zod.enum(['92', '93', '94']).optional().describe('Restrict to one Department. Only the three suburban Departments are Areas.'),
+  "commune": zod.coerce.string().regex(getSalesByRoomsQueryCommuneRegExp).optional().describe('Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).'),
   "from": zod.coerce.string().regex(getSalesByRoomsQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(getSalesByRoomsQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.')
 })
 
 export const GetSalesByRoomsResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "rooms": zod.number().int().describe('Number of main rooms; 5 means 5 or more'),
   "count": zod.number().int(),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "medianSurface": zod.number()
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 export const GetSalesByRoomsResponse = zod.array(GetSalesByRoomsResponseItem)
 
@@ -251,15 +270,17 @@ export const GetSalesByArrondissementQueryParams = zod.object({
 })
 
 export const GetSalesByArrondissementResponseItem = zod.object({
-  "id": zod.string().describe('Arrondissement number (1 to 20) as a string, or the INSEE quartier code'),
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
+  "id": zod.string().describe('Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code'),
   "name": zod.string(),
-  "arrondissement": zod.number().int(),
+  "group": zod.enum(['paris', '92', '93', '94', 'major']).describe('Where the Area sits. Paris, one of the three Departments, or a Major town.'),
+  "arrondissement": zod.number().int().nullable().describe('The Arrondissement number, or null for a Commune'),
   "count": zod.number().int(),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "p25PricePerSqm": zod.number(),
-  "p75PricePerSqm": zod.number(),
-  "medianSurface": zod.number(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "startMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the first months of the selected range (null if fewer than 5 sales)'),
   "endMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the last months of the selected range (null if fewer than 5 sales)'),
   "changePct": zod.number().nullable().describe('Percentage change between the start and end windows (null when either window has fewer than 5 sales)')
@@ -282,20 +303,55 @@ export const GetSalesByQuartierQueryParams = zod.object({
 })
 
 export const GetSalesByQuartierResponseItem = zod.object({
-  "id": zod.string().describe('Arrondissement number (1 to 20) as a string, or the INSEE quartier code'),
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
+  "id": zod.string().describe('Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code'),
   "name": zod.string(),
-  "arrondissement": zod.number().int(),
+  "group": zod.enum(['paris', '92', '93', '94', 'major']).describe('Where the Area sits. Paris, one of the three Departments, or a Major town.'),
+  "arrondissement": zod.number().int().nullable().describe('The Arrondissement number, or null for a Commune'),
   "count": zod.number().int(),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "p25PricePerSqm": zod.number(),
-  "p75PricePerSqm": zod.number(),
-  "medianSurface": zod.number(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "startMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the first months of the selected range (null if fewer than 5 sales)'),
   "endMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the last months of the selected range (null if fewer than 5 sales)'),
   "changePct": zod.number().nullable().describe('Percentage change between the start and end windows (null when either window has fewer than 5 sales)')
 })
 export const GetSalesByQuartierResponse = zod.array(GetSalesByQuartierResponseItem)
+
+
+/**
+ * @summary Price statistics and price change for each Commune with Sales
+ */
+export const getSalesByCommuneQueryPropertyTypeDefault = `all`;
+export const getSalesByCommuneQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesByCommuneQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
+export const GetSalesByCommuneQueryParams = zod.object({
+  "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getSalesByCommuneQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
+  "from": zod.coerce.string().regex(getSalesByCommuneQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
+  "to": zod.coerce.string().regex(getSalesByCommuneQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.')
+})
+
+export const GetSalesByCommuneResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
+  "id": zod.string().describe('Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code'),
+  "name": zod.string(),
+  "group": zod.enum(['paris', '92', '93', '94', 'major']).describe('Where the Area sits. Paris, one of the three Departments, or a Major town.'),
+  "arrondissement": zod.number().int().nullable().describe('The Arrondissement number, or null for a Commune'),
+  "count": zod.number().int(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "startMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the first months of the selected range (null if fewer than 5 sales)'),
+  "endMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the last months of the selected range (null if fewer than 5 sales)'),
+  "changePct": zod.number().nullable().describe('Percentage change between the start and end windows (null when either window has fewer than 5 sales)')
+})
+export const GetSalesByCommuneResponse = zod.array(GetSalesByCommuneResponseItem)
 
 
 /**
@@ -305,14 +361,17 @@ export const getSalesPointsQueryPropertyTypeDefault = `all`;
 export const getSalesPointsQueryArrondissementMax = 20;
 
 export const getSalesPointsQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
+export const getSalesPointsQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
 export const getSalesPointsQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getSalesPointsQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
 
 export const GetSalesPointsQueryParams = zod.object({
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(getSalesPointsQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
-  "arrondissement": zod.coerce.number().int().min(1).max(getSalesPointsQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20).'),
+  "arrondissement": zod.coerce.number().int().min(1).max(getSalesPointsQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.'),
   "quartier": zod.coerce.string().regex(getSalesPointsQueryQuartierRegExp).optional().describe('Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).'),
+  "department": zod.enum(['92', '93', '94']).optional().describe('Restrict to one Department. Only the three suburban Departments are Areas.'),
+  "commune": zod.coerce.string().regex(getSalesPointsQueryCommuneRegExp).optional().describe('Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).'),
   "from": zod.coerce.string().regex(getSalesPointsQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(getSalesPointsQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.')
 })
@@ -324,7 +383,10 @@ export const GetSalesPointsResponseItem = zod.object({
   "price": zod.number(),
   "surface": zod.number(),
   "pricePerSqm": zod.number(),
-  "arrondissement": zod.number().int(),
+  "arrondissement": zod.number().int().nullable(),
+  "commune": zod.string().nullable(),
+  "quartier": zod.string().nullable().describe('Id of the Quartier, for a Sale in Paris'),
+  "areaName": zod.string().describe('Name of the Arrondissement or Commune'),
   "date": zod.string(),
   "type": zod.string(),
   "address": zod.string()
@@ -339,6 +401,7 @@ export const listTransactionsQueryPropertyTypeDefault = `all`;
 export const listTransactionsQueryArrondissementMax = 20;
 
 export const listTransactionsQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
+export const listTransactionsQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
 export const listTransactionsQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const listTransactionsQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const listTransactionsQuerySortByDefault = `date`;
@@ -353,8 +416,10 @@ export const listTransactionsQueryOffsetMin = 0;
 
 export const ListTransactionsQueryParams = zod.object({
   "propertyType": zod.enum(['all', 'Appartement', 'Maison']).default(listTransactionsQueryPropertyTypeDefault).describe('Restrict to apartments or houses. Defaults to all residential sales.'),
-  "arrondissement": zod.coerce.number().int().min(1).max(listTransactionsQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20).'),
+  "arrondissement": zod.coerce.number().int().min(1).max(listTransactionsQueryArrondissementMax).optional().describe('Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.'),
   "quartier": zod.coerce.string().regex(listTransactionsQueryQuartierRegExp).optional().describe('Restrict to one administrative quartier, identified by its INSEE code (the id of the quartier boundaries and area stats).'),
+  "department": zod.enum(['92', '93', '94']).optional().describe('Restrict to one Department. Only the three suburban Departments are Areas.'),
+  "commune": zod.coerce.string().regex(listTransactionsQueryCommuneRegExp).optional().describe('Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).'),
   "from": zod.coerce.string().regex(listTransactionsQueryFromRegExp).optional().describe('First day to include (YYYY-MM-DD). Defaults to the start of the data.'),
   "to": zod.coerce.string().regex(listTransactionsQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.'),
   "sortBy": zod.enum(['date', 'price', 'pricePerSqm', 'surface']).default(listTransactionsQuerySortByDefault),
@@ -370,7 +435,9 @@ export const ListTransactionsResponse = zod.object({
   "date": zod.string(),
   "type": zod.string(),
   "address": zod.string(),
-  "arrondissement": zod.number().int(),
+  "arrondissement": zod.number().int().nullable(),
+  "commune": zod.string().nullable().describe('INSEE commune code, null in Paris'),
+  "communeName": zod.string().nullable(),
   "quartierName": zod.string().nullable(),
   "price": zod.number(),
   "surface": zod.number(),
@@ -393,6 +460,15 @@ export const GetArrondissementBoundariesResponse = zod.object({
  * @summary GeoJSON boundaries of the 80 administrative quartiers
  */
 export const GetQuartierBoundariesResponse = zod.object({
+  "type": zod.string(),
+  "features": zod.array(zod.record(zod.string(), zod.unknown()))
+})
+
+
+/**
+ * @summary GeoJSON boundaries of the Communes
+ */
+export const GetCommuneBoundariesResponse = zod.object({
   "type": zod.string(),
   "features": zod.array(zod.record(zod.string(), zod.unknown()))
 })

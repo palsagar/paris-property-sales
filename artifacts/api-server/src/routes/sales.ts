@@ -14,6 +14,8 @@ import {
   GetSalesByRoomsResponse,
   GetSalesByArrondissementQueryParams,
   GetSalesByArrondissementResponse,
+  GetSalesByCommuneQueryParams,
+  GetSalesByCommuneResponse,
   GetSalesByQuartierQueryParams,
   GetSalesByQuartierResponse,
   GetSalesPointsQueryParams,
@@ -23,6 +25,9 @@ import {
 } from "@workspace/api-zod";
 import {
   arrondissementGeo,
+  communeGeo,
+  communeGroups,
+  communeNames,
   datasetMeta,
   datasetRange,
   datasetYears,
@@ -34,6 +39,7 @@ import {
   areaStats,
   areaTrendPoints,
   distribution,
+  saleAreaName,
   salePoints,
   salesByRooms,
   summaryStats,
@@ -49,6 +55,8 @@ interface RangeQuery {
   propertyType?: string;
   arrondissement?: number;
   quartier?: string;
+  department?: string;
+  commune?: string;
   from?: string;
   to?: string;
 }
@@ -58,6 +66,8 @@ function toFilter(q: RangeQuery): SaleFilter {
     propertyType: q.propertyType,
     arrondissement: q.arrondissement,
     quartier: q.quartier,
+    department: q.department,
+    commune: q.commune,
     from: q.from,
     to: q.to,
   };
@@ -167,7 +177,7 @@ router.get("/sales/by-arrondissement", async (req, res): Promise<void> => {
   );
   const rows = stats.map(({ area, ...stat }) => {
     const arr = Number(area);
-    return { id: area, name: names.get(arr) ?? area, arrondissement: arr, ...stat };
+    return { id: area, name: names.get(arr) ?? area, group: "paris", arrondissement: arr, ...stat };
   });
   res.json(GetSalesByArrondissementResponse.parse(rows));
 });
@@ -191,6 +201,7 @@ router.get("/sales/by-quartier", async (req, res): Promise<void> => {
       {
         id,
         name: String(f.properties["name"]),
+        group: "paris",
         arrondissement: Number(f.properties["arr"]),
         ...stat,
       },
@@ -199,9 +210,46 @@ router.get("/sales/by-quartier", async (req, res): Promise<void> => {
   res.json(GetSalesByQuartierResponse.parse(rows));
 });
 
+router.get("/sales/by-commune", async (req, res): Promise<void> => {
+  const q = GetSalesByCommuneQueryParams.parse(req.query);
+  const range = effectiveRange(q);
+  const stats = await areaStats(
+    salesDb,
+    toFilter(q),
+    "commune",
+    changeWindows(range.from, range.to),
+  );
+  const byCommune = new Map(stats.map((s) => [s.area, s]));
+  const rows = communeGeo.features.flatMap((f) => {
+    const id = String(f.properties["id"]);
+    const found = byCommune.get(id);
+    if (!found) return [];
+    const { area: _area, ...stat } = found;
+    return [
+      {
+        id,
+        name: communeNames.get(id) ?? id,
+        group: communeGroups.get(id) ?? "major",
+        arrondissement: null,
+        ...stat,
+      },
+    ];
+  });
+  res.json(GetSalesByCommuneResponse.parse(rows));
+});
+
 router.get("/sales/points", async (req, res): Promise<void> => {
   const q = GetSalesPointsQueryParams.parse(req.query);
-  res.json(GetSalesPointsResponse.parse(await salePoints(salesDb, toFilter(q))));
+  const points = await salePoints(salesDb, toFilter(q));
+  res.json(
+    GetSalesPointsResponse.parse(
+      points.map(({ arr, ...point }) => ({
+        ...point,
+        arrondissement: arr,
+        areaName: saleAreaName(arr, point.commune, communeNames),
+      })),
+    ),
+  );
 });
 
 router.get("/sales/transactions", async (req, res): Promise<void> => {
@@ -217,8 +265,10 @@ router.get("/sales/transactions", async (req, res): Promise<void> => {
   res.json(
     ListTransactionsResponse.parse({
       total,
-      items: items.map(({ quartier, ...item }) => ({
+      items: items.map(({ arr, quartier, ...item }) => ({
         ...item,
+        arrondissement: arr,
+        communeName: item.commune ? (communeNames.get(item.commune) ?? null) : null,
         quartierName: quartier ? (quartierNames.get(quartier) ?? null) : null,
       })),
     }),

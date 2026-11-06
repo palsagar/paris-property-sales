@@ -3,19 +3,20 @@ import { useListTransactions, getListTransactionsQueryKey, type ListTransactions
 import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState } from "@/components/ui-bits";
-import { eur, sqm, num, arrLabel, dateLabel } from "@/lib/fmt";
+import { eur, sqm, num, dateLabel } from "@/lib/fmt";
+import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 
 const COLS: { key: string; label: string; sort?: ListTransactionsSortBy; right?: boolean }[] = [
-  { key: "date", label: "Date", sort: "date" }, { key: "address", label: "Address" }, { key: "arr", label: "Arr." }, { key: "quartier", label: "Quartier" },
+  { key: "date", label: "Date", sort: "date" }, { key: "address", label: "Street" }, { key: "area", label: "Area" }, { key: "quartier", label: "Quartier" },
   { key: "type", label: "Type" }, { key: "rooms", label: "Rooms", right: true }, { key: "surface", label: "Surface", sort: "surface", right: true },
   { key: "price", label: "Price", sort: "price", right: true }, { key: "ppsqm", label: "Price / m²", sort: "pricePerSqm", right: true },
 ];
 const PAGE = 15;
 
-export function Transactions({ filters, scopeLabel, scale, arrColor, onSelectArr, onSelectQuartierName, isDark }: {
-  filters: Filters; scopeLabel: string; scale: (v: number) => string; arrColor: (a: number) => string;
-  onSelectArr: (a: number) => void; onSelectQuartierName: (name: string) => void; isDark: boolean;
+export function Transactions({ filters, scopeLabel, scale, areaColor, onSelectArea, onSelectQuartierName, isDark }: {
+  filters: Filters; scopeLabel: string; scale: (v: number) => string; areaColor: (id: string) => string;
+  onSelectArea: (a: Area) => void; onSelectQuartierName: (name: string) => void; isDark: boolean;
 }) {
   const [sortBy, setSortBy] = useState<ListTransactionsSortBy>("date");
   const [sortDir, setSortDir] = useState<ListTransactionsSortDir>("desc");
@@ -23,7 +24,7 @@ export function Transactions({ filters, scopeLabel, scale, arrColor, onSelectArr
   const fk = JSON.stringify(filters);
   useEffect(() => setPage(0), [fk, sortBy, sortDir]);
   const p = { ...filters, sortBy, sortDir, limit: PAGE, offset: page * PAGE };
-  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p) } });
+  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameArea(filters) } });
   const totalPages = tx.data ? Math.max(1, Math.ceil(tx.data.total / PAGE)) : 1;
 
   return (
@@ -50,13 +51,13 @@ export function Transactions({ filters, scopeLabel, scale, arrColor, onSelectArr
               <tbody>
                 {tx.isLoading ? Array.from({ length: PAGE }).map((_, i) => (
                   <tr key={i} className="border-t"><td colSpan={COLS.length} className="px-3 py-2"><Skeleton className="h-5 w-full" /></td></tr>
-                )) : tx.data?.items.length ? tx.data.items.map((t) => (
+                )) : tx.data?.items.length ? tx.data.items.map((t) => { const a = saleArea(t); return (
                   <tr key={t.id} className="border-t hover:bg-muted/40 transition-colors" data-testid={`row-tx-${t.id}`}>
                     <td className="px-3 py-2 whitespace-nowrap font-num text-[13px]">{dateLabel(t.date)}</td>
                     <td className="px-3 py-2 max-w-[280px] truncate" title={t.address}>{t.address}</td>
                     <td className="px-3 py-2">
-                      <button onClick={() => onSelectArr(t.arrondissement)} className="inline-flex items-center gap-1.5 hover:underline">
-                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: arrColor(t.arrondissement) }} />{arrLabel(t.arrondissement)}
+                      <button onClick={() => onSelectArea(a.area)} className="inline-flex items-center gap-1.5 hover:underline text-left">
+                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: areaColor(a.id) }} />{a.label}
                       </button>
                     </td>
                     <td className="px-3 py-2 max-w-[180px] truncate">
@@ -70,7 +71,7 @@ export function Transactions({ filters, scopeLabel, scale, arrColor, onSelectArr
                       <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: scale(t.pricePerSqm) }} />{sqm(t.pricePerSqm)}</span>
                     </td>
                   </tr>
-                )) : (
+                ); }) : (
                   <tr><td colSpan={COLS.length} className="px-3 py-12 text-center text-muted-foreground">No sales match this selection. Try a longer period or another area.</td></tr>
                 )}
               </tbody>

@@ -7,8 +7,11 @@
  */
 
 export * from './areaStat';
+export * from './areaStatGroup';
 export * from './areaTrendPoint';
 export * from './arrondissementParameter';
+export * from './communeParameter';
+export * from './departmentParameter';
 export * from './distribution';
 export * from './distributionBin';
 export * from './fromParameter';
@@ -19,6 +22,7 @@ export * from './getAreaTrendParams';
 export * from './getPriceDistributionParams';
 export * from './getPricePerSqmDistributionParams';
 export * from './getSalesByArrondissementParams';
+export * from './getSalesByCommuneParams';
 export * from './getSalesByQuartierParams';
 export * from './getSalesByRoomsParams';
 export * from './getSalesPointsParams';

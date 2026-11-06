@@ -8,14 +8,39 @@
 import type { YearRange } from './yearRange';
 
 export interface SalesSummary {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   count: number;
   /** Sum of all purchase prices in euros */
   totalVolume: number;
-  medianPrice: number;
-  averagePrice: number;
-  medianPricePerSqm: number;
-  averagePricePerSqm: number;
-  medianSurface: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  averagePrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  averagePricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianSurface: number | null;
   minPrice: number;
   maxPrice: number;
   /** Date of the earliest selected sale (YYYY-MM-DD) */

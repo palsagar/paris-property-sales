@@ -12,7 +12,11 @@ export interface FixtureSale {
   surface: number;
   pricePerSqm: number;
   rooms: number;
-  arr: number;
+  /** Defaults to "75", Paris. */
+  department?: string;
+  /** INSEE code of the Commune. Defaults to null, as for every Sale in Paris. */
+  commune?: string | null;
+  arr: number | null;
   quartier: string | null;
   lon: number | null;
   lat: number | null;
@@ -45,7 +49,7 @@ export async function createSalesFixture(sales: FixtureSale[]): Promise<SalesDb>
       CREATE TABLE sales (
         id VARCHAR NOT NULL, sale_date VARCHAR NOT NULL, property_type VARCHAR NOT NULL,
         price INTEGER NOT NULL, surface INTEGER NOT NULL, price_per_sqm INTEGER NOT NULL,
-        rooms INTEGER NOT NULL, arr INTEGER NOT NULL, quartier VARCHAR,
+        rooms INTEGER NOT NULL, department VARCHAR NOT NULL, commune VARCHAR, arr INTEGER, quartier VARCHAR,
         lon DOUBLE, lat DOUBLE, street VARCHAR NOT NULL
       );
       CREATE TABLE metadata (key VARCHAR NOT NULL, value VARCHAR NOT NULL);
@@ -53,8 +57,8 @@ export async function createSalesFixture(sales: FixtureSale[]): Promise<SalesDb>
     `);
     for (const s of sales) {
       await connection.run(
-        "INSERT INTO sales VALUES ($id, $date, $type, $price, $surface, $pricePerSqm, $rooms, $arr, $quartier, $lon, $lat, $street)",
-        { ...s },
+        "INSERT INTO sales VALUES ($id, $date, $type, $price, $surface, $pricePerSqm, $rooms, $department, $commune, $arr, $quartier, $lon, $lat, $street)",
+        { ...s, department: s.department ?? "75", commune: s.commune ?? null },
       );
     }
   } finally {

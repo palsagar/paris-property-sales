@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ArrondissementParameter } from './arrondissementParameter';
+import type { CommuneParameter } from './communeParameter';
+import type { DepartmentParameter } from './departmentParameter';
 import type { FromParameter } from './fromParameter';
 import type { PropertyTypeParameter } from './propertyTypeParameter';
 import type { QuartierParameter } from './quartierParameter';
@@ -17,7 +19,7 @@ export type GetSalesByRoomsParams = {
  */
 propertyType?: PropertyTypeParameter;
 /**
- * Restrict to one arrondissement (1 to 20).
+ * Restrict to one arrondissement (1 to 20). With no Area at all, a request means Paris.
  * @minimum 1
  * @maximum 20
  */
@@ -27,6 +29,15 @@ arrondissement?: ArrondissementParameter;
  * @pattern ^[0-9]{7}$
  */
 quartier?: QuartierParameter;
+/**
+ * Restrict to one Department. Only the three suburban Departments are Areas.
+ */
+department?: DepartmentParameter;
+/**
+ * Restrict to one Commune, identified by its INSEE code (the id of the commune boundaries and area stats).
+ * @pattern ^[0-9]{5}$
+ */
+commune?: CommuneParameter;
 /**
  * First day to include (YYYY-MM-DD). Defaults to the start of the data.
  * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$

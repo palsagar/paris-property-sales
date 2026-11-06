@@ -32,6 +32,9 @@ async function startApp(maxBytes?: number): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 20));
     res.json({ padding: "x".repeat(1000) });
   });
+  routes.get("/sales/by-commune", (_req, res) => {
+    res.json({ communes: [] });
+  });
   routes.get("/healthz", (_req, res) => {
     res.json({ status: "ok" });
   });
@@ -165,5 +168,19 @@ describe("byte limit", () => {
       assert.equal((await get(url(day))).cache, "MISS");
       assert.equal((await get(url(day))).cache, "HIT");
     }
+  });
+});
+
+describe("Areas in the query", () => {
+  test("other Departments are not Areas", () => {
+    assert.equal(GetSalesSummaryQueryParams.safeParse({ department: "95" }).success, false);
+    assert.equal(GetSalesSummaryQueryParams.safeParse({ department: "92" }).success, true);
+  });
+
+  test("the Commune route is cached", async () => {
+    const base = await startApp();
+    const url = `${base}/sales/by-commune?propertyType=all`;
+    assert.equal((await get(url)).cache, "MISS");
+    assert.equal((await get(url)).cache, "HIT");
   });
 });

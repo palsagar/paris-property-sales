@@ -5,18 +5,50 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AreaStatGroup } from './areaStatGroup';
 
 export interface AreaStat {
-  /** Arrondissement number (1 to 20) as a string, or the INSEE quartier code */
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
+  /** Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code */
   id: string;
   name: string;
-  arrondissement: number;
+  /** Where the Area sits. Paris, one of the three Departments, or a Major town. */
+  group: AreaStatGroup;
+  /**
+     * The Arrondissement number, or null for a Commune
+     * @nullable
+     */
+  arrondissement: number | null;
   count: number;
-  medianPrice: number;
-  medianPricePerSqm: number;
-  p25PricePerSqm: number;
-  p75PricePerSqm: number;
-  medianSurface: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p25PricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p75PricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianSurface: number | null;
   /**
      * Median price per m2 over the first months of the selected range (null if fewer than 5 sales)
      * @nullable

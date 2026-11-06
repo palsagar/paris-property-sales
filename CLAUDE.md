@@ -22,8 +22,8 @@ pnpm is not installed globally on this machine. Use `npx -y pnpm@10.26.1` in pla
 
 ```sh
 # Data: required once per clone, and again after each DVF release. The download is about 610 MB and takes about a minute and a half.
-# This runs fetch_dvf.py and then build_paris_sales.py, and the build checks the release before it replaces sales.duckdb.
-uv run scripts/update_data.py           # writes data-raw/src/paris.csv and artifacts/api-server/data/sales.duckdb
+# This runs fetch_dvf.py and then build_paris_sales.py (fetch_communes.py is separate: run it only when the list of Communes changes), and the build checks the release before it replaces sales.duckdb.
+uv run scripts/update_data.py           # writes data-raw/src/dvf.csv and artifacts/api-server/data/sales.duckdb
 
 # Run everything in one container on http://localhost:3000. Compose mounts the data folder.
 docker compose up --build -d
@@ -65,7 +65,7 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 
 **Two pieces of code depend on the exact requests the dashboard makes.**
 - `lib/responseCache.ts` caches successful `/api` GETs in memory, up to a limit in total bytes. The key is the path plus the query after validation, with the same Zod schema the route uses, so the cache and the route always agree on what a request means. A new route is not cached until you add it and its schema to `QUERY_SCHEMAS`. The cache assumes that the data never changes while the process runs, so a server must restart to show new data.
-- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 2,800 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
+- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 4,463 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
 
 **The dashboard is one page.** `pages/dashboard.tsx` owns the view and passes filters to the panels in `components/`. Each panel fetches its own data through the generated hooks. The view state (`lib/view-state.ts`) is mirrored into the URL query string, and links depend on it, so a new filter belongs there. Charts use Recharts, and the map uses Leaflet.
 

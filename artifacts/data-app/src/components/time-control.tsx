@@ -4,8 +4,9 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Brush, ResponsiveContainer } fr
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChartColors } from "@/components/ui-bits";
 import { endOfMonth, monthsBefore, rangeLabel } from "@/lib/fmt";
+import { keepInSameArea, type areaParams as areaParamsOf } from "@/lib/areas";
 
-type AreaParams = { arrondissement?: number; quartier?: string };
+type AreaParams = ReturnType<typeof areaParamsOf>;
 
 export function TimeControl({ ptype, areaParams, from, to, datasetFrom, datasetTo, years, onChange, isDark }: {
   ptype: PropertyTypeParameter; areaParams: AreaParams; from?: string; to?: string; datasetFrom: string; datasetTo: string; years: YearRange[];
@@ -13,7 +14,7 @@ export function TimeControl({ ptype, areaParams, from, to, datasetFrom, datasetT
 }) {
   const c = useChartColors(isDark);
   const params = { propertyType: ptype, ...areaParams, granularity: "month" as const, window: 1 };
-  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params) } });
+  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(areaParams) } });
   const data = useMemo(() => q.data ?? [], [q.data]);
   const periods = data.map((d) => d.period);
 
