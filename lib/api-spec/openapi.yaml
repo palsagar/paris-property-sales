@@ -698,7 +698,7 @@ components:
           description: Percentage change between the start and end windows (null when either window has fewer than 5 sales)
     SalePoint:
       type: object
-      required: [id, lon, lat, price, surface, pricePerSqm, areaName, date, type, address]
+      required: [id, lon, lat, price, surface, pricePerSqm, arrondissement, commune, quartier, areaName, date, type, address]
       properties:
         id:
           type: string
@@ -712,6 +712,13 @@ components:
           type: number
         pricePerSqm:
           type: number
+        arrondissement:
+          type: ["integer", "null"]
+        commune:
+          type: ["string", "null"]
+        quartier:
+          type: ["string", "null"]
+          description: Id of the Quartier, for a Sale in Paris
         areaName:
           type: string
           description: Name of the Arrondissement or Commune

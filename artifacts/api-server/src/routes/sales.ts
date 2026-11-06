@@ -243,9 +243,10 @@ router.get("/sales/points", async (req, res): Promise<void> => {
   const points = await salePoints(salesDb, toFilter(q));
   res.json(
     GetSalesPointsResponse.parse(
-      points.map(({ arr, commune, ...point }) => ({
+      points.map(({ arr, ...point }) => ({
         ...point,
-        areaName: saleAreaName(arr, commune, communeNames),
+        arrondissement: arr,
+        areaName: saleAreaName(arr, point.commune, communeNames),
       })),
     ),
   );

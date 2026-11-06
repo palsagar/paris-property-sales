@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { before, test } from "node:test";
+import { GetSalesPointsResponse } from "@workspace/api-zod";
 import { createSalesFixture, FIXTURE_SALES, type FixtureSale } from "./salesFixture";
 import type { SalesDb } from "./salesDb";
 import { bucketOrdinal, changeWindows } from "./timeStats";
@@ -200,6 +201,20 @@ test("Arrondissements sort as numbers within a period", async () => {
 test("points leave out Sales with no position and have a fixed order", async () => {
   assert.deepEqual((await salePoints(db, {})).map((p) => p.id), ["s4", "s3", "s2", "s1"]);
   assert.deepEqual(await salePoints(db, { from: "2030-01-01" }), []);
+});
+
+test("points carry the recorded Area of each Sale, and the response keeps it", async () => {
+  const fixture = await createSalesFixture([
+    { id: "p1", date: "2024-01-10", type: "Appartement", price: 100000, surface: 10, pricePerSqm: 10000, rooms: 1, arr: 5, quartier: "7510501", lon: 2.3, lat: 48.8, street: "Rue X" },
+    { id: "p2", date: "2024-01-10", type: "Maison", price: 100000, surface: 10, pricePerSqm: 10000, rooms: 1, department: "99", commune: "99001", arr: null, quartier: null, lon: 2.4, lat: 48.9, street: "Rue Y" },
+  ]);
+  const [paris] = await salePoints(fixture, {});
+  const [commune] = await salePoints(fixture, { commune: "99001" });
+  assert.deepEqual([paris.arr, paris.commune, paris.quartier], [5, null, "7510501"]);
+  assert.deepEqual([commune.arr, commune.commune, commune.quartier], [null, "99001", null]);
+  const { arr, ...point } = paris;
+  const [parsed] = GetSalesPointsResponse.parse([{ ...point, arrondissement: arr, areaName: "5e arrondissement" }]);
+  assert.deepEqual([parsed.arrondissement, parsed.commune, parsed.quartier], [5, null, "7510501"]);
 });
 
 test("ties break by id ascending in both directions", async () => {

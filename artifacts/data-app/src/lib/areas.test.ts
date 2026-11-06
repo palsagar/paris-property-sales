@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { areaParams, featureArea, featureId, featureState, groupOfArea, keepInSameArea, saleArea, searchScore, searchValue } from "./areas";
+import { areaParams, featureArea, featureId, featureState, groupOfArea, keepInSameArea, pointArea, saleArea, searchScore, searchValue } from "./areas";
 
 test("areaParams gives the request parameter of each kind", () => {
   assert.deepEqual(areaParams({ kind: "paris" }), {});
@@ -60,6 +60,16 @@ test("searchValue finds names without accents and old names", () => {
 test("saleArea gives a Paris Sale its Arrondissement and a Commune Sale its Commune", () => {
   assert.deepEqual(saleArea({ arrondissement: 5, commune: null, communeName: null }), { id: "5", label: "5e", area: { kind: "arr", arr: 5 } });
   assert.deepEqual(saleArea({ arrondissement: null, commune: "99001", communeName: "Ville" }), { id: "99001", label: "Ville", area: { kind: "commune", id: "99001" } });
+});
+
+test("pointArea gives the Area recorded on a Sale, at each map level", () => {
+  const paris = { arrondissement: 5, commune: null, quartier: "7510501" };
+  const commune = { arrondissement: null, commune: "99001", quartier: null };
+  assert.deepEqual(pointArea(paris, "arr"), { kind: "arr", arr: 5 });
+  assert.deepEqual(pointArea(paris, "quartier"), { kind: "q", id: "7510501" });
+  assert.deepEqual(pointArea({ ...paris, quartier: null }, "quartier"), { kind: "arr", arr: 5 });
+  assert.deepEqual(pointArea(commune, "arr"), { kind: "commune", id: "99001" });
+  assert.deepEqual(pointArea(commune, "quartier"), { kind: "commune", id: "99001" });
 });
 
 test("keepInSameArea keeps the previous data only while the Area stays the same", () => {

@@ -296,6 +296,15 @@ export interface SalePoint {
   price: number;
   surface: number;
   pricePerSqm: number;
+  /** @nullable */
+  arrondissement: number | null;
+  /** @nullable */
+  commune: string | null;
+  /**
+     * Id of the Quartier, for a Sale in Paris
+     * @nullable
+     */
+  quartier: string | null;
   /** Name of the Arrondissement or Commune */
   areaName: string;
   date: string;

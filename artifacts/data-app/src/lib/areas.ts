@@ -55,6 +55,12 @@ export function saleArea(t: { arrondissement: number | null; commune: string | n
   return { id, label: t.communeName ?? "", area: { kind: "commune", id } };
 }
 
+/** The Area a click on a Sale's dot selects: the one recorded on the Sale, at the chosen map level. A Commune has no Quartiers. */
+export function pointArea(p: { arrondissement: number | null; commune: string | null; quartier: string | null }, level: "arr" | "quartier"): Area {
+  if (level === "quartier" && p.quartier != null) return { kind: "q", id: p.quartier };
+  return saleArea({ ...p, communeName: null }).area;
+}
+
 export interface MapFeature {
   arr?: number;
   id?: string;

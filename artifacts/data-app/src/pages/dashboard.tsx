@@ -276,7 +276,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
               statsLoading={byArr.isLoading || byCommune.isLoading} statsError={byArr.isError || byCommune.isError}
               retryStats={() => { byArr.refetch(); byCommune.refetch(); }} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
               arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
-              travel={travel} setTravel={setTravel} onSelect={(p) => selectArea(featureArea(p))} />
+              travel={travel} setTravel={setTravel} onSelect={(p) => selectArea(featureArea(p))} onSelectArea={selectArea} />
             <Ranking stats={rankStats} trend={heatData} loading={rankLoading} fetching={byArr.isFetching || byCommune.isFetching || heat.isFetching} error={rankError}
               retry={() => { byArr.refetch(); byCommune.refetch(); }} scale={scale} selId={selId} onSelect={selectArea}
               rank={rank} onRank={(r) => patch({ rank: r })} ptype={ptype} isDark={isDark} />

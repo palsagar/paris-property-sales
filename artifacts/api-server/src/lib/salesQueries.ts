@@ -341,9 +341,9 @@ export async function salePoints(db: SalesDb, f: SaleFilter) {
   const where = saleWhere(f);
   return db.query<{
     id: string; lon: number; lat: number; price: number; surface: number; pricePerSqm: number;
-    arr: number | null; commune: string | null; date: string; type: string; address: string;
+    arr: number | null; commune: string | null; quartier: string | null; date: string; type: string; address: string;
   }>(
-    `SELECT id, lon, lat, price, surface, price_per_sqm AS "pricePerSqm", arr, commune,
+    `SELECT id, lon, lat, price, surface, price_per_sqm AS "pricePerSqm", arr, commune, quartier,
       sale_date AS "date", property_type AS "type", street AS "address"
     FROM sales WHERE lon IS NOT NULL AND lat IS NOT NULL AND ${where.sql}
     ORDER BY sale_date DESC, id`,

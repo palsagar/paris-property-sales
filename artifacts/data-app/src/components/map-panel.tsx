@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetSalesByQuartier, getGetSalesByQuartierQueryKey, useGetAreaTrend, getGetAreaTrendQueryKey,
   useGetSalesPoints, getGetSalesPointsQueryKey,
-  type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter,
+  type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter, type SalePoint,
 } from "@workspace/api-client-react";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { escapeHtml } from "@/lib/escape";
@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend } from "@/components/ui-bits";
 import { eur, sqm, num, arrLabel, pct, makeDivScale, monthsBefore, monthsBetween, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
-import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
+import { DEPARTMENT_NAMES, featureState, keepInSameArea, pointArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
 import type { MapLevel, MapMode } from "@/lib/view-state";
 
@@ -23,7 +23,7 @@ export function MapPanel(props: {
   arrBounds?: GeoFeatureCollection; qBounds?: GeoFeatureCollection; communeBounds?: GeoFeatureCollection;
   scale: StepScale;
   travel: string | null; setTravel: (p: string | null) => void;
-  onSelect: (p: MapFeature) => void;
+  onSelect: (p: MapFeature) => void; onSelectArea: (a: Area) => void;
 }) {
   const { isDark, ptype, from, to, datasetFrom, datasetTo, area, selArr, areaParams: areaP, mode, setMode, level, setLevel, arrStats, communeStats, arrTrend, communeTrend, scale, travel, setTravel } = props;
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
@@ -105,6 +105,18 @@ export function MapPanel(props: {
       (s.startMedianPricePerSqm != null && s.endMedianPricePerSqm != null ? `<div class="pt-sub">From ${num(s.startMedianPricePerSqm)} to ${num(s.endMedianPricePerSqm)} EUR/m²</div>` : "");
   };
 
+  // A dot names and selects the Area recorded on its Sale, which the rounded position can place across a boundary.
+  const quartierNames = useMemo(() => new Map((props.qBounds?.features ?? []).map((f) => {
+    const q = (f as { properties: MapFeature }).properties;
+    return [q.id, q.name];
+  })), [props.qBounds]);
+  const pointName = (p: SalePoint) => (level === "quartier" && p.quartier != null && quartierNames.get(p.quartier)) || p.areaName;
+  // A dot only selects: a click on a dot in the selected Area must not click the Area off.
+  const selectPoint = (p: SalePoint) => {
+    const a = pointArea(p, level);
+    if (JSON.stringify(a) !== JSON.stringify(area)) props.onSelectArea(a);
+  };
+
   const parisBounds = level === "quartier" && mode !== "dots" ? props.qBounds : props.arrBounds;
   const bounds = useMemo(() => (parisBounds && props.communeBounds ? { ...parisBounds, features: [...props.communeBounds.features, ...parisBounds.features] } : undefined), [parisBounds, props.communeBounds]);
   const focusFeature = useMemo(() => {
@@ -138,7 +150,7 @@ export function MapPanel(props: {
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
             stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}
             onSelect={props.onSelect} outlineOnly={mode === "dots"}
-            points={mode === "dots" ? points.data ?? [] : undefined} pointScale={scale.color} focusFeature={focusFeature} />
+            points={mode === "dots" ? points.data ?? [] : undefined} pointScale={scale.color} pointName={pointName} onSelectPoint={selectPoint} focusFeature={focusFeature} />
         )}
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
         <div className="absolute left-3 bottom-3 z-[400] rounded-md bg-card border px-3 py-2">
