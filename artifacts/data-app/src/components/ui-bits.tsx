@@ -99,7 +99,7 @@ export function ErrorState({ onRetry }: { onRetry: () => void }) {
 
 export function Segmented<T extends string>({ value, options, onChange, testId, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; testId: string; label?: string }) {
   return (
-    <div className="flex rounded-md border bg-card p-0.5 print:hidden" role="group" aria-label={label}>
+    <div className="flex flex-wrap rounded-md border bg-card p-0.5 print:hidden" role="group" aria-label={label}>
       {options.map(([v, l]) => (
         <button key={v} onClick={() => onChange(v)} data-testid={`${testId}-${v}`} aria-pressed={value === v}
           className={`px-2.5 h-7 text-[13px] rounded transition-colors ${value === v ? "bg-foreground text-background" : "hover:bg-muted"}`}>{l}</button>

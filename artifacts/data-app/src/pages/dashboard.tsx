@@ -52,7 +52,7 @@ export default function Dashboard() {
 function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datasetFrom: string; datasetTo: string; releaseMonth: string; years: YearRange[] }) {
   const qc = useQueryClient();
   const [view, patch, movedTo] = useViewState(datasetFrom, datasetTo);
-  const { ptype, area, from, to, mapMode, mapLevel, gran } = view;
+  const { ptype, area, from, to, mapMode, mapLevel, gran, rank } = view;
   const [isDark, setIsDark] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [intervalMs, setIntervalMs] = useState(5 * 60 * 1000);
@@ -101,7 +101,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
   const arrTrendQ = useGetAreaTrend(arrTrendP, { query: { queryKey: getGetAreaTrendQueryKey(arrTrendP) } });
   const communeTrendP = { ...arrTrendP, level: "commune" as const };
   const communeTrendQ = useGetAreaTrend(communeTrendP, { query: { queryKey: getGetAreaTrendQueryKey(communeTrendP) } });
-  const hp = { level: "arrondissement" as const, propertyType: ptype, from, to, granularity: "quarter" as const, window: 1 };
+  const hp = { level: rank === "paris" ? "arrondissement" as const : "commune" as const, propertyType: ptype, from, to, granularity: "quarter" as const, window: 1 };
   const heat = useGetAreaTrend(hp, { query: { queryKey: getGetAreaTrendQueryKey(hp) } });
 
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
@@ -117,7 +117,19 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
   const communeStats = useMemo(() => byCommune.data ?? [], [byCommune.data]);
   const arrTrend = useMemo(() => arrTrendQ.data ?? [], [arrTrendQ.data]);
   const communeTrend = useMemo(() => communeTrendQ.data ?? [], [communeTrendQ.data]);
-  const heatData = useMemo(() => heat.data ?? [], [heat.data]);
+  // The rows of the ranking and the heat map: Paris, or the Communes of one Department or of the Major towns.
+  const rankStats = useMemo(() => (rank === "paris" ? arrStats : communeStats.filter((s) => s.group === rank)), [rank, arrStats, communeStats]);
+  const rankRows = useMemo(() => {
+    const sorted = rank === "paris" ? [...rankStats].sort((a, b) => (a.arrondissement ?? 0) - (b.arrondissement ?? 0)) : [...rankStats].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    return sorted.map((s) => ({ id: s.id, label: s.arrondissement != null ? arrLabel(s.arrondissement) : s.name }));
+  }, [rank, rankStats]);
+  const heatData = useMemo(() => {
+    const ids = new Set(rankRows.map((r) => r.id));
+    return (heat.data ?? []).filter((r) => ids.has(r.id));
+  }, [heat.data, rankRows]);
+  const rankLoading = rank === "paris" ? byArr.isLoading : byCommune.isLoading;
+  const rankError = rank === "paris" ? byArr.isError : byCommune.isError;
+  const selId = area.kind === "commune" ? area.id : selArr != null ? String(selArr) : undefined;
   // One price scale for the whole range: map, time travel, ranking, heat map. Quartiers do not enter it,
   // so switching the map level keeps the colours.
   const scale = useMemo(() => {
@@ -131,6 +143,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
   const arrColor = (a: number) => scale.color(arrStats.find((s) => s.arrondissement === a)?.medianPricePerSqm ?? 0);
 
   const selectArea = (a: Area) => patch({ area: JSON.stringify(a) === JSON.stringify(area) ? { kind: "paris" } : a, rank: groupOfArea(a) });
+  const selectRow = (id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id });
   const selectArr = (arr: number) => selectArea({ kind: "arr", arr });
 
   const communeGroup = groupOfArea(area);
@@ -243,7 +256,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
 
         <main>
           {/* Map first */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-4 mb-5">
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_520px] gap-4 mb-5">
             <MapPanel isDark={isDark} ptype={ptype} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
               area={area} selArr={selArr} areaParams={areaP} mode={mapMode} setMode={(m) => patch({ mapMode: m })}
               level={mapLevel} setLevel={(l) => patch({ mapLevel: l })} arrStats={arrStats} communeStats={communeStats}
@@ -251,8 +264,9 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
               retryStats={() => { byArr.refetch(); byCommune.refetch(); }} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
               arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
               travel={travel} setTravel={setTravel} onSelect={(p) => selectArea(featureArea(p))} />
-            <Ranking stats={arrStats} trend={heatData} loading={byArr.isLoading} fetching={byArr.isFetching || heat.isFetching} error={byArr.isError}
-              retry={() => byArr.refetch()} scale={scale.color} domain={domain} selArr={selArr} onSelect={(a) => selectArr(a)} isDark={isDark} />
+            <Ranking stats={rankStats} trend={heatData} loading={rankLoading} fetching={byArr.isFetching || byCommune.isFetching || heat.isFetching} error={rankError}
+              retry={() => { byArr.refetch(); byCommune.refetch(); }} scale={scale} selId={selId} onSelect={selectArea}
+              rank={rank} onRank={(r) => patch({ rank: r })} ptype={ptype} isDark={isDark} />
           </div>
 
           {/* Focus header */}
@@ -276,8 +290,8 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
           </div>
 
           <div className="mb-4">
-            <Heatmap data={heatData} loading={heat.isLoading} fetching={heat.isFetching} error={heat.isError} retry={() => heat.refetch()}
-              scale={scale.color} domain={domain} selArr={selArr} onSelectArr={(a) => selectArr(a)} travel={travel}
+            <Heatmap data={heatData} rows={rankRows} loading={heat.isLoading || rankLoading} fetching={heat.isFetching} error={heat.isError || rankError} retry={() => { heat.refetch(); byArr.refetch(); byCommune.refetch(); }}
+              scale={scale.color} domain={domain} selId={selId} onSelectRow={selectRow} rank={rank} onRank={(r) => patch({ rank: r })} ptype={ptype} travel={travel}
               onSelectPeriod={(p) => { setTravel(p); patch({ mapMode: "level" }); }} isDark={isDark} />
           </div>
 
