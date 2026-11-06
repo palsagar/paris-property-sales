@@ -1,3 +1,5 @@
+import { arrLabel } from "./fmt";
+
 export type DepartmentId = "92" | "93" | "94";
 export type RankGroup = "paris" | DepartmentId | "major";
 export type Area =
@@ -33,6 +35,13 @@ export function groupOfArea(a: Area): RankGroup {
   if (a.kind === "department") return a.id;
   if (a.kind === "commune") return groupOfCommune(a.id);
   return "paris";
+}
+
+/** The Area of one Sale: its Arrondissement in Paris, its Commune elsewhere. */
+export function saleArea(t: { arrondissement: number | null; commune: string | null; communeName: string | null }): { id: string; label: string; area: Area } {
+  if (t.arrondissement != null) return { id: String(t.arrondissement), label: arrLabel(t.arrondissement), area: { kind: "arr", arr: t.arrondissement } };
+  const id = t.commune ?? "";
+  return { id, label: t.communeName ?? "", area: { kind: "commune", id } };
 }
 
 export interface MapFeature {
@@ -79,8 +88,18 @@ export function featureState(p: MapFeature, a: Area, parentArr?: number): { sele
 /** Old town names that a Visitor may still type. */
 const OLD_NAMES: Record<string, string> = { "93066": "Pierrefitte-sur-Seine" };
 
+const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+
 /** The text the search box matches against: the name, the name without accents, the id and any old name. */
 export function searchValue(name: string, id: string): string {
-  const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
   return [name, plain(name), id, OLD_NAMES[id] ?? ""].join(" ").toLowerCase();
+}
+
+/**
+ * The search box's filter: 1 when the value holds every word typed, else 0. The search component's own fuzzy
+ * match lets "evry" find Ville-d'Avray first, and Enter would then select it.
+ */
+export function searchScore(value: string, search: string): number {
+  const words = plain(search).toLowerCase().split(/[\s-]+/).filter(Boolean);
+  return words.every((w) => value.includes(w)) ? 1 : 0;
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { areaParams, featureArea, featureId, featureState, groupOfArea, searchValue } from "./areas";
+import { areaParams, featureArea, featureId, featureState, groupOfArea, saleArea, searchScore, searchValue } from "./areas";
 
 test("areaParams gives the request parameter of each kind", () => {
   assert.deepEqual(areaParams({ kind: "paris" }), {});
@@ -55,4 +55,20 @@ test("searchValue finds names without accents and old names", () => {
   assert.ok(searchValue("Évry-Courcouronnes", "91228").includes("evry"));
   assert.ok(searchValue("Saint-Denis", "93066").includes("pierrefitte"));
   assert.ok(searchValue("L'Île-Saint-Denis", "93039").includes("ile-saint-denis"));
+});
+
+test("saleArea gives a Paris Sale its Arrondissement and a Commune Sale its Commune", () => {
+  assert.deepEqual(saleArea({ arrondissement: 5, commune: null, communeName: null }), { id: "5", label: "5e", area: { kind: "arr", arr: 5 } });
+  assert.deepEqual(saleArea({ arrondissement: null, commune: "99001", communeName: "Ville" }), { id: "99001", label: "Ville", area: { kind: "commune", id: "99001" } });
+});
+
+test("searchScore needs every typed word in the name, and takes no loose fuzzy match", () => {
+  const stMaur = searchValue("Saint-Maur-des-Fossés", "94068");
+  assert.equal(searchScore(stMaur, "saint maur"), 1);
+  assert.equal(searchScore(stMaur, "Saint-Maur"), 1);
+  assert.equal(searchScore(stMaur, "fossés"), 1);
+  assert.equal(searchScore(searchValue("Évry-Courcouronnes", "91228"), "evry"), 1);
+  assert.equal(searchScore(searchValue("Ville-d'Avray", "92077"), "evry"), 0);
+  assert.equal(searchScore(searchValue("Saint-Germain-l'Auxerrois", "7510101"), "saint maur"), 0);
+  assert.equal(searchScore(searchValue("Quinze-Vingts", "7511201"), "zzzz"), 0);
 });

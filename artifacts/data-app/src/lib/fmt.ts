@@ -12,7 +12,8 @@ export function eurShort(n: number) {
 }
 export const sqm = (n: number) => `${num(n)} EUR/m²`;
 export const TOO_FEW = "Too few sales";
-export const sqmOrTooFew = (n: number | null | undefined) => (n == null ? TOO_FEW : sqm(n));
+export const orTooFew = (n: number | null | undefined, format: (n: number) => string) => (n == null ? TOO_FEW : format(n));
+export const sqmOrTooFew = (n: number | null | undefined) => orTooFew(n, sqm);
 
 /** Houses above this share of the Sales (in percent) get a warning. */
 export const HOUSE_SHARE_LIMIT = 10;

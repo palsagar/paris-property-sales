@@ -1,20 +1,24 @@
-import type { SalesSummary } from "@workspace/api-client-react";
+import type { PropertyTypeParameter, SalesSummary } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DeltaChip } from "@/components/ui-bits";
-import { eur, eurShort, sqm, num, dateLabel } from "@/lib/fmt";
+import { eur, eurShort, sqm, num, dateLabel, orTooFew, sqmOrTooFew, houseShareLabel, houseShareWarning } from "@/lib/fmt";
 
-type Kpi = { label: string; value: string; sub: string; change?: number | null; startEnd?: [number | null, number | null, (n: number) => string] };
+type Kpi = { label: string; value: string; sub: string; note?: string | null; change?: number | null; startEnd?: [number | null, number | null, (n: number) => string] };
 
-export function Kpis({ s, loading, fetching, error }: { s?: SalesSummary; loading: boolean; fetching: boolean; error: boolean }) {
+export function Kpis({ s, ptype, loading, fetching, error }: { s?: SalesSummary; ptype: PropertyTypeParameter; loading: boolean; fetching: boolean; error: boolean }) {
   const n = s?.changeWindowMonths ?? 3;
+  // A Selection of one type says nothing through its House share, and with no median there is nothing to warn about.
+  const share = ptype === "all" && s?.medianPricePerSqm != null ? s.houseShare : null;
+  const note = houseShareLabel(share);
+  const warning = houseShareWarning(share);
   const kpis: Kpi[] = s ? [
     { label: "Sales recorded", value: num(s.count), sub: `${dateLabel(s.periodFrom)} to ${dateLabel(s.periodTo)}` },
-    { label: "Median price", value: eur(s.medianPrice), sub: `Average ${eurShort(s.averagePrice)}`, change: s.priceChangePct, startEnd: [s.startMedianPrice, s.endMedianPrice, eurShort] },
-    { label: "Median price per m²", value: sqm(s.medianPricePerSqm), sub: `Average ${sqm(s.averagePricePerSqm)}`, change: s.changePct, startEnd: [s.startMedianPricePerSqm, s.endMedianPricePerSqm, sqm] },
+    { label: "Median price", value: orTooFew(s.medianPrice, eur), sub: `Average ${orTooFew(s.averagePrice, eurShort)}`, note, change: s.priceChangePct, startEnd: [s.startMedianPrice, s.endMedianPrice, eurShort] },
+    { label: "Median price per m²", value: sqmOrTooFew(s.medianPricePerSqm), sub: `Average ${sqmOrTooFew(s.averagePricePerSqm)}`, note, change: s.changePct, startEnd: [s.startMedianPricePerSqm, s.endMedianPricePerSqm, sqm] },
     { label: "Total volume", value: eurShort(s.totalVolume), sub: "Sum of all sale prices" },
-    { label: "Median surface", value: `${num(s.medianSurface)} m²`, sub: "Carrez or built surface" },
+    { label: "Median surface", value: orTooFew(s.medianSurface, (v) => `${num(v)} m²`), sub: "Carrez or built surface", note },
     { label: "Price range", value: `${eurShort(s.minPrice)} - ${eurShort(s.maxPrice)}`, sub: "Cheapest and dearest sale" },
   ] : [];
   return (
@@ -40,11 +44,13 @@ export function Kpis({ s, loading, fetching, error }: { s?: SalesSummary; loadin
                   )}
                   <p className="text-[12.5px] text-muted-foreground">{k.startEnd ? "over the period" : k.sub}</p>
                 </div>
+                {k.note && <p className="text-[12.5px] text-muted-foreground mt-0.5" data-testid={`text-house-share-${i}`}>{k.note}</p>}
               </>
             )}
           </CardContent>
         </Card>
       ))}
+      {warning && <p className="col-span-full text-[13px] text-muted-foreground" data-testid="text-house-share-warning">{warning}</p>}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { RefreshCw, ChevronDown, Check, Sun, Moon, Printer, X, Info, MapPin } fr
 import { useViewState } from "@/lib/view-state";
 import { areaParams, featureArea, groupOfArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
-import { arrLabel, rangeLabel, longMonthLabel, num, sqm, pct } from "@/lib/fmt";
+import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct } from "@/lib/fmt";
 import { btnCls, FetchDot } from "@/components/ui-bits";
 import { TimeControl } from "@/components/time-control";
 import { Kpis } from "@/components/kpis";
@@ -22,7 +22,7 @@ import { Ranking } from "@/components/ranking";
 import { Heatmap } from "@/components/heatmap";
 import { Distributions, RoomsChart } from "@/components/distributions";
 import { Transactions } from "@/components/transactions";
-import { QuartierPicker, type QMeta } from "@/components/area-picker";
+import { AreaSearch, type QMeta } from "@/components/area-picker";
 
 const INTERVAL_OPTIONS = [
   { label: "Every 5 min", ms: 5 * 60 * 1000 },
@@ -30,7 +30,7 @@ const INTERVAL_OPTIONS = [
   { label: "Every 1 hour", ms: 60 * 60 * 1000 },
   { label: "Every 24 hours", ms: 24 * 60 * 60 * 1000 },
 ];
-const DATA_SOURCES = ["DVF open data (DGFiP)", "Paris OpenData boundaries"];
+const DATA_SOURCES = ["DVF open data (DGFiP)", "Paris OpenData boundaries", "Etalab Contours administratifs (ODbL)"];
 
 // Wait for the dates: the first state of the view needs them to move an expired link.
 export default function Dashboard() {
@@ -140,7 +140,11 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
     return makeStepScale(quantileThresholds(figures(arrStats, arrTrend), figures(communeStats, communeTrend)));
   }, [arrStats, arrTrend, communeStats, communeTrend]);
   const domain: [number, number] = [scale.thresholds[0] ?? 0, scale.thresholds[scale.thresholds.length - 1] ?? 0];
-  const arrColor = (a: number) => scale.color(arrStats.find((s) => s.arrondissement === a)?.medianPricePerSqm ?? 0);
+  const areaMedians = useMemo(() => new Map([...arrStats, ...communeStats].map((s) => [s.id, s.medianPricePerSqm])), [arrStats, communeStats]);
+  const areaColor = (id: string) => {
+    const m = areaMedians.get(id);
+    return m == null ? "transparent" : scale.color(m);
+  };
 
   const selectArea = (a: Area) => patch({ area: JSON.stringify(a) === JSON.stringify(area) ? { kind: "paris" } : a, rank: groupOfArea(a) });
   const selectRow = (id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id });
@@ -152,7 +156,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
     : area.kind === "arr" ? arrStats.find((s) => s.arrondissement === area.arr)?.name ?? `${arrLabel(area.arr)} arrondissement`
     : area.kind === "q" ? qById.get(area.id)?.name ?? "Quartier" : "All Paris";
   const areaKicker = area.kind === "department" ? "Department"
-    : area.kind === "commune" ? (communeGroup === "major" ? "Major town" : `Commune in ${DEPARTMENT_NAMES[communeGroup as DepartmentId]}`)
+    : area.kind === "commune" ? (communeB.data && !communes.some((c) => c.id === area.id) ? "" : communeGroup === "major" ? "Major town" : `Commune in ${DEPARTMENT_NAMES[communeGroup as DepartmentId]}`)
     : area.kind === "arr" ? "Arrondissement" : area.kind === "q" ? `Quartier in the ${selArr ? arrLabel(selArr) : ""} arrondissement` : "";
   const typeLabel = ptype === "all" ? "all homes" : ptype === "Appartement" ? "apartments" : "houses";
   const scopeLabel = `${typeLabel}, ${areaName}, ${rangeLabel(ef, et)}`;
@@ -206,16 +210,16 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
         {/* Intro band: scrolls away, the filter bar below stays sticky */}
         <section className="py-3 md:py-4 border-b flex flex-wrap items-end justify-between gap-x-8 gap-y-3" data-testid="intro">
           <div className="max-w-[760px]">
-            <h1 className="font-display font-bold text-[24px] md:text-[32px] leading-[1.1]" data-testid="text-headline">What homes in Paris have sold for since {longMonthLabel(datasetFrom)}, and where prices moved</h1>
+            <h1 className="font-display font-bold text-[24px] md:text-[32px] leading-[1.1]" data-testid="text-headline">What homes in Paris and its suburbs have sold for since {longMonthLabel(datasetFrom)}, and where prices moved</h1>
             <p className="mt-1.5 text-[14px] md:text-[15px] text-muted-foreground leading-snug">
-              Every recorded apartment and house sale from the DGFiP's Demandes de valeurs foncières, from {longMonthLabel(datasetFrom)} to {longMonthLabel(datasetTo)}, the latest official release.
+              Apartment and house sales from the DGFiP's Demandes de valeurs foncières, from {longMonthLabel(datasetFrom)} to {longMonthLabel(datasetTo)}, the latest official release.
               <span className="hidden md:inline"> Pick a period, a property type or an area, or click the map to drill down.</span>
             </p>
           </div>
           {summary.data && (
             <dl className="hidden xl:flex gap-8 text-right" data-testid="intro-figures">
               <div><dt className="text-[13px] text-muted-foreground">Sales</dt><dd className="font-display font-bold text-[22px] text-primary">{num(summary.data.count)}</dd></div>
-              <div><dt className="text-[13px] text-muted-foreground">Median per m²</dt><dd className="font-display font-bold text-[22px] text-primary">{sqm(summary.data.medianPricePerSqm)}</dd></div>
+              <div><dt className="text-[13px] text-muted-foreground">Median per m²</dt><dd className="font-display font-bold text-[22px] text-primary">{sqmOrTooFew(summary.data.medianPricePerSqm)}</dd></div>
               <div><dt className="text-[13px] text-muted-foreground">Change over the period</dt><dd className="font-display font-bold text-[22px] text-primary">{summary.data.changePct != null ? pct(summary.data.changePct) : "n/a"}</dd></div>
             </dl>
           )}
@@ -244,7 +248,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
                     className={`w-7 h-7 text-[12.5px] font-num rounded transition-colors ${area.kind === "arr" && area.arr === n ? "bg-primary text-primary-foreground" : selArr === n ? "ring-1 ring-primary text-primary" : "hover:bg-muted"}`}>{n}</button>
                 ))}
               </div>
-              <QuartierPicker quartiers={quartiers} selected={area.kind === "q" ? area.id : undefined} onSelect={(q) => selectArea({ kind: "q", id: q.id })} />
+              <AreaSearch quartiers={quartiers} communes={communes} area={area} onSelect={selectArea} />
             </div>
           </div>
         </div>
@@ -273,7 +277,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
           <div className="flex flex-wrap items-end justify-between gap-3 mb-3" data-testid="focus-header">
             <div>
               <h2 className="font-display font-bold text-[26px] leading-tight flex items-center gap-2" data-testid="text-area-name"><MapPin className="w-5 h-5 text-primary" aria-hidden />{areaName}</h2>
-              <p className="text-[14px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{area.kind !== "paris" && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
+              <p className="text-[14px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{areaKicker && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
             </div>
             {area.kind !== "paris" && (
               <button onClick={() => selectArea({ kind: "paris" })} data-testid="button-clear-area"
@@ -283,7 +287,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
             )}
           </div>
 
-          <Kpis s={summary.data} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
+          <Kpis s={summary.data} ptype={ptype} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
 
           <div className="mb-4">
             <HeroTrend filters={filters} areaName={areaName} hasArea={area.kind !== "paris"} isQuartier={area.kind === "q"} gran={gran} setGran={(g) => patch({ gran: g })} isDark={isDark} years={years} />
@@ -295,7 +299,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
               onSelectPeriod={(p) => { setTravel(p); patch({ mapMode: "level" }); }} isDark={isDark} />
           </div>
 
-          <Distributions filters={filters} isDark={isDark} />
+          <Distributions filters={filters} houseShare={ptype === "all" ? summary.data?.houseShare : null} isDark={isDark} />
 
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 mb-4">
             <RoomsChart filters={filters} isDark={isDark} />
@@ -303,16 +307,16 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
               <Info className="w-4 h-4 text-primary shrink-0 mt-1" aria-hidden />
               <div className="space-y-2 max-w-[68ch]">
                 <h2 className="font-display font-bold text-[17px]">About the data</h2>
-                <p>The figures come from Demandes de valeurs foncières (DVF), published by the DGFiP. They cover every residential sale signed in Paris from {rangeLabel(datasetFrom, datasetTo)}, the latest official release. Prices are in nominal euros and are not adjusted for inflation.</p>
-                {summary.data && <p>{num(summary.data.excludedCount)} transactions in the raw data are left out of this selection. They are sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².</p>}
-                <p className="text-muted-foreground">Changes compare the median of the first {summary.data?.changeWindowMonths ?? 3} months of the selected period with the median of the last {summary.data?.changeWindowMonths ?? 3} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked.</p>
+                <p>The figures come from Demandes de valeurs foncières (DVF), published by the DGFiP. They cover residential sales in Paris and 135 Communes around it from {rangeLabel(datasetFrom, datasetTo)}, the latest official release. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface and has a price of 1,000 to 35,000 EUR/m².</p>
+                {summary.data && <p>{num(summary.data.excludedCount)} residential transactions in the whole dataset are left out by these rules. They are sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².</p>}
+                <p className="text-muted-foreground">Changes compare the median of the first {summary.data?.changeWindowMonths ?? 3} months of the selected period with the median of the last {summary.data?.changeWindowMonths ?? 3} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.</p>
                 <p className="text-muted-foreground">Sources: {DATA_SOURCES.join(", ")}.{lastRefreshed && ` Last loaded at ${lastRefreshed}.`}</p>
               </div>
             </section>
           </div>
 
-          <Transactions filters={filters} scopeLabel={scopeLabel} scale={scale.color} arrColor={arrColor} isDark={isDark}
-            onSelectArr={(a) => selectArr(a)}
+          <Transactions filters={filters} scopeLabel={scopeLabel} scale={scale.color} areaColor={areaColor} isDark={isDark}
+            onSelectArea={selectArea}
             onSelectQuartierName={(name) => { const q = quartiers.find((x) => x.name === name); if (q) selectArea({ kind: "q", id: q.id }); }} />
         </main>
 

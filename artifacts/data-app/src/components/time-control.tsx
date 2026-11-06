@@ -4,8 +4,9 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Brush, ResponsiveContainer } fr
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChartColors } from "@/components/ui-bits";
 import { endOfMonth, monthsBefore, rangeLabel } from "@/lib/fmt";
+import type { areaParams as areaParamsOf } from "@/lib/areas";
 
-type AreaParams = { arrondissement?: number; quartier?: string };
+type AreaParams = ReturnType<typeof areaParamsOf>;
 
 export function TimeControl({ ptype, areaParams, from, to, datasetFrom, datasetTo, years, onChange, isDark }: {
   ptype: PropertyTypeParameter; areaParams: AreaParams; from?: string; to?: string; datasetFrom: string; datasetTo: string; years: YearRange[];
