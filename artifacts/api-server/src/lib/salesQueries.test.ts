@@ -228,6 +228,7 @@ test("Area Change compares the first and last Change window of each Area", async
 
 test("without Change windows, Area figures have no Change", async () => {
   const rows = await areaStats(db, {}, "arrondissement", null);
+  assert.ok(rows.length > 0);
   assert.ok(rows.every((r) => r.changePct === null && r.startMedianPricePerSqm === null));
 });
 
