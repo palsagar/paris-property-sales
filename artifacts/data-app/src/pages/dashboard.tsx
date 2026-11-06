@@ -10,7 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import { RefreshCw, ChevronDown, Check, Sun, Moon, Printer, X, Info, MapPin } from "lucide-react";
 import { useViewState } from "@/lib/view-state";
-import { areaParams, featureArea, groupOfArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
+import { areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
 import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct, houseShareLabel } from "@/lib/fmt";
 import { btnCls, FetchDot } from "@/components/ui-bits";
@@ -92,7 +92,10 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
   const filters: Filters = { propertyType: ptype, ...areaP, from, to };
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
 
-  const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters) } });
+  const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  // The data note's figures do not depend on the Area, so the note keeps the last summary while a new Area loads.
+  const noteSummary = useRef(summary.data);
+  if (summary.data) noteSummary.current = summary.data;
   const ap = { propertyType: ptype, from, to };
   const byArr = useGetSalesByArrondissement(ap, { query: { queryKey: getGetSalesByArrondissementQueryKey(ap) } });
   const byCommune = useGetSalesByCommune(ap, { query: { queryKey: getGetSalesByCommuneQueryKey(ap) } });
@@ -314,8 +317,8 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
               <div className="space-y-2 max-w-[68ch]">
                 <h2 className="font-display font-bold text-[17px]">About the data</h2>
                 <p>The figures come from Demandes de valeurs foncières (DVF), published by the DGFiP. They cover residential sales in Paris and 135 Communes around it from {rangeLabel(datasetFrom, datasetTo)}, the latest official release. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface and has a price of 1,000 to 35,000 EUR/m².</p>
-                {summary.data && <p>{num(summary.data.excludedCount)} residential transactions in the whole dataset are left out by these rules. They are sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².</p>}
-                <p className="text-muted-foreground">Changes compare the median of the first {summary.data?.changeWindowMonths ?? 3} months of the selected period with the median of the last {summary.data?.changeWindowMonths ?? 3} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.</p>
+                {noteSummary.current && <p>{num(noteSummary.current.excludedCount)} residential transactions in the whole dataset are left out by these rules. They are sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².</p>}
+                <p className="text-muted-foreground">Changes compare the median of the first {noteSummary.current?.changeWindowMonths ?? 3} months of the selected period with the median of the last {noteSummary.current?.changeWindowMonths ?? 3} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.</p>
                 <p className="text-muted-foreground">Sources: {DATA_SOURCES.join(", ")}.{lastRefreshed && ` Last loaded at ${lastRefreshed}.`}</p>
               </div>
             </section>

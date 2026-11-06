@@ -4,7 +4,7 @@ import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, Cartesian
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, TipBox, useChartColors } from "@/components/ui-bits";
 import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, TOO_FEW } from "@/lib/fmt";
-import type { areaParams } from "@/lib/areas";
+import { keepInSameArea, type areaParams } from "@/lib/areas";
 import { yearBucketLabel } from "@/lib/period";
 
 export type Filters = ReturnType<typeof areaParams> & { propertyType: PropertyTypeParameter; from?: string; to?: string };
@@ -35,7 +35,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
   const smooth = gran === "year" ? false : override ?? (gran === "month" || isQuartier);
   const win = smooth ? 3 : 1;
   const params = { ...filters, granularity: gran, window: win };
-  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params) } });
+  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(filters) } });
   const allP = { propertyType: filters.propertyType, from: filters.from, to: filters.to, granularity: gran, window: win };
   const all = useGetSalesTrend(allP, { query: { queryKey: getGetSalesTrendQueryKey(allP), enabled: hasArea } });
 

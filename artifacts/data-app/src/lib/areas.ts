@@ -25,6 +25,17 @@ export function areaParams(a: Area): { department?: DepartmentId; arrondissement
   }
 }
 
+/**
+ * The `placeholderData` option of a query that depends on the Area. While a new Period or property type loads, a panel
+ * keeps its figures. While a new Area loads, it has none, so one Area's figures never appear under another Area's name.
+ */
+export function keepInSameArea(a: ReturnType<typeof areaParams>) {
+  return <T,>(previous: T | undefined, query?: { queryKey: readonly unknown[] }): T | undefined => {
+    const p = (query?.queryKey[1] ?? {}) as ReturnType<typeof areaParams>;
+    return p.department === a.department && p.arrondissement === a.arrondissement && p.quartier === a.quartier && p.commune === a.commune ? previous : undefined;
+  };
+}
+
 /** The group a Commune code belongs to, from its first two characters. */
 const groupOfCommune = (id: string): RankGroup => {
   const d = id.slice(0, 2);

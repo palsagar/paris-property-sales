@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, TipBox, useChartColors } from "@/components/ui-bits";
 import { eur, eurShort, sqm, sqmOrTooFew, num, kShort, orTooFew, houseShareLabel, TOO_FEW } from "@/lib/fmt";
 import { binStart, binTick } from "@/lib/histogram";
+import { keepInSameArea } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 
 function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; color: string }) {
@@ -57,8 +58,8 @@ function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribu
 
 export function Distributions({ filters, houseShare, isDark }: { filters: Filters; houseShare?: number | null; isDark: boolean }) {
   const c = useChartColors(isDark);
-  const pd = useGetPriceDistribution(filters, { query: { queryKey: getGetPriceDistributionQueryKey(filters) } });
-  const sd = useGetPricePerSqmDistribution(filters, { query: { queryKey: getGetPricePerSqmDistributionQueryKey(filters) } });
+  const pd = useGetPriceDistribution(filters, { query: { queryKey: getGetPriceDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  const sd = useGetPricePerSqmDistribution(filters, { query: { queryKey: getGetPricePerSqmDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
       <ChartCard testId="price-dist" title="Sale prices" desc="Number of sales in each price bracket." isDark={isDark} loading={pd.isLoading} fetching={pd.isFetching} csv={pd.data?.bins} csvName="price-distribution.csv">
@@ -73,7 +74,7 @@ export function Distributions({ filters, houseShare, isDark }: { filters: Filter
 
 export function RoomsChart({ filters, isDark }: { filters: Filters; isDark: boolean }) {
   const c = useChartColors(isDark);
-  const rooms = useGetSalesByRooms(filters, { query: { queryKey: getGetSalesByRoomsQueryKey(filters) } });
+  const rooms = useGetSalesByRooms(filters, { query: { queryKey: getGetSalesByRoomsQueryKey(filters), placeholderData: keepInSameArea(filters) } });
   return (
     <ChartCard testId="rooms" title="Prices by number of rooms" desc="Bars show the median price and the line the median price per m², for each count of main rooms." isDark={isDark}
       loading={rooms.isLoading} fetching={rooms.isFetching} csv={rooms.data} csvName="sales-by-rooms.csv">

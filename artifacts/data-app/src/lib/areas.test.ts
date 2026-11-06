@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { areaParams, featureArea, featureId, featureState, groupOfArea, saleArea, searchScore, searchValue } from "./areas";
+import { areaParams, featureArea, featureId, featureState, groupOfArea, keepInSameArea, saleArea, searchScore, searchValue } from "./areas";
 
 test("areaParams gives the request parameter of each kind", () => {
   assert.deepEqual(areaParams({ kind: "paris" }), {});
@@ -60,6 +60,19 @@ test("searchValue finds names without accents and old names", () => {
 test("saleArea gives a Paris Sale its Arrondissement and a Commune Sale its Commune", () => {
   assert.deepEqual(saleArea({ arrondissement: 5, commune: null, communeName: null }), { id: "5", label: "5e", area: { kind: "arr", arr: 5 } });
   assert.deepEqual(saleArea({ arrondissement: null, commune: "99001", communeName: "Ville" }), { id: "99001", label: "Ville", area: { kind: "commune", id: "99001" } });
+});
+
+test("keepInSameArea keeps the previous data only while the Area stays the same", () => {
+  const query = (params: object) => ({ queryKey: ["/api/sales/summary", params] });
+  const commune = { propertyType: "all", commune: "99001" };
+  assert.equal(keepInSameArea(commune)("old", query({ propertyType: "Maison", commune: "99001", from: "2024-01-01" })), "old");
+  assert.equal(keepInSameArea({ propertyType: "all" })("old", query({ propertyType: "Maison" })), "old");
+  assert.equal(keepInSameArea(commune)("old", query({ propertyType: "all" })), undefined);
+  assert.equal(keepInSameArea({ propertyType: "all" })("old", query(commune)), undefined);
+  assert.equal(keepInSameArea({ arrondissement: 5 })("old", query({ arrondissement: 6 })), undefined);
+  assert.equal(keepInSameArea({ arrondissement: 5 })("old", query({ quartier: "7510501" })), undefined);
+  assert.equal(keepInSameArea({ department: "92" })("old", query({ department: "93" })), undefined);
+  assert.equal(keepInSameArea(commune)(undefined, undefined), undefined);
 });
 
 test("searchScore needs every typed word in the name, and takes no loose fuzzy match", () => {

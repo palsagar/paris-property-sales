@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend } from "@/components/ui-bits";
 import { eur, sqm, num, arrLabel, pct, makeDivScale, monthsBefore, monthsBetween, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
-import { DEPARTMENT_NAMES, featureState, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
+import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
 import type { MapLevel, MapMode } from "@/lib/view-state";
 
@@ -38,7 +38,7 @@ export function MapPanel(props: {
   const long = monthsBetween(ef, et) > 12;
   const dotsFrom = long && !dotsFull ? monthsBefore(et, 11) : from;
   const pp = { propertyType: ptype, ...areaP, from: dotsFrom, to };
-  const points = useGetSalesPoints(pp, { query: { queryKey: getGetSalesPointsQueryKey(pp), enabled: mode === "dots" } });
+  const points = useGetSalesPoints(pp, { query: { queryKey: getGetSalesPointsQueryKey(pp), enabled: mode === "dots", placeholderData: keepInSameArea(areaP) } });
 
   // Paris at the chosen level, with the Communes always around it.
   const stats = useMemo(() => [...(level === "quartier" ? qStats.data ?? [] : arrStats), ...communeStats], [level, qStats.data, arrStats, communeStats]);

@@ -4,7 +4,7 @@ import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState } from "@/components/ui-bits";
 import { eur, sqm, num, dateLabel } from "@/lib/fmt";
-import { saleArea, type Area } from "@/lib/areas";
+import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 
 const COLS: { key: string; label: string; sort?: ListTransactionsSortBy; right?: boolean }[] = [
@@ -24,7 +24,7 @@ export function Transactions({ filters, scopeLabel, scale, areaColor, onSelectAr
   const fk = JSON.stringify(filters);
   useEffect(() => setPage(0), [fk, sortBy, sortDir]);
   const p = { ...filters, sortBy, sortDir, limit: PAGE, offset: page * PAGE };
-  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p) } });
+  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameArea(filters) } });
   const totalPages = tx.data ? Math.max(1, Math.ceil(tx.data.total / PAGE)) : 1;
 
   return (
