@@ -21,12 +21,14 @@ import duckdb
 import fetch_communes
 from build_paris_sales import (
     EXPECTED_COLUMNS,
+    Previous,
     Sale,
     assign_ids,
     check_columns,
     check_release,
     classify_mutation,
     main,
+    read_previous,
     write_database,
 )
 from communes import (
@@ -393,27 +395,41 @@ class WriteDatabaseTest(unittest.TestCase):
 class CheckReleaseTest(unittest.TestCase):
     good = [make_sale(id=str(i), date="2026-06-30", arr=1, quartier="7510101") for i in range(100)]
 
-    def check(self, sales: list[Sale], previous: tuple[int, str] | None = (100, "2026-06-30"),
+    def check(self, sales: list[Sale], previous: Previous | None = Previous(100, None, "2026-06-30"),
               arrs: tuple[int, ...] = (1,), quartiers: tuple[str, ...] = ("7510101",),
+              communes: tuple[str, ...] = (), unknown_codes: tuple[str, ...] = (),
               release_month: str = "2026-10") -> list[str]:
-        return check_release(sales, previous, arrs, quartiers, release_month)
+        return check_release(sales, previous, arrs, quartiers, communes, unknown_codes, release_month)
 
     def test_passes_on_same_release_again_and_on_no_previous_file(self) -> None:
         self.assertEqual(self.check(self.good), [])
         self.assertEqual(self.check(self.good, previous=None), [])
 
     def test_count_limit_is_15_percent_in_both_directions(self) -> None:
-        self.assertEqual(self.check(self.good, previous=(115, "2026-06-30")), [])  # -13.0%
+        self.assertEqual(self.check(self.good, previous=Previous(115, None, "2026-06-30")), [])  # -13.0%
         self.assertEqual(self.check(self.good[:85]), [])                           # exactly -15%
         self.assertIn("Sale count", self.check(self.good[:84])[0])                 # -16%
         self.assertIn("Sale count", self.check(self.good * 2)[0])                  # +100%
+
+    def test_count_limit_applies_to_paris_and_to_communes_separately(self) -> None:
+        # Adding Communes for the first time must not fail, so only Paris Sales count on that side.
+        communes = [make_sale(id=f"c{i}", department="92", commune="92012", arr=None, quartier=None) for i in range(900)]
+        self.assertEqual(self.check([*self.good, *communes], previous=Previous(100, None, "2026-06-30")), [])
+        # Once the file holds Communes, a large fall there fails even though Paris is unchanged.
+        self.assertIn("Commune", self.check([*self.good, *communes], previous=Previous(100, 2000, "2026-06-30"))[0])
+
+    def test_commune_with_no_sales_is_named(self) -> None:
+        self.assertIn("92012", self.check(self.good, communes=("92012",))[0])
+
+    def test_unknown_code_is_named(self) -> None:
+        self.assertIn("93999", self.check(self.good, unknown_codes=("93999",))[0])
 
     def test_area_with_no_sales_is_named(self) -> None:
         self.assertIn("20", self.check(self.good, arrs=(1, 20))[0])
         self.assertIn("7510102", self.check(self.good, quartiers=("7510101", "7510102"))[0])
 
     def test_end_date_earlier_than_previous_fails(self) -> None:
-        self.assertIn("end date", self.check(self.good, previous=(100, "2026-12-31"))[0])
+        self.assertIn("end date", self.check(self.good, previous=Previous(100, None, "2026-12-31"))[0])
 
     def test_date_not_in_iso_format_fails(self) -> None:
         bad = [*self.good[:99], make_sale(date="30/06/2026", arr=1, quartier="7510101")]
@@ -476,8 +492,19 @@ class MainTest(unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def write_inputs(self, count: int = 10, date: str = "2026-03-15", arrs: tuple[int, ...] = (1,),
-                     drop_column: str | None = None, release: str | None = "2026-10") -> None:
-        """Write invented inputs: ``count`` Sales in Arrondissement 1, one square per Arrondissement."""
+                     drop_column: str | None = None, release: str | None = "2026-10",
+                     listed: tuple[str, ...] = ("92012",), row_codes: tuple[str, ...] = ("92012",),
+                     boundary_codes: tuple[str, ...] = ("92012",), reverse: bool = False) -> None:
+        """Write invented inputs.
+
+        There are ``count`` Sales in Arrondissement 1, and one Sale for each code of ``row_codes``.
+        ``listed`` is the Commune list that the build uses. ``boundary_codes`` are the Communes
+        that have a boundary. A code of ``row_codes`` that is not in ``listed`` is an outside code.
+        """
+        patcher = mock.patch.object(build_paris_sales, "COMMUNE_CODES", listed)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         def write_json(name: str, features: list[dict[str, Any]]) -> None:
             with open(os.path.join(self.raw, name), "w", encoding="utf-8") as f:
                 json.dump({"type": "FeatureCollection", "features": features}, f)
@@ -490,19 +517,33 @@ class MainTest(unittest.TestCase):
             {"type": "Feature", "properties": {"c_quinsee": f"75{a:02d}01", "l_qu": f"Quartier {a}", "c_ar": a},
              "geometry": square(2.34567 + a, 48.86123)} for a in arrs
         ])
+        write_json("communes.geojson", [
+            {"type": "Feature", "properties": {"code": c, "nom": f"Commune {c}"}, "geometry": square(2.0, 48.8)}
+            for c in boundary_codes
+        ])
         columns = [c for c in mutation_row() if c != drop_column]
-        with open(os.path.join(self.raw, "src", "paris.csv"), "w", encoding="utf-8", newline="") as f:
+        # Arrondissement 1 sits at longitude 2.34567 + 1, so the position is shifted to match.
+        # The prices differ, so that the order of the rows matters to the build.
+        rows = [
+            mutation_row(id_mutation=f"new{i}", date_mutation=date, longitude="3.34567",
+                         valeur_fonciere=str(200_000 + 1_000 * i))
+            for i in range(count)
+        ]
+        rows += [mutation_row(id_mutation=f"town{c}", date_mutation=date, code_commune=c) for c in row_codes]
+        if reverse:
+            rows.reverse()
+        with open(os.path.join(self.raw, "src", "dvf.csv"), "w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, columns, extrasaction="ignore")
             writer.writeheader()
-            for i in range(count):
-                # Arrondissement 1 sits at longitude 2.34567 + 1, so the position is shifted to match.
-                writer.writerow(mutation_row(id_mutation=f"new{i}", date_mutation=date, longitude="3.34567"))
+            writer.writerows(rows)
         if release is not None:
             with open(os.path.join(self.raw, "src", "release.txt"), "w", encoding="utf-8") as f:
                 f.write(release)
 
     def write_previous(self) -> None:
-        write_database([make_sale(id=f"old{i}") for i in range(10)], {"kept": 10}, "2026-04", self.db)
+        sales = [make_sale(id=f"old{i}") for i in range(10)]
+        sales.append(make_sale(id="oldc", department="92", commune="92012", arr=None, quartier=None))
+        write_database(sales, {"kept": 11}, "2026-04", self.db)
 
     def ids(self) -> list[tuple[Any, ...]]:
         con = duckdb.connect(self.db, read_only=True)
@@ -524,13 +565,13 @@ class MainTest(unittest.TestCase):
         self.assertIn(NO_PREVIOUS_NOTICE, output)
         con = duckdb.connect(self.db, read_only=True)
         try:
-            self.assertEqual(con.execute("SELECT count(*) FROM sales").fetchone(), (10,))
+            self.assertEqual(con.execute("SELECT count(*) FROM sales").fetchone(), (11,))
             self.assertEqual(
                 con.execute("SELECT value FROM metadata WHERE key = 'release_month'").fetchall(), [("2026-10",)]
             )
         finally:
             con.close()
-        self.assertEqual(sorted(os.listdir(self.boundaries)), ["arrondissements.geojson", "quartiers.geojson"])
+        self.assertEqual(sorted(os.listdir(self.boundaries)), ["arrondissements.geojson", "communes.geojson", "quartiers.geojson"])
 
     def test_rebuild_does_not_print_the_no_previous_file_line(self) -> None:
         self.write_previous()
@@ -544,7 +585,11 @@ class MainTest(unittest.TestCase):
             ("Arrondissement with no Sales", {"arrs": (1, 2)}, "Arrondissement"),
             ("earlier end date", {"date": "2026-01-01"}, "end date"),
             ("Sale dated after the release month", {"date": "2096-06-30"}, "2096-06-30"),
-            ("header with no rows", {"count": 0}, "No Sales"),
+            ("header with no rows", {"count": 0, "row_codes": ()}, "No Sales"),
+            ("Commune with no Sales",
+             {"listed": ("92012", "92014"), "boundary_codes": ("92012", "92014")}, "92014"),
+            ("unknown code in department 93", {"row_codes": ("92012", "93999")}, "93999"),
+            ("Commune missing from the boundary file", {"boundary_codes": ()}, "92012"),
         ]
         for name, inputs, reason in cases:
             with self.subTest(name):
@@ -554,9 +599,58 @@ class MainTest(unittest.TestCase):
                     self.run_main()
                 self.assertIsInstance(raised.exception.code, str)
                 self.assertIn(reason, str(raised.exception.code))
-                self.assertEqual(self.ids(), [(f"old{i}",) for i in range(10)])
+                self.assertEqual(self.ids(), sorted([(f"old{i}",) for i in range(10)] + [("oldc",)]))
                 self.assertEqual(os.listdir(self.out), ["sales.duckdb"])
                 self.assertEqual(os.listdir(self.boundaries), [])
+
+    def test_first_update_reads_a_file_from_before_this_chunk(self) -> None:
+        # The old file has no department and no commune column: every Sale is in Paris.
+        con = duckdb.connect(self.db)
+        try:
+            con.execute(
+                "CREATE TABLE sales (id VARCHAR, sale_date VARCHAR, property_type VARCHAR, price INTEGER,"
+                " surface INTEGER, price_per_sqm INTEGER, rooms INTEGER, arr INTEGER, quartier VARCHAR,"
+                " lon DOUBLE, lat DOUBLE, street VARCHAR)"
+            )
+            for i in range(10):
+                con.execute(
+                    "INSERT INTO sales VALUES (?, '2026-04-01', 'Appartement', 200000, 50, 4000, 2, 1,"
+                    " '7510101', 2.3, 48.8, 'Rue X')",
+                    [f"old{i}"],
+                )
+        finally:
+            con.close()
+        self.assertEqual(read_previous(self.db), Previous(10, None, "2026-04-01"))
+        self.write_inputs(date="2026-04-02")
+        self.assertNotIn(NO_PREVIOUS_NOTICE, self.run_main())
+        self.assertEqual(len(self.ids()), 11)
+
+    def test_built_file_holds_no_id_mutation_value(self) -> None:
+        self.write_inputs()
+        self.run_main()
+        con = duckdb.connect(self.db, read_only=True)
+        try:
+            tables = [t for (t,) in con.execute("SELECT table_name FROM information_schema.tables").fetchall()]
+            values: set[str] = set()
+            for table in tables:
+                for row in con.execute(f"SELECT * FROM {table}").fetchall():  # noqa: S608 - names come from the file
+                    values.update(str(v) for v in row)
+        finally:
+            con.close()
+        secrets = {f"new{i}" for i in range(10)} | {"town92012"}
+        self.assertEqual(values & secrets, set())
+
+    def test_two_builds_of_one_release_give_the_same_file_contents(self) -> None:
+        contents = []
+        for reverse in (False, True):
+            self.write_inputs(reverse=reverse)
+            self.run_main()
+            con = duckdb.connect(self.db, read_only=True)
+            try:
+                contents.append(con.execute("SELECT * FROM sales ORDER BY id").fetchall())
+            finally:
+                con.close()
+        self.assertEqual(contents[0], contents[1])
 
     def test_missing_release_file_exits_with_a_reason(self) -> None:
         self.write_inputs(release=None)

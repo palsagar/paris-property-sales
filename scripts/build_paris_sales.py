@@ -4,10 +4,11 @@
 # ///
 """Builds the cleaned Paris residential sales dataset used by the API server.
 
-Source: DVF géolocalisées (data.gouv.fr), the five-year file filtered to department 75.
-Inputs (in data-raw/, not committed): src/paris.csv, src/release.txt, arr.geojson, q2.geojson
+Source: DVF géolocalisées (data.gouv.fr), the five-year file filtered to Paris and the Communes.
+Inputs (in data-raw/, not committed): src/dvf.csv, src/release.txt, arr.geojson, q2.geojson,
+communes.geojson
 Outputs: artifacts/api-server/data/sales.duckdb (not committed), and
-artifacts/api-server/boundaries/arrondissements.geojson and quartiers.geojson.
+artifacts/api-server/boundaries/arrondissements.geojson, quartiers.geojson and communes.geojson.
 
 The finished file holds neither the house number nor the exact position.
 
@@ -21,10 +22,10 @@ import tempfile
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date
-from typing import Any, TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 import duckdb
-from communes import COMMUNE_CODES, PARIS_CODES, current_code
+from communes import COMMUNE_CODES, PARIS_CODES, commune_group, current_code
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data-raw")
@@ -40,6 +41,8 @@ MIN_PPSM, MAX_PPSM = 1_000, 35_000
 POSITION_DECIMALS = 3
 # A new release may change the Sale count by at most this share of the previous count.
 MAX_COUNT_CHANGE = 0.15
+# The departments that are complete in the file. A code here that is on no list is a merger or a rename.
+COMPLETE_DEPARTMENTS = ("75", "92", "93", "94")
 # The columns of the DVF file that this script reads.
 EXPECTED_COLUMNS = (
     "id_mutation", "date_mutation", "nature_mutation", "valeur_fonciere", "adresse_nom_voie",
@@ -383,8 +386,20 @@ def check_columns(fieldnames: Sequence[str] | None) -> list[str]:
     return [f"The file has no column {c}." for c in missing]
 
 
-def read_previous(path: str) -> tuple[int, str] | None:
-    """Read the Sale count and the end date of an existing Sales file.
+class Previous(NamedTuple):
+    """What the existing Sales file says about itself.
+
+    ``commune_count`` is None when the file comes from before the Communes, and then
+    every Sale in it is in Paris.
+    """
+
+    paris_count: int
+    commune_count: int | None
+    end_date: str
+
+
+def read_previous(path: str) -> Previous | None:
+    """Read the Sale counts and the end date of an existing Sales file.
 
     Parameters
     ----------
@@ -393,52 +408,72 @@ def read_previous(path: str) -> tuple[int, str] | None:
 
     Returns
     -------
-    tuple of (int, str) or None
-        The number of Sales and the latest Sale date, or None when the file
-        does not exist.
+    Previous or None
+        The Paris and Commune Sale counts and the latest Sale date, or None
+        when the file does not exist. A file without a ``department`` column
+        is all Paris, and its ``commune_count`` is None.
 
     Examples
     --------
     .. code-block:: python
 
         previous = read_previous("artifacts/api-server/data/sales.duckdb")
-        # (62000, "2026-06-30")
+        # Previous(paris_count=62000, commune_count=None, end_date="2026-06-30")
     """
     if not os.path.exists(path):
         return None
     con = duckdb.connect(path, read_only=True)
     try:
-        row = con.execute("SELECT count(*), max(sale_date) FROM sales").fetchone()
+        has_department = con.execute(
+            "SELECT count(*) FROM information_schema.columns WHERE table_name = 'sales' AND column_name = 'department'"
+        ).fetchone()
+        end = con.execute("SELECT max(sale_date) FROM sales").fetchone()
+        assert has_department is not None and end is not None
+        if has_department[0]:
+            row = con.execute(
+                "SELECT count(*) FILTER (WHERE department = '75'), count(*) FILTER (WHERE department <> '75') FROM sales"
+            ).fetchone()
+            assert row is not None
+            return Previous(row[0], row[1], end[0])
+        row = con.execute("SELECT count(*) FROM sales").fetchone()
+        assert row is not None
+        return Previous(row[0], None, end[0])
     finally:
         con.close()
-    assert row is not None
-    return row[0], row[1]
 
 
 def check_release(
     sales: Sequence[Sale],
-    previous: tuple[int, str] | None,
+    previous: Previous | None,
     arrondissements: Iterable[int],
     quartiers: Iterable[str],
+    communes: Iterable[str],
+    unknown_codes: Iterable[str],
     release_month: str,
 ) -> list[str]:
     """Decide whether a new release is safe to replace the existing file.
 
     The checks are: the release has Sales, every date is in ISO format, no
-    Sale is dated after the release month, the Sale count is within
-    ``MAX_COUNT_CHANGE`` of the previous count, every Arrondissement and
-    Quartier has a Sale, and the end date is not earlier than the previous one.
+    Sale is dated after the release month, the Paris Sale count and the
+    Commune Sale count are each within ``MAX_COUNT_CHANGE`` of the previous
+    count, every Arrondissement, Quartier and Commune has a Sale, no unknown
+    Commune code appears in the complete departments, and the end date is not
+    earlier than the previous one.
 
     Parameters
     ----------
     sales : sequence of Sale
         The Sales of the new release.
-    previous : tuple of (int, str) or None
-        The Sale count and end date of the existing file, or None when there is none.
+    previous : Previous or None
+        The counts and end date of the existing file, or None when there is none.
     arrondissements : iterable of int
         Every Arrondissement number of the boundary file.
     quartiers : iterable of str
         Every Quartier id of the boundary file.
+    communes : iterable of str
+        Every Commune code of the list.
+    unknown_codes : iterable of str
+        Codes found in the complete departments that are on no list.
     release_month : str
         The month of the release, as ``YYYY-MM``. No Sale may be dated after it.
 
@@ -451,7 +486,9 @@ def check_release(
     --------
     .. code-block:: python
 
-        reasons = check_release(sales, (62000, "2026-06-30"), range(1, 21), quartier_ids, "2026-10")
+        reasons = check_release(
+            sales, Previous(62000, None, "2026-06-30"), range(1, 21), quartier_ids, commune_codes, (), "2026-10"
+        )
         if reasons:
             raise SystemExit("\\n".join(reasons))
     """
@@ -467,23 +504,38 @@ def check_release(
     if end_date[:7] > release_month:
         reasons.append(f"The end date {end_date} is later than the release month {release_month}.")
     if previous is not None:
-        count, previous_end = previous
-        change = (len(sales) - count) / count
-        if abs(change) > MAX_COUNT_CHANGE:
-            reasons.append(
-                f"Sale count changed by {change:+.1%} ({count} to {len(sales)}). "
-                f"The limit is {MAX_COUNT_CHANGE:.0%}."
-            )
-        if end_date < previous_end:
-            reasons.append(f"The end date {end_date} is earlier than the previous end date {previous_end}.")
+        # Paris and the Communes are counted apart, so a first release with Communes can pass.
+        paris_new = sum(1 for s in sales if s["department"] == "75")
+        counts = [("Paris", previous.paris_count, paris_new)]
+        if previous.commune_count is not None:
+            counts.append(("Commune", previous.commune_count, len(sales) - paris_new))
+        for label, count, new in counts:
+            change = (new - count) / count
+            if abs(change) > MAX_COUNT_CHANGE:
+                reasons.append(
+                    f"{label} Sale count changed by {change:+.1%} ({count} to {new}). "
+                    f"The limit is {MAX_COUNT_CHANGE:.0%}."
+                )
+        if end_date < previous.end_date:
+            reasons.append(f"The end date {end_date} is earlier than the previous end date {previous.end_date}.")
     seen_arr = {s["arr"] for s in sales}
     seen_quartier = {s["quartier"] for s in sales}
+    seen_commune = {s["commune"] for s in sales}
     empty_arr = sorted(set(arrondissements) - seen_arr)
     if empty_arr:
         reasons.append(f"Arrondissements with no Sales: {', '.join(map(str, empty_arr))}.")
     empty_quartier = sorted(set(quartiers) - seen_quartier)
     if empty_quartier:
         reasons.append(f"Quartiers with no Sales: {', '.join(empty_quartier)}.")
+    # A Major town whose code changed also shows up here.
+    empty_commune = sorted(set(communes) - seen_commune)
+    if empty_commune:
+        reasons.append(f"Communes with no Sales: {', '.join(empty_commune)}.")
+    if unknown_codes:
+        reasons.append(
+            f"Codes in departments {', '.join(COMPLETE_DEPARTMENTS)} that are on no list "
+            f"(a merger or a rename?): {', '.join(sorted(set(unknown_codes)))}."
+        )
     return reasons
 
 
@@ -595,11 +647,11 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], release_month: s
 def main() -> None:
     """Build the Sales database and the boundary files.
 
-    The function reads the boundaries, ``data-raw/src/paris.csv`` and
+    The function reads the boundaries, ``data-raw/src/dvf.csv`` and
     ``data-raw/src/release.txt``, groups the rows by mutation, and keeps the
     mutations that count as one Sale. It checks the release against the
     existing file and exits with the reasons when a check fails. Only then does
-    it write ``sales.duckdb`` and the two boundary GeoJSON files. It prints the
+    it write ``sales.duckdb`` and the three boundary GeoJSON files. It prints the
     exclusion counts and the period of the data.
 
     Examples
@@ -622,15 +674,25 @@ def main() -> None:
         lambda p: {"id": p["c_quinsee"], "name": p["l_qu"], "arr": int(p["c_ar"])},
     )
     find_quartier = make_find_quartier(quartier_geo)
+    commune_geo = load_geo(
+        os.path.join(RAW, "communes.geojson"),
+        lambda p: {"id": p["code"], "name": p["nom"], "group": commune_group(p["code"])},
+    )
 
+    in_scope = {*PARIS_CODES, *COMMUNE_CODES}
+    unknown_codes: set[str] = set()
     mutations: dict[str, list[dict[str, str]]] = defaultdict(list)
-    with open(os.path.join(RAW, "src", "paris.csv"), encoding="utf-8", newline="") as f:
+    with open(os.path.join(RAW, "src", "dvf.csv"), encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         reasons = check_columns(reader.fieldnames)
         if reasons:
             raise SystemExit("\n".join(reasons))
         for row in reader:
-            mutations[row["id_mutation"]].append(row)
+            # The file has 2.4 million rows of 40 columns, so keep only the columns that are read.
+            mutations[row["id_mutation"]].append({c: row[c] for c in EXPECTED_COLUMNS})
+            code = current_code(row["code_commune"])
+            if code[:2] in COMPLETE_DEPARTMENTS and code not in in_scope:
+                unknown_codes.add(code)
 
     stats: dict[str, int] = defaultdict(int)
     sales: list[Sale] = []
@@ -651,8 +713,13 @@ def main() -> None:
         previous,
         [ft["properties"]["arr"] for ft in arr_geo["features"]],
         [ft["properties"]["id"] for ft in quartier_geo["features"]],
+        COMMUNE_CODES,
+        unknown_codes,
         release_month,
     )
+    missing_boundaries = sorted(set(COMMUNE_CODES) - {ft["properties"]["id"] for ft in commune_geo["features"]})
+    if missing_boundaries:
+        reasons.append(f"Communes with no boundary in communes.geojson: {', '.join(missing_boundaries)}.")
     if reasons:
         raise SystemExit("\n".join(reasons))
 
@@ -664,12 +731,15 @@ def main() -> None:
         json.dump(arr_geo, f, separators=(",", ":"))
     with open(os.path.join(BOUNDARIES, "quartiers.geojson"), "w", encoding="utf-8") as f:
         json.dump(quartier_geo, f, ensure_ascii=False, separators=(",", ":"))
+    with open(os.path.join(BOUNDARIES, "communes.geojson"), "w", encoding="utf-8") as f:
+        json.dump(commune_geo, f, ensure_ascii=False, separators=(",", ":"))
 
     print(json.dumps(stats, indent=2))
     print(
         "period", min(s["date"] for s in sales), max(s["date"] for s in sales),
         "no-coords", sum(1 for s in sales if s["lon"] is None),
-        "no-quartier", sum(1 for s in sales if s["lon"] is not None and s["quartier"] is None),
+        "no-quartier",
+        sum(1 for s in sales if s["department"] == "75" and s["lon"] is not None and s["quartier"] is None),
     )
 
 
