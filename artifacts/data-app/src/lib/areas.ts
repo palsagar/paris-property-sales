@@ -99,10 +99,18 @@ export function searchValue(name: string, id: string): string {
 const SHORT_FORMS: Record<string, string> = { st: "saint", ste: "sainte" };
 
 /**
- * The search box's filter: 1 when the value holds every word typed, else 0. The search component's own fuzzy
- * match lets "evry" find Ville-d'Avray first, and Enter would then select it.
+ * The search box's filter. It scores 0 when the value misses a typed word, else 1 for a plain match, 2 when the
+ * name starts with the typed text and 3 when the name is the typed text. The search component sorts by this score,
+ * so "Saint-Denis" puts the Commune before the Department Seine-Saint-Denis. The component's own fuzzy match
+ * lets "evry" find Ville-d'Avray first, and Enter would then select it. The value starts with the name, then
+ * repeats it without accents. The comparison ignores accents, case and the difference between a hyphen and a space.
  */
 export function searchScore(value: string, search: string): number {
-  const words = plain(search).replace(/’/g, "'").toLowerCase().split(/[\s-]+/).filter(Boolean).map((w) => SHORT_FORMS[w] ?? w);
-  return words.every((w) => value.includes(w)) ? 1 : 0;
+  const typed = plain(search).replace(/’/g, "'").toLowerCase();
+  const words = typed.split(/[\s-]+/).filter(Boolean).map((w) => SHORT_FORMS[w] ?? w);
+  if (!words.every((w) => value.includes(w))) return 0;
+  const phrase = words.join(" ");
+  const text = plain(value).replace(/-/g, " ");
+  if (text.startsWith(`${phrase} ${phrase} `)) return 3;
+  return text.startsWith(phrase) ? 2 : 1;
 }

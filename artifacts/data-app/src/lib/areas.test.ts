@@ -64,10 +64,10 @@ test("saleArea gives a Paris Sale its Arrondissement and a Commune Sale its Comm
 
 test("searchScore needs every typed word in the name, and takes no loose fuzzy match", () => {
   const stMaur = searchValue("Saint-Maur-des-Fossés", "94068");
-  assert.equal(searchScore(stMaur, "saint maur"), 1);
-  assert.equal(searchScore(stMaur, "Saint-Maur"), 1);
+  assert.equal(searchScore(stMaur, "saint maur"), 2);
+  assert.equal(searchScore(stMaur, "Saint-Maur"), 2);
   assert.equal(searchScore(stMaur, "fossés"), 1);
-  assert.equal(searchScore(searchValue("Évry-Courcouronnes", "91228"), "evry"), 1);
+  assert.equal(searchScore(searchValue("Évry-Courcouronnes", "91228"), "evry"), 2);
   assert.equal(searchScore(searchValue("Ville-d'Avray", "92077"), "evry"), 0);
   assert.equal(searchScore(searchValue("Saint-Germain-l'Auxerrois", "7510101"), "saint maur"), 0);
   assert.equal(searchScore(searchValue("Quinze-Vingts", "7511201"), "zzzz"), 0);
@@ -75,13 +75,25 @@ test("searchScore needs every typed word in the name, and takes no loose fuzzy m
 
 test("searchScore accepts a curly apostrophe", () => {
   const lhay = searchValue("L'Haÿ-les-Roses", "94038");
-  assert.equal(searchScore(lhay, "l’hay"), 1);
-  assert.equal(searchScore(lhay, "l'hay"), 1);
+  assert.equal(searchScore(lhay, "l’hay"), 2);
+  assert.equal(searchScore(lhay, "l'hay"), 2);
 });
 
 test("searchScore accepts St and Ste for Saint and Sainte", () => {
-  assert.equal(searchScore(searchValue("Saint-Maur-des-Fossés", "94068"), "st maur"), 1);
-  assert.equal(searchScore(searchValue("Saint-Denis", "93066"), "st denis"), 1);
-  assert.equal(searchScore(searchValue("Sainte-Marguerite", "7511102"), "ste marguerite"), 1);
+  assert.equal(searchScore(searchValue("Saint-Maur-des-Fossés", "94068"), "st maur"), 2);
+  assert.equal(searchScore(searchValue("Saint-Denis", "93066"), "st denis"), 3);
+  assert.equal(searchScore(searchValue("Sainte-Marguerite", "7511102"), "ste marguerite"), 3);
   assert.equal(searchScore(searchValue("Saint-Denis", "93066"), "ste denis"), 0);
+});
+
+test("searchScore ranks an exact name above a name that starts with the text, and that above a plain match", () => {
+  const commune = searchValue("Saint-Denis", "93066");
+  const department = searchValue("Seine-Saint-Denis", "93");
+  assert.equal(searchScore(commune, "Saint-Denis"), 3);
+  assert.equal(searchScore(commune, "saint denis"), 3);
+  assert.equal(searchScore(department, "Saint-Denis"), 1);
+  assert.equal(searchScore(searchValue("Saint-Germain-en-Laye", "78551"), "Saint-Germain"), 2);
+  assert.equal(searchScore(searchValue("Saint-Germain-en-Laye", "78551"), "Saint-Germain-en-Laye"), 3);
+  assert.equal(searchScore(searchValue("Créteil", "94028"), "creteil"), 3);
+  assert.equal(searchScore(searchValue("Évry-Courcouronnes", "91228"), "evry"), 2);
 });
