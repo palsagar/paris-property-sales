@@ -18,6 +18,7 @@ from unittest import mock
 
 import build_paris_sales
 import duckdb
+import fetch_communes
 from build_paris_sales import (
     EXPECTED_COLUMNS,
     Sale,
@@ -27,22 +28,68 @@ from build_paris_sales import (
     main,
     write_database,
 )
-from fetch_dvf import copy_paris_rows, find_release
+from communes import (
+    COMMUNE_CODES,
+    DEPARTMENT_COMMUNES,
+    MAJOR_TOWNS,
+    commune_group,
+    current_code,
+)
+from fetch_communes import keep_communes
+from fetch_dvf import copy_department_rows, find_release
 
 
-class CopyParisRowsTest(unittest.TestCase):
-    def test_copy_paris_rows_keeps_every_date_in_department_75(self) -> None:
+class CommuneListTest(unittest.TestCase):
+    def test_list_holds_exactly_the_135_communes(self) -> None:
+        self.assertEqual({d: len(c) for d, c in DEPARTMENT_COMMUNES.items()}, {"92": 36, "93": 39, "94": 47})
+        self.assertEqual(len(MAJOR_TOWNS), 13)
+        self.assertEqual(len(set(COMMUNE_CODES)), 135)
+
+    def test_old_code_maps_to_the_current_one(self) -> None:
+        self.assertEqual(current_code("93059"), "93066")
+        self.assertEqual(current_code("92012"), "92012")
+        self.assertNotIn("93059", COMMUNE_CODES)
+
+    def test_group_of_a_commune(self) -> None:
+        self.assertEqual(commune_group("93066"), "93")
+        self.assertEqual(commune_group("78646"), "major")
+
+
+class CopyDepartmentRowsTest(unittest.TestCase):
+    def test_copy_department_rows_keeps_the_departments_of_the_communes_and_paris(self) -> None:
         header = ["id_mutation", "date_mutation", "code_departement", "adresse_nom_voie"]
         rows = [
             header,
             ["a", "2022-01-01", "75", 'RUE "X", Y'],
-            ["b", "2021-12-31", "75", "RUE B"],
-            ["c", "2024-05-01", "92", "RUE C"],
+            ["b", "2021-12-31", "92", "RUE B"],
+            ["c", "2024-05-01", "60", "RUE C"],
+            ["d", "2024-05-02", "77", "RUE D"],
         ]
         out = io.StringIO()
-        count = copy_paris_rows(iter(rows), csv.writer(out, lineterminator="\n"))
-        self.assertEqual(count, 2)
-        self.assertEqual(list(csv.reader(io.StringIO(out.getvalue()))), rows[:3])
+        count = copy_department_rows(iter(rows), csv.writer(out, lineterminator="\n"))
+        self.assertEqual(count, 3)
+        self.assertEqual(list(csv.reader(io.StringIO(out.getvalue()))), [rows[0], rows[1], rows[2], rows[4]])
+
+
+class KeepCommunesTest(unittest.TestCase):
+    @staticmethod
+    def feature(code: str) -> dict[str, Any]:
+        return {"type": "Feature", "properties": {"code": code},
+                "geometry": {"type": "Polygon", "coordinates": [[[2, 48], [2, 49], [3, 49], [2, 48]]]}}
+
+    def test_keeps_only_the_listed_communes_with_their_geometry(self) -> None:
+        collection = {"type": "FeatureCollection",
+                      "features": [self.feature("92012"), self.feature("78646"), self.feature("69123")]}
+        with mock.patch.object(fetch_communes, "COMMUNE_CODES", ("92012", "78646")):
+            kept = keep_communes(collection)
+        self.assertEqual([f["properties"]["code"] for f in kept["features"]], ["92012", "78646"])
+        self.assertEqual(kept["features"][0]["geometry"], self.feature("92012")["geometry"])
+
+    def test_raises_when_a_listed_commune_is_missing(self) -> None:
+        collection = {"type": "FeatureCollection", "features": [self.feature("92012")]}
+        with mock.patch.object(fetch_communes, "COMMUNE_CODES", ("92012", "78646")):
+            with self.assertRaisesRegex(ValueError, "78646"):
+                keep_communes(collection)
 
 
 class FindReleaseTest(unittest.TestCase):

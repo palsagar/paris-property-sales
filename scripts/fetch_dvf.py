@@ -1,8 +1,10 @@
-"""Downloads the raw DVF file for Paris into data-raw/src/paris.csv.
+"""Downloads the raw DVF rows for Paris and the Communes into data-raw/src/dvf.csv.
 
 Source: "Demandes de valeurs foncières géolocalisées" on data.gouv.fr. The file
 is the national "fichier unique", found by its title in the dataset's
-resource list. It is streamed and only department 75 is kept, with every date.
+resource list. It is streamed and only the departments of Paris and of the
+Communes in communes.py are kept, with every date. A Mutation can cross a
+Commune border, so the build needs all the rows of these departments.
 The release month goes to data-raw/src/release.txt. The download is about
 610 MB. Run scripts/build_paris_sales.py afterwards.
 
@@ -18,6 +20,8 @@ import urllib.request
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from communes import COMMUNE_CODES
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "data-raw", "src")
 DATASET_URL = "https://www.data.gouv.fr/api/1/datasets/demandes-de-valeurs-foncieres-geolocalisees/"
@@ -28,10 +32,12 @@ HEADERS = {"User-Agent": "paris-property-sales-data-fetch"}
 TITLE_MARKER = "fichier unique"
 # Seconds without data before a request fails. It limits a stalled connection, not the length of a download.
 TIMEOUT_SECONDS = 60
+# Paris, then the department of each Commune: 75, 77, 78, 91, 92, 93, 94 and 95.
+DEPARTMENTS = frozenset({"75"} | {code[:2] for code in COMMUNE_CODES})
 
 
-def copy_paris_rows(reader: Iterable[list[str]], writer: Any) -> int:
-    """Copy the rows of department 75, with every date.
+def copy_department_rows(reader: Iterable[list[str]], writer: Any) -> int:
+    """Copy the rows of the departments in ``DEPARTMENTS``, with every date.
 
     Parameters
     ----------
@@ -49,8 +55,8 @@ def copy_paris_rows(reader: Iterable[list[str]], writer: Any) -> int:
     --------
     .. code-block:: python
 
-        with open("national.csv", newline="") as source, open("paris.csv", "w", newline="") as out:
-            copy_paris_rows(csv.reader(source), csv.writer(out))
+        with open("national.csv", newline="") as source, open("dvf.csv", "w", newline="") as out:
+            copy_department_rows(csv.reader(source), csv.writer(out))
     """
     rows = iter(reader)
     header = next(rows)
@@ -58,7 +64,7 @@ def copy_paris_rows(reader: Iterable[list[str]], writer: Any) -> int:
     writer.writerow(header)
     count = 0
     for row in rows:
-        if row[department] == "75":
+        if row[department] in DEPARTMENTS:
             writer.writerow(row)
             count += 1
     return count
@@ -128,8 +134,8 @@ def fetch_dataset() -> dict[str, Any]:
         return json.load(response)
 
 
-def fetch_paris_rows(url: str, path: str) -> int:
-    """Stream the national DVF file and save its Paris rows.
+def fetch_rows(url: str, path: str) -> int:
+    """Stream the national DVF file and save the rows of its departments.
 
     Parameters
     ----------
@@ -141,23 +147,23 @@ def fetch_paris_rows(url: str, path: str) -> int:
     Returns
     -------
     int
-        The number of Paris rows written.
+        The number of rows written.
 
     Examples
     --------
     .. code-block:: python
 
-        fetch_paris_rows(url, "data-raw/src/paris.csv")
+        fetch_rows(url, "data-raw/src/dvf.csv")
     """
     # Write to a temporary name first, so that a failed download never leaves a
-    # partial paris.csv for the build script to read.
+    # partial dvf.csv for the build script to read.
     partial = f"{path}.part"
     request = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response, open(
         partial, "w", encoding="utf-8", newline=""
     ) as out:
         lines = io.TextIOWrapper(gzip.GzipFile(fileobj=response), encoding="utf-8", newline="")
-        count = copy_paris_rows(csv.reader(lines), csv.writer(out, lineterminator="\n"))
+        count = copy_department_rows(csv.reader(lines), csv.writer(out, lineterminator="\n"))
     os.replace(partial, path)
     return count
 
@@ -167,12 +173,12 @@ def main() -> None:
     os.makedirs(OUT, exist_ok=True)
     try:
         url, month = find_release(fetch_dataset())
-        print(f"paris.csv: downloading the {month} release", flush=True)
-        count = fetch_paris_rows(url, os.path.join(OUT, "paris.csv"))
+        print(f"dvf.csv: downloading the {month} release", flush=True)
+        count = fetch_rows(url, os.path.join(OUT, "dvf.csv"))
     except ValueError as error:
         # This includes a file without a code_departement column.
         raise SystemExit(str(error))
-    print(f"paris.csv: {count} rows", flush=True)
+    print(f"dvf.csv: {count} rows", flush=True)
     # Write the month only after the CSV is in place, so that release.txt never
     # names a release whose file is missing.
     with open(os.path.join(OUT, "release.txt"), "w", encoding="utf-8") as release:
