@@ -359,6 +359,11 @@ test("a filter with no Area means Paris, never the whole file", async () => {
   assert.equal((await summaryStats(areaDb, {}, null)).count, 2);
   assert.deepEqual(await salePointsIds(areaDb, {}), ["p1", "p2"]);
   assert.equal((await transactionPage(areaDb, {}, "date", "desc", 200, 0)).total, 2);
+  // Paris has 2 Sales, which is too few for a median. The whole file has 8, which would give one.
+  assert.equal((await distribution(areaDb, {}, "price", 45)).median, null);
+  assert.deepEqual((await salesByRooms(areaDb, {})).map((r) => [r.rooms, r.count]), [[1, 2]]);
+  const b = month("2024-01-01");
+  assert.deepEqual((await trendPoints(areaDb, {}, "month", 1, b, b)).map((r) => r.count), [2]);
 });
 
 test("each kind of Area filters to its own Sales", async () => {
@@ -431,6 +436,9 @@ test("no query returns a median for fewer than 5 Sales", async () => {
   // The responses still hold the Sales, so the check above is not empty.
   assert.equal((responses[0] as { count: number }).count, 4);
   assert.equal((responses[3] as { count: number }[])[0]!.count, 4);
+  // The 4 prices differ, so bins would exist without the rule, and they would give the shape of the 4 Sales.
+  assert.deepEqual((responses[1] as { bins: unknown[] }).bins, []);
+  assert.deepEqual((responses[2] as { bins: unknown[] }).bins, []);
 });
 
 test("5 Sales give a median in every query", async () => {
