@@ -6,15 +6,28 @@
 
 Run: cd scripts && uv run test_data_scripts.py
 """
+import contextlib
 import csv
 import io
+import json
 import os
 import tempfile
 import unittest
 from typing import Any
+from unittest import mock
 
+import build_paris_sales
 import duckdb
-from build_paris_sales import Sale, classify_mutation, write_database
+from build_paris_sales import (
+    EXPECTED_COLUMNS,
+    Sale,
+    check_columns,
+    check_release,
+    classify_mutation,
+    main,
+    read_previous,
+    write_database,
+)
 from fetch_dvf import copy_paris_rows, find_release
 
 
@@ -208,7 +221,7 @@ class WriteDatabaseTest(unittest.TestCase):
             make_sale(id="b", street=""),
             make_sale(id="c", quartier=None, lon=None, lat=None),
         ]
-        write_database(sales, {"kept": 3}, self.path)
+        write_database(sales, {"kept": 3}, "2026-10", self.path)
         rows = self.read(
             "SELECT id, sale_date, property_type, price, surface, price_per_sqm, rooms, arr,"
             " quartier, lon, lat, street FROM sales ORDER BY id"
@@ -222,32 +235,178 @@ class WriteDatabaseTest(unittest.TestCase):
         self.assertEqual(rows[1][-1], "")
 
     def test_metadata_and_filter_counts_hold_what_was_passed_in(self) -> None:
-        write_database([make_sale()], {"kept": 1, "not_a_sale": 7}, self.path)
-        self.assertEqual(self.read("SELECT key FROM metadata"), [("source",)])
+        write_database([make_sale()], {"kept": 1, "not_a_sale": 7}, "2026-10", self.path)
+        self.assertEqual(
+            self.read("SELECT key, value FROM metadata WHERE key = 'release_month'"),
+            [("release_month", "2026-10")],
+        )
         self.assertEqual(
             self.read("SELECT name, mutations FROM filter_counts ORDER BY name"),
             [("kept", 1), ("not_a_sale", 7)],
         )
 
     def test_overwrite_replaces_file_and_leaves_no_extra_files(self) -> None:
-        write_database([make_sale(id="old")], {"kept": 1}, self.path)
-        write_database([make_sale(id="new1"), make_sale(id="new2")], {"kept": 2}, self.path)
+        write_database([make_sale(id="old")], {"kept": 1}, "2026-10", self.path)
+        write_database([make_sale(id="new1"), make_sale(id="new2")], {"kept": 2}, "2026-10", self.path)
         self.assertEqual(self.read("SELECT id FROM sales ORDER BY id"), [("new1",), ("new2",)])
         self.assertEqual(os.listdir(self.dir.name), ["sales.duckdb"])
 
     def test_empty_sales_raise_and_keep_existing_file(self) -> None:
-        write_database([make_sale(id="old")], {"kept": 1}, self.path)
+        write_database([make_sale(id="old")], {"kept": 1}, "2026-10", self.path)
         with self.assertRaises(ValueError):
-            write_database([], {"kept": 0}, self.path)
+            write_database([], {"kept": 0}, "2026-10", self.path)
         self.assertEqual(self.read("SELECT id FROM sales"), [("old",)])
         self.assertEqual(os.listdir(self.dir.name), ["sales.duckdb"])
 
     def test_failed_write_keeps_existing_file_and_leaves_no_extra_files(self) -> None:
-        write_database([make_sale(id="old")], {"kept": 1}, self.path)
+        write_database([make_sale(id="old")], {"kept": 1}, "2026-10", self.path)
         with self.assertRaises(Exception):
-            write_database([make_sale(price=None)], {"kept": 1}, self.path)
+            write_database([make_sale(price=None)], {"kept": 1}, "2026-10", self.path)
         self.assertEqual(self.read("SELECT id FROM sales"), [("old",)])
         self.assertEqual(os.listdir(self.dir.name), ["sales.duckdb"])
+
+
+class CheckReleaseTest(unittest.TestCase):
+    good = [make_sale(id=str(i), date="2026-06-30", arr=1, quartier="7510101") for i in range(100)]
+
+    def check(self, sales: list[Sale], previous: tuple[int, str] | None = (100, "2026-06-30"),
+              arrs: tuple[int, ...] = (1,), quartiers: tuple[str, ...] = ("7510101",)) -> list[str]:
+        return check_release(sales, previous, arrs, quartiers)
+
+    def test_passes_on_same_release_again_and_on_no_previous_file(self) -> None:
+        self.assertEqual(self.check(self.good), [])
+        self.assertEqual(self.check(self.good, previous=None), [])
+
+    def test_count_limit_is_15_percent_in_both_directions(self) -> None:
+        self.assertEqual(self.check(self.good, previous=(115, "2026-06-30")), [])  # -13.0%
+        self.assertEqual(self.check(self.good[:85]), [])                           # exactly -15%
+        self.assertIn("Sale count", self.check(self.good[:84])[0])                 # -16%
+        self.assertIn("Sale count", self.check(self.good * 2)[0])                  # +100%
+
+    def test_area_with_no_sales_is_named(self) -> None:
+        self.assertIn("20", self.check(self.good, arrs=(1, 20))[0])
+        self.assertIn("7510102", self.check(self.good, quartiers=("7510101", "7510102"))[0])
+
+    def test_end_date_earlier_than_previous_fails(self) -> None:
+        self.assertIn("end date", self.check(self.good, previous=(100, "2026-12-31"))[0])
+
+    def test_date_not_in_iso_format_fails(self) -> None:
+        bad = [*self.good[:99], make_sale(date="30/06/2026", arr=1, quartier="7510101")]
+        self.assertIn("30/06/2026", self.check(bad)[0])
+
+    def test_no_sales_fails_with_a_reason_and_no_previous_file(self) -> None:
+        self.assertIn("No Sales", self.check([], previous=None)[0])
+
+
+class CheckColumnsTest(unittest.TestCase):
+    def test_names_missing_columns(self) -> None:
+        columns = [c for c in EXPECTED_COLUMNS if c != "valeur_fonciere"]
+        self.assertEqual(check_columns(EXPECTED_COLUMNS), [])
+        self.assertIn("valeur_fonciere", check_columns(columns)[0])
+        self.assertTrue(check_columns(None))
+
+
+def square(lon: float, lat: float) -> dict[str, Any]:
+    """Return a small invented Polygon around a position."""
+    d = 0.01
+    ring = [[lon - d, lat - d], [lon + d, lat - d], [lon + d, lat + d], [lon - d, lat + d], [lon - d, lat - d]]
+    return {"type": "Polygon", "coordinates": [ring]}
+
+
+class MainTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.raw = os.path.join(self.dir.name, "raw")
+        self.out = os.path.join(self.dir.name, "out")
+        self.boundaries = os.path.join(self.dir.name, "boundaries")
+        for folder in (os.path.join(self.raw, "src"), self.out, self.boundaries):
+            os.makedirs(folder)
+        self.db = os.path.join(self.out, "sales.duckdb")
+        for name, value in (("RAW", self.raw), ("OUT", self.out), ("BOUNDARIES", self.boundaries)):
+            patcher = mock.patch.object(build_paris_sales, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def write_inputs(self, count: int = 10, date: str = "2026-03-15", arrs: tuple[int, ...] = (1,),
+                     drop_column: str | None = None, release: str | None = "2026-10") -> None:
+        """Write invented inputs: ``count`` Sales in Arrondissement 1, one square per Arrondissement."""
+        def write_json(name: str, features: list[dict[str, Any]]) -> None:
+            with open(os.path.join(self.raw, name), "w", encoding="utf-8") as f:
+                json.dump({"type": "FeatureCollection", "features": features}, f)
+
+        write_json("arr.geojson", [
+            {"type": "Feature", "properties": {"c_ar": a, "l_aroff": f"Arr {a}"},
+             "geometry": square(2.34567 + a, 48.86123)} for a in arrs
+        ])
+        write_json("q2.geojson", [
+            {"type": "Feature", "properties": {"c_quinsee": f"75{a:02d}01", "l_qu": f"Quartier {a}", "c_ar": a},
+             "geometry": square(2.34567 + a, 48.86123)} for a in arrs
+        ])
+        columns = [c for c in mutation_row() if c != drop_column]
+        with open(os.path.join(self.raw, "src", "paris.csv"), "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, columns, extrasaction="ignore")
+            writer.writeheader()
+            for i in range(count):
+                # Arrondissement 1 sits at longitude 2.34567 + 1, so the position is shifted to match.
+                writer.writerow(mutation_row(id_mutation=f"new{i}", date_mutation=date, longitude="3.34567"))
+        if release is not None:
+            with open(os.path.join(self.raw, "src", "release.txt"), "w", encoding="utf-8") as f:
+                f.write(release)
+
+    def write_previous(self) -> None:
+        write_database([make_sale(id=f"old{i}") for i in range(10)], {"kept": 10}, "2026-04", self.db)
+
+    def ids(self) -> list[tuple[Any, ...]]:
+        con = duckdb.connect(self.db, read_only=True)
+        try:
+            return con.execute("SELECT id FROM sales ORDER BY id").fetchall()
+        finally:
+            con.close()
+
+    def run_main(self) -> None:
+        with contextlib.redirect_stdout(io.StringIO()):
+            main()
+
+    def test_fresh_clone_builds_and_records_the_release_month(self) -> None:
+        self.write_inputs()
+        self.run_main()
+        con = duckdb.connect(self.db, read_only=True)
+        try:
+            self.assertEqual(con.execute("SELECT count(*) FROM sales").fetchone(), (10,))
+            self.assertEqual(
+                con.execute("SELECT value FROM metadata WHERE key = 'release_month'").fetchall(), [("2026-10",)]
+            )
+        finally:
+            con.close()
+        self.assertEqual(sorted(os.listdir(self.boundaries)), ["arrondissements.geojson", "quartiers.geojson"])
+
+    def test_each_failing_input_exits_and_keeps_the_previous_file(self) -> None:
+        cases: list[tuple[str, dict[str, Any], str]] = [
+            ("missing column", {"drop_column": "valeur_fonciere"}, "valeur_fonciere"),
+            ("count more than 15% away", {"count": 5}, "Sale count"),
+            ("Arrondissement with no Sales", {"arrs": (1, 2)}, "Arrondissement"),
+            ("earlier end date", {"date": "2026-01-01"}, "end date"),
+            ("header with no rows", {"count": 0}, "No Sales"),
+        ]
+        for name, inputs, reason in cases:
+            with self.subTest(name):
+                self.write_previous()
+                self.write_inputs(**inputs)
+                with self.assertRaises(SystemExit) as raised:
+                    self.run_main()
+                self.assertIsInstance(raised.exception.code, str)
+                self.assertIn(reason, raised.exception.code)
+                self.assertEqual(self.ids(), [(f"old{i}",) for i in range(10)])
+                self.assertEqual(os.listdir(self.out), ["sales.duckdb"])
+                self.assertEqual(os.listdir(self.boundaries), [])
+
+    def test_missing_release_file_exits_with_a_reason(self) -> None:
+        self.write_inputs(release=None)
+        with self.assertRaises(SystemExit) as raised:
+            self.run_main()
+        self.assertIn("fetch_dvf.py", raised.exception.code)
+        self.assertEqual(os.listdir(self.out), [])
 
 
 if __name__ == "__main__":
