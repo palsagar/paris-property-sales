@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Data rule
 
-Never commit `artifacts/api-server/data/sales.duckdb` or `data-raw/src/`. The raw files link prices to street addresses and exact coordinates, and the built file holds street names and positions rounded to about 100 m. The repository is public. The DVF reuse conditions are the reason. See "Data and licences" in `README.md`. A fresh clone has neither file, so run the two data scripts below first.
+Never commit `artifacts/api-server/data/sales.duckdb` or `data-raw/src/`. The raw files link prices to street addresses and exact coordinates, and the built file holds street names and positions rounded to about 100 m. The repository is public. The DVF reuse conditions are the reason. See "Data and licences" in `README.md`. A fresh clone has neither file, so run the update command below first.
 
 ## Documentation
 
@@ -65,7 +65,7 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 
 **Two pieces of code depend on the exact requests the dashboard makes.**
 - `lib/responseCache.ts` caches successful `/api` GETs in memory, up to a limit in total bytes. The key is the path plus the query after validation, with the same Zod schema the route uses, so the cache and the route always agree on what a request means. A new route is not cached until you add it and its schema to `QUERY_SCHEMAS`. The cache assumes that the data never changes while the process runs, so a server must restart to show new data.
-- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 2,600 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
+- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 2,800 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
 
 **The dashboard is one page.** `pages/dashboard.tsx` owns the view and passes filters to the panels in `components/`. Each panel fetches its own data through the generated hooks. The view state (`lib/view-state.ts`) is mirrored into the URL query string, and links depend on it, so a new filter belongs there. Charts use Recharts, and the map uses Leaflet.
 

@@ -122,6 +122,8 @@ DGFiP publishes a new DVF release each April and October. After each release, up
 
 Before the build replaces `sales.duckdb`, it checks the new release. The release must have the expected columns. Its Sale count must be within 15% of the previous file. Every Arrondissement and every Quartier must have Sales. Every date must be in ISO format. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason and exits with an error. The previous `sales.duckdb` and the boundary files stay in place.
 
+When a check fails, read the printed reason and compare the new release with the dataset page on data.gouv.fr. The previous file stays in place, so the site keeps working. A release that is correct but fails a check needs a reviewed change to the check in the code. For example, the Sale count limit is `MAX_COUNT_CHANGE` in `scripts/build_paris_sales.py`.
+
 DGFiP can correct past periods in a new release, so the figures can change when you download the data again.
 
 ## Change the API
