@@ -48,7 +48,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
       const prev = byP.get(prevKey);
       return {
         ...p, shown: gran === "year" ? yearBucketLabel(p.period, p.label, years) : p.label, band: [p.p25PricePerSqm, p.p75PricePerSqm] as [number | null, number | null],
-        paris: paris.get(p.period), low: p.count < 10,
+        paris: paris.get(p.period), low: p.count > 0 && p.count < 10,
         yoy: prev && prev.medianPricePerSqm && p.medianPricePerSqm != null ? ((p.medianPricePerSqm - prev.medianPricePerSqm) / prev.medianPricePerSqm) * 100 : null,
       };
     });
