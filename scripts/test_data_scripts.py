@@ -15,11 +15,11 @@ from typing import Any
 
 import duckdb
 from build_paris_sales import Sale, classify_mutation, write_database
-from fetch_dvf import copy_paris_rows
+from fetch_dvf import copy_paris_rows, find_release
 
 
 class CopyParisRowsTest(unittest.TestCase):
-    def test_copy_paris_rows_keeps_department_75_from_2022(self) -> None:
+    def test_copy_paris_rows_keeps_every_date_in_department_75(self) -> None:
         header = ["id_mutation", "date_mutation", "code_departement", "adresse_nom_voie"]
         rows = [
             header,
@@ -29,8 +29,34 @@ class CopyParisRowsTest(unittest.TestCase):
         ]
         out = io.StringIO()
         count = copy_paris_rows(iter(rows), csv.writer(out, lineterminator="\n"))
-        self.assertEqual(count, 1)
-        self.assertEqual(list(csv.reader(io.StringIO(out.getvalue()))), rows[:2])
+        self.assertEqual(count, 2)
+        self.assertEqual(list(csv.reader(io.StringIO(out.getvalue()))), rows[:3])
+
+
+class FindReleaseTest(unittest.TestCase):
+    single = {"title": "DVF juillet 2021 - juin 2026 - fichier unique",
+              "url": "https://example.org/dvf.csv.gz", "last_modified": "2026-10-21T08:58:04.821000+00:00"}
+    others = [{"title": "DVF 2022", "url": "https://example.org/2022.csv.gz", "last_modified": "2026-10-20T11:42:30+00:00"}]
+
+    def test_returns_url_and_release_month(self) -> None:
+        self.assertEqual(find_release({"resources": [*self.others, self.single]}),
+                         ("https://example.org/dvf.csv.gz", "2026-10"))
+
+    def test_title_match_ignores_case(self) -> None:
+        upper = {**self.single, "title": "DVF - Fichier Unique"}
+        self.assertEqual(find_release({"resources": [upper]})[1], "2026-10")
+
+    def test_no_match_raises_and_names_the_titles(self) -> None:
+        with self.assertRaisesRegex(ValueError, "DVF 2022"):
+            find_release({"resources": self.others})
+
+    def test_two_matches_raise(self) -> None:
+        with self.assertRaisesRegex(ValueError, "fichier unique"):
+            find_release({"resources": [self.single, self.single]})
+
+    def test_bad_modified_date_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            find_release({"resources": [{**self.single, "last_modified": "soon"}]})
 
 
 def mutation_row(**overrides: str) -> dict[str, str]:
