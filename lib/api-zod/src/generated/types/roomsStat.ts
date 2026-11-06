@@ -7,10 +7,27 @@
  */
 
 export interface RoomsStat {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   /** Number of main rooms; 5 means 5 or more */
   rooms: number;
   count: number;
-  medianPrice: number;
-  medianPricePerSqm: number;
-  medianSurface: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianSurface: number | null;
 }

@@ -7,11 +7,20 @@
  */
 
 export interface AreaTrendPoint {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   /** Arrondissement number as a string, INSEE quartier code, or INSEE commune code */
   id: string;
   /** Start date of the bucket (YYYY-MM-DD) */
   period: string;
   label: string;
   count: number;
-  medianPricePerSqm: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
 }

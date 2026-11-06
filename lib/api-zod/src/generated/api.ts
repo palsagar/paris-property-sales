@@ -40,13 +40,14 @@ export const GetSalesSummaryQueryParams = zod.object({
 })
 
 export const GetSalesSummaryResponse = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "count": zod.number().int(),
   "totalVolume": zod.number().describe('Sum of all purchase prices in euros'),
-  "medianPrice": zod.number(),
-  "averagePrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "averagePricePerSqm": zod.number(),
-  "medianSurface": zod.number(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "averagePrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "averagePricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "minPrice": zod.number(),
   "maxPrice": zod.number(),
   "periodFrom": zod.string().describe('Date of the earliest selected sale (YYYY-MM-DD)'),
@@ -99,12 +100,12 @@ export const GetPriceDistributionResponse = zod.object({
   "to": zod.number(),
   "count": zod.number().int()
 })),
-  "median": zod.number(),
-  "mean": zod.number(),
-  "p10": zod.number(),
-  "p25": zod.number(),
-  "p75": zod.number(),
-  "p90": zod.number()
+  "median": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "mean": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p10": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p90": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 
 
@@ -136,12 +137,12 @@ export const GetPricePerSqmDistributionResponse = zod.object({
   "to": zod.number(),
   "count": zod.number().int()
 })),
-  "median": zod.number(),
-  "mean": zod.number(),
-  "p10": zod.number(),
-  "p25": zod.number(),
-  "p75": zod.number(),
-  "p90": zod.number()
+  "median": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "mean": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p10": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p90": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 
 
@@ -175,13 +176,14 @@ export const GetSalesTrendQueryParams = zod.object({
 })
 
 export const GetSalesTrendResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "period": zod.string().describe('Start date of the bucket (YYYY-MM-DD)'),
   "label": zod.string().describe('Human label, for example "2024-03", "2024 Q2" or "2024"'),
   "count": zod.number().int().describe('Number of sales pooled into this point'),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "p25PricePerSqm": zod.number(),
-  "p75PricePerSqm": zod.number()
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 export const GetSalesTrendResponse = zod.array(GetSalesTrendResponseItem)
 
@@ -210,11 +212,12 @@ export const GetAreaTrendQueryParams = zod.object({
 })
 
 export const GetAreaTrendResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "id": zod.string().describe('Arrondissement number as a string, INSEE quartier code, or INSEE commune code'),
   "period": zod.string().describe('Start date of the bucket (YYYY-MM-DD)'),
   "label": zod.string(),
   "count": zod.number().int(),
-  "medianPricePerSqm": zod.number()
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 export const GetAreaTrendResponse = zod.array(GetAreaTrendResponseItem)
 
@@ -242,11 +245,12 @@ export const GetSalesByRoomsQueryParams = zod.object({
 })
 
 export const GetSalesByRoomsResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "rooms": zod.number().int().describe('Number of main rooms; 5 means 5 or more'),
   "count": zod.number().int(),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "medianSurface": zod.number()
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales')
 })
 export const GetSalesByRoomsResponse = zod.array(GetSalesByRoomsResponseItem)
 
@@ -266,16 +270,17 @@ export const GetSalesByArrondissementQueryParams = zod.object({
 })
 
 export const GetSalesByArrondissementResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "id": zod.string().describe('Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code'),
   "name": zod.string(),
   "group": zod.enum(['paris', '92', '93', '94', 'major']).describe('Where the Area sits. Paris, one of the three Departments, or a Major town.'),
   "arrondissement": zod.number().int().nullable().describe('The Arrondissement number, or null for a Commune'),
   "count": zod.number().int(),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "p25PricePerSqm": zod.number(),
-  "p75PricePerSqm": zod.number(),
-  "medianSurface": zod.number(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "startMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the first months of the selected range (null if fewer than 5 sales)'),
   "endMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the last months of the selected range (null if fewer than 5 sales)'),
   "changePct": zod.number().nullable().describe('Percentage change between the start and end windows (null when either window has fewer than 5 sales)')
@@ -298,16 +303,17 @@ export const GetSalesByQuartierQueryParams = zod.object({
 })
 
 export const GetSalesByQuartierResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "id": zod.string().describe('Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code'),
   "name": zod.string(),
   "group": zod.enum(['paris', '92', '93', '94', 'major']).describe('Where the Area sits. Paris, one of the three Departments, or a Major town.'),
   "arrondissement": zod.number().int().nullable().describe('The Arrondissement number, or null for a Commune'),
   "count": zod.number().int(),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "p25PricePerSqm": zod.number(),
-  "p75PricePerSqm": zod.number(),
-  "medianSurface": zod.number(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "startMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the first months of the selected range (null if fewer than 5 sales)'),
   "endMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the last months of the selected range (null if fewer than 5 sales)'),
   "changePct": zod.number().nullable().describe('Percentage change between the start and end windows (null when either window has fewer than 5 sales)')
@@ -330,16 +336,17 @@ export const GetSalesByCommuneQueryParams = zod.object({
 })
 
 export const GetSalesByCommuneResponseItem = zod.object({
+  "houseShare": zod.number().nullable().describe('Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.'),
   "id": zod.string().describe('Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code'),
   "name": zod.string(),
   "group": zod.enum(['paris', '92', '93', '94', 'major']).describe('Where the Area sits. Paris, one of the three Departments, or a Major town.'),
   "arrondissement": zod.number().int().nullable().describe('The Arrondissement number, or null for a Commune'),
   "count": zod.number().int(),
-  "medianPrice": zod.number(),
-  "medianPricePerSqm": zod.number(),
-  "p25PricePerSqm": zod.number(),
-  "p75PricePerSqm": zod.number(),
-  "medianSurface": zod.number(),
+  "medianPrice": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianPricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p25PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "p75PricePerSqm": zod.number().nullable().describe('Null when fewer than 5 Sales'),
+  "medianSurface": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "startMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the first months of the selected range (null if fewer than 5 sales)'),
   "endMedianPricePerSqm": zod.number().nullable().describe('Median price per m2 over the last months of the selected range (null if fewer than 5 sales)'),
   "changePct": zod.number().nullable().describe('Percentage change between the start and end windows (null when either window has fewer than 5 sales)')

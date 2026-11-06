@@ -446,22 +446,31 @@ components:
         - endMedianPrice
         - priceChangePct
         - changeWindowMonths
+        - houseShare
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         count:
           type: integer
         totalVolume:
           type: number
           description: Sum of all purchase prices in euros
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         averagePrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         averagePricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianSurface:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         minPrice:
           type: number
         maxPrice:
@@ -542,21 +551,30 @@ components:
           items:
             $ref: "#/components/schemas/DistributionBin"
         median:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         mean:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p10:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p25:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p75:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p90:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     TrendPoint:
       type: object
-      required: [period, label, count, medianPrice, medianPricePerSqm, p25PricePerSqm, p75PricePerSqm]
+      required: [period, label, count, medianPrice, medianPricePerSqm, p25PricePerSqm, p75PricePerSqm, houseShare]
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         period:
           type: string
           description: Start date of the bucket (YYYY-MM-DD)
@@ -567,17 +585,24 @@ components:
           type: integer
           description: Number of sales pooled into this point
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p25PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p75PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     AreaTrendPoint:
       type: object
-      required: [id, period, label, count, medianPricePerSqm]
+      required: [id, period, label, count, medianPricePerSqm, houseShare]
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         id:
           type: string
           description: Arrondissement number as a string, INSEE quartier code, or INSEE commune code
@@ -589,22 +614,29 @@ components:
         count:
           type: integer
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     RoomsStat:
       type: object
-      required: [rooms, count, medianPrice, medianPricePerSqm, medianSurface]
+      required: [rooms, count, medianPrice, medianPricePerSqm, medianSurface, houseShare]
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         rooms:
           type: integer
           description: Number of main rooms; 5 means 5 or more
         count:
           type: integer
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianSurface:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
     AreaStat:
       type: object
       required:
@@ -621,7 +653,11 @@ components:
         - startMedianPricePerSqm
         - endMedianPricePerSqm
         - changePct
+        - houseShare
       properties:
+        houseShare:
+          type: ["number", "null"]
+          description: Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
         id:
           type: string
           description: Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code
@@ -637,15 +673,20 @@ components:
         count:
           type: integer
         medianPrice:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianPricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p25PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         p75PricePerSqm:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         medianSurface:
-          type: number
+          type: ["number", "null"]
+          description: Null when fewer than 5 Sales
         startMedianPricePerSqm:
           type: ["number", "null"]
           description: Median price per m2 over the first months of the selected range (null if fewer than 5 sales)

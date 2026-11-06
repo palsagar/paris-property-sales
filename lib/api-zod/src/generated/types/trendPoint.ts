@@ -7,14 +7,35 @@
  */
 
 export interface TrendPoint {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   /** Start date of the bucket (YYYY-MM-DD) */
   period: string;
   /** Human label, for example "2024-03", "2024 Q2" or "2024" */
   label: string;
   /** Number of sales pooled into this point */
   count: number;
-  medianPrice: number;
-  medianPricePerSqm: number;
-  p25PricePerSqm: number;
-  p75PricePerSqm: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p25PricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p75PricePerSqm: number | null;
 }

@@ -19,14 +19,39 @@ export interface YearRange {
 }
 
 export interface SalesSummary {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   count: number;
   /** Sum of all purchase prices in euros */
   totalVolume: number;
-  medianPrice: number;
-  averagePrice: number;
-  medianPricePerSqm: number;
-  averagePricePerSqm: number;
-  medianSurface: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  averagePrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  averagePricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianSurface: number | null;
   minPrice: number;
   maxPrice: number;
   /** Date of the earliest selected sale (YYYY-MM-DD) */
@@ -80,44 +105,115 @@ export interface DistributionBin {
 
 export interface Distribution {
   bins: DistributionBin[];
-  median: number;
-  mean: number;
-  p10: number;
-  p25: number;
-  p75: number;
-  p90: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  median: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  mean: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p10: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p25: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p75: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p90: number | null;
 }
 
 export interface TrendPoint {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   /** Start date of the bucket (YYYY-MM-DD) */
   period: string;
   /** Human label, for example "2024-03", "2024 Q2" or "2024" */
   label: string;
   /** Number of sales pooled into this point */
   count: number;
-  medianPrice: number;
-  medianPricePerSqm: number;
-  p25PricePerSqm: number;
-  p75PricePerSqm: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p25PricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p75PricePerSqm: number | null;
 }
 
 export interface AreaTrendPoint {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   /** Arrondissement number as a string, INSEE quartier code, or INSEE commune code */
   id: string;
   /** Start date of the bucket (YYYY-MM-DD) */
   period: string;
   label: string;
   count: number;
-  medianPricePerSqm: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
 }
 
 export interface RoomsStat {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   /** Number of main rooms; 5 means 5 or more */
   rooms: number;
   count: number;
-  medianPrice: number;
-  medianPricePerSqm: number;
-  medianSurface: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianSurface: number | null;
 }
 
 /**
@@ -135,6 +231,11 @@ export const AreaStatGroup = {
 } as const;
 
 export interface AreaStat {
+  /**
+     * Percentage of the Sales that are houses, from 0 to 100. Null only when there are no Sales.
+     * @nullable
+     */
+  houseShare: number | null;
   /** Arrondissement number (1 to 20) as a string, the INSEE quartier code, or the INSEE commune code */
   id: string;
   name: string;
@@ -146,11 +247,31 @@ export interface AreaStat {
      */
   arrondissement: number | null;
   count: number;
-  medianPrice: number;
-  medianPricePerSqm: number;
-  p25PricePerSqm: number;
-  p75PricePerSqm: number;
-  medianSurface: number;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPrice: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianPricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p25PricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  p75PricePerSqm: number | null;
+  /**
+     * Null when fewer than 5 Sales
+     * @nullable
+     */
+  medianSurface: number | null;
   /**
      * Median price per m2 over the first months of the selected range (null if fewer than 5 sales)
      * @nullable

@@ -2,7 +2,8 @@ import type { SqlParams } from "./salesDb";
 
 export type Granularity = "month" | "quarter" | "year";
 
-const MIN_SALES_FOR_CHANGE = 5;
+/** The fewest Sales a median may describe. The server withholds any statistic built from fewer. */
+export const MIN_SALES = 5;
 
 function parts(date: string): { y: number; m: number; d: number } {
   return {
@@ -123,8 +124,8 @@ export function changeSelect(w: ChangeWindows | null): { sql: string; params: Sq
 
 export function changeFromRow(row: ChangeRow): Change {
   if (
-    row.nStart < MIN_SALES_FOR_CHANGE ||
-    row.nEnd < MIN_SALES_FOR_CHANGE ||
+    row.nStart < MIN_SALES ||
+    row.nEnd < MIN_SALES ||
     row.startPpsm === null || row.endPpsm === null ||
     row.startPrice === null || row.endPrice === null
   ) {

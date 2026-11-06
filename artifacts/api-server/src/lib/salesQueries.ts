@@ -7,6 +7,7 @@ import {
   type ChangeRow,
   type ChangeWindows,
   type Granularity,
+  MIN_SALES,
   ordinalSql,
 } from "./timeStats";
 
@@ -64,7 +65,13 @@ export function saleWhere(
   return { sql: conditions.length ? conditions.join(" AND ") : "TRUE", params };
 }
 
-const med = (column: string) => `coalesce(quantile_cont(${column}, 0.5), 0)::DOUBLE`;
+/** Gives the statistic only when the group holds enough Sales, and NULL otherwise. */
+const ifEnough = (expr: string) => `CASE WHEN count(*) >= ${MIN_SALES} THEN ${expr} END`;
+const quantile = (column: string, q: number) => ifEnough(`quantile_cont(${column}, ${q})::DOUBLE`);
+const mean = (column: string) => ifEnough(`avg(${column})::DOUBLE`);
+
+/** The percentage of Sales that are houses. NULL when the group is empty. */
+const HOUSE_SHARE = `(100.0 * count(*) FILTER (WHERE property_type = 'Maison') / nullif(count(*), 0))::DOUBLE`;
 
 export async function summaryStats(db: SalesDb, f: SaleFilter, w: ChangeWindows | null) {
   const where = saleWhere(f);
@@ -73,24 +80,26 @@ export async function summaryStats(db: SalesDb, f: SaleFilter, w: ChangeWindows 
     {
       count: number;
       totalVolume: number;
-      medianPrice: number;
-      averagePrice: number;
-      medianPricePerSqm: number;
-      averagePricePerSqm: number;
-      medianSurface: number;
+      medianPrice: number | null;
+      averagePrice: number | null;
+      medianPricePerSqm: number | null;
+      averagePricePerSqm: number | null;
+      medianSurface: number | null;
       minPrice: number;
       maxPrice: number;
+      houseShare: number | null;
     } & ChangeRow
   >(
     `SELECT count(*)::INTEGER AS count,
       coalesce(sum(price), 0)::DOUBLE AS totalVolume,
-      ${med("price")} AS medianPrice,
-      coalesce(avg(price), 0)::DOUBLE AS averagePrice,
-      ${med("price_per_sqm")} AS medianPricePerSqm,
-      coalesce(avg(price_per_sqm), 0)::DOUBLE AS averagePricePerSqm,
-      ${med("surface")} AS medianSurface,
+      ${quantile("price", 0.5)} AS medianPrice,
+      ${mean("price")} AS averagePrice,
+      ${quantile("price_per_sqm", 0.5)} AS medianPricePerSqm,
+      ${mean("price_per_sqm")} AS averagePricePerSqm,
+      ${quantile("surface", 0.5)} AS medianSurface,
       coalesce(min(price), 0)::DOUBLE AS minPrice,
       coalesce(max(price), 0)::DOUBLE AS maxPrice,
+      ${HOUSE_SHARE} AS houseShare,
       ${change.sql}
     FROM sales WHERE ${where.sql}`,
     { ...where.params, ...change.params },
@@ -114,7 +123,11 @@ export async function distribution(
   f: SaleFilter,
   column: "price" | "price_per_sqm",
   targetBins: number,
-) {
+): Promise<{
+  bins: { from: number; to: number; count: number }[];
+  median: number | null; mean: number | null;
+  p10: number | null; p25: number | null; p75: number | null; p90: number | null;
+}> {
   const where = saleWhere(f);
   const [s] = await db.query<{
     n: number; min: number | null; mean: number | null;
@@ -128,8 +141,8 @@ export async function distribution(
     FROM sales WHERE ${where.sql}`,
     where.params,
   );
-  if (!s || s.n === 0) {
-    return { bins: [], median: 0, mean: 0, p10: 0, p25: 0, p75: 0, p90: 0 };
+  if (!s || s.n < MIN_SALES) {
+    return { bins: [], median: null, mean: null, p10: null, p25: null, p75: null, p90: null };
   }
   // The chart range stops at the 99th percentile, as before.
   const start0 = s.min!;
@@ -157,12 +170,14 @@ export async function distribution(
 export async function salesByRooms(db: SalesDb, f: SaleFilter) {
   const where = saleWhere(f);
   return db.query<{
-    rooms: number; count: number; medianPrice: number; medianPricePerSqm: number; medianSurface: number;
+    rooms: number; count: number; medianPrice: number | null; medianPricePerSqm: number | null;
+    medianSurface: number | null; houseShare: number | null;
   }>(
     `SELECT least(rooms, 5)::INTEGER AS rooms, count(*)::INTEGER AS count,
-      quantile_cont(price, 0.5)::DOUBLE AS medianPrice,
-      quantile_cont(price_per_sqm, 0.5)::DOUBLE AS medianPricePerSqm,
-      quantile_cont(surface, 0.5)::DOUBLE AS medianSurface
+      ${quantile("price", 0.5)} AS medianPrice,
+      ${quantile("price_per_sqm", 0.5)} AS medianPricePerSqm,
+      ${quantile("surface", 0.5)} AS medianSurface,
+      ${HOUSE_SHARE} AS houseShare
     FROM sales WHERE rooms >= 1 AND ${where.sql}
     GROUP BY 1 ORDER BY 1`,
     where.params,
@@ -187,11 +202,12 @@ export function saleAreaName(arr: number | null, commune: string | null, names: 
 export interface AreaStat {
   area: string;
   count: number;
-  medianPrice: number;
-  medianPricePerSqm: number;
-  p25PricePerSqm: number;
-  p75PricePerSqm: number;
-  medianSurface: number;
+  medianPrice: number | null;
+  medianPricePerSqm: number | null;
+  p25PricePerSqm: number | null;
+  p75PricePerSqm: number | null;
+  medianSurface: number | null;
+  houseShare: number | null;
   startMedianPricePerSqm: number | null;
   endMedianPricePerSqm: number | null;
   changePct: number | null;
@@ -208,16 +224,18 @@ export async function areaStats(
   const change = changeSelect(w);
   const rows = await db.query<
     {
-      area: string; count: number; medianPrice: number; medianPricePerSqm: number;
-      p25PricePerSqm: number; p75PricePerSqm: number; medianSurface: number;
+      area: string; count: number; medianPrice: number | null; medianPricePerSqm: number | null;
+      p25PricePerSqm: number | null; p75PricePerSqm: number | null; medianSurface: number | null;
+      houseShare: number | null;
     } & ChangeRow
   >(
     `SELECT ${lv.expr} AS area, count(*)::INTEGER AS count,
-      quantile_cont(price, 0.5)::DOUBLE AS medianPrice,
-      quantile_cont(price_per_sqm, 0.5)::DOUBLE AS medianPricePerSqm,
-      quantile_cont(price_per_sqm, 0.25)::DOUBLE AS p25PricePerSqm,
-      quantile_cont(price_per_sqm, 0.75)::DOUBLE AS p75PricePerSqm,
-      quantile_cont(surface, 0.5)::DOUBLE AS medianSurface,
+      ${quantile("price", 0.5)} AS medianPrice,
+      ${quantile("price_per_sqm", 0.5)} AS medianPricePerSqm,
+      ${quantile("price_per_sqm", 0.25)} AS p25PricePerSqm,
+      ${quantile("price_per_sqm", 0.75)} AS p75PricePerSqm,
+      ${quantile("surface", 0.5)} AS medianSurface,
+      ${HOUSE_SHARE} AS houseShare,
       ${change.sql}
     FROM sales WHERE ${lv.condition} AND ${where.sql}
     GROUP BY ${lv.column} ORDER BY ${lv.column}`,
@@ -252,7 +270,7 @@ function pooledQuery(
   const where = saleWhere(f, noArea);
   const area = areaExpr ? `${areaExpr} AS area, ` : "";
   return {
-    sql: `WITH s AS (SELECT ${area}price, price_per_sqm, ${ordinalSql(g)} AS o FROM sales WHERE ${extraWhere}${where.sql}),
+    sql: `WITH s AS (SELECT ${area}price, price_per_sqm, property_type, ${ordinalSql(g)} AS o FROM sales WHERE ${extraWhere}${where.sql}),
       buckets AS (SELECT unnest(range($tFirst::INTEGER, $tLast::INTEGER + 1))::INTEGER AS b)
     SELECT ${areaExpr ? "area, " : ""}b, count(*)::INTEGER AS count, ${measures}
     FROM buckets JOIN s ON s.o BETWEEN b - $tWindow::INTEGER + 1 AND b
@@ -270,13 +288,14 @@ export async function trendPoints(
   last: number,
 ) {
   const q = pooledQuery(f, g, windowSize, first, last, null, "",
-    `quantile_cont(price, 0.5)::DOUBLE AS "medianPrice",
-      quantile_cont(price_per_sqm, 0.5)::DOUBLE AS "medianPricePerSqm",
-      quantile_cont(price_per_sqm, 0.25)::DOUBLE AS "p25PricePerSqm",
-      quantile_cont(price_per_sqm, 0.75)::DOUBLE AS "p75PricePerSqm"`);
+    `${quantile("price", 0.5)} AS "medianPrice",
+      ${quantile("price_per_sqm", 0.5)} AS "medianPricePerSqm",
+      ${quantile("price_per_sqm", 0.25)} AS "p25PricePerSqm",
+      ${quantile("price_per_sqm", 0.75)} AS "p75PricePerSqm",
+      ${HOUSE_SHARE} AS "houseShare"`);
   const rows = await db.query<{
-    b: number; count: number; medianPrice: number; medianPricePerSqm: number;
-    p25PricePerSqm: number; p75PricePerSqm: number;
+    b: number; count: number; medianPrice: number | null; medianPricePerSqm: number | null;
+    p25PricePerSqm: number | null; p75PricePerSqm: number | null; houseShare: number | null;
   }>(`${q.sql} ORDER BY b`, q.params);
   return rows.map(({ b, ...r }) => ({ ...bucketInfo(b, g), ...r }));
 }
@@ -295,12 +314,14 @@ export async function areaTrendPoints(
     f, g, windowSize, first, last,
     lv.expr,
     `${lv.condition} AND `,
-    `quantile_cont(price_per_sqm, 0.5)::DOUBLE AS "medianPricePerSqm"`,
+    `${quantile("price_per_sqm", 0.5)} AS "medianPricePerSqm", ${HOUSE_SHARE} AS "houseShare"`,
     lv.noArea,
   );
-  const rows = await db.query<{ area: string; b: number; count: number; medianPricePerSqm: number }>(q.sql, q.params);
+  const rows = await db.query<{
+    area: string; b: number; count: number; medianPricePerSqm: number | null; houseShare: number | null;
+  }>(q.sql, q.params);
   return rows
-    .map(({ area, b, count, medianPricePerSqm }) => ({ id: area, ...bucketInfo(b, g), count, medianPricePerSqm }))
+    .map(({ area, b, ...r }) => ({ id: area, ...bucketInfo(b, g), ...r }))
     .sort((a, b) =>
       a.period === b.period
         ? a.id.localeCompare(b.id, undefined, { numeric: true })
