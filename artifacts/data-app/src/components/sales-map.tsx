@@ -4,6 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { SalePoint, GeoFeatureCollection } from "@workspace/api-client-react";
 import { eur, sqm, num } from "@/lib/fmt";
+import { escapeHtml } from "@/lib/escape";
 import { featureId, type MapFeature } from "@/lib/areas";
 import { useChartColors } from "@/components/ui-bits";
 
@@ -19,7 +20,7 @@ function PointsLayer({ points, scale, boundaries, stateOf }: { points: SalePoint
     for (const p of points) {
       const m = L.circleMarker([p.lat, p.lon], { radius: 3, weight: 0, fillOpacity: 0.78, fillColor: scale(p.pricePerSqm) });
       m.bindTooltip(
-        () => `<div class="pt-title">${p.address}</div><div class="pt-sub">${p.areaName}</div><div>${p.type === "Maison" ? "House" : "Apartment"} of ${num(p.surface)} m², sold on ${p.date.slice(0, 10)}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`,
+        () => `<div class="pt-title">${escapeHtml(p.address)}</div><div class="pt-sub">${escapeHtml(p.areaName)}</div><div>${p.type === "Maison" ? "House" : "Apartment"} of ${num(p.surface)} m², sold on ${p.date.slice(0, 10)}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`,
         { className: "pt", sticky: true }
       );
       // The dot takes the click, so pass it to the boundary under the dot's centre. Leaflet gives a marker event the

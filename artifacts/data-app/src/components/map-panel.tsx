@@ -5,6 +5,7 @@ import {
   type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter,
 } from "@workspace/api-client-react";
 import { Play, Pause, RotateCcw } from "lucide-react";
+import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend } from "@/components/ui-bits";
@@ -88,7 +89,7 @@ export function MapPanel(props: {
     return (label ? `<div>${label}</div>` : "") + (warning ? `<div class="pt-sub" style="white-space:normal;width:250px">${warning}</div>` : "");
   };
   const tooltipFor = (id: string, p: MapFeature) => {
-    const title = `<div class="pt-title">${p.name}</div>`;
+    const title = `<div class="pt-title">${escapeHtml(p.name)}</div>`;
     if (mode === "dots") return title;
     const sub = p.group ? (p.group === "major" ? "Major town" : DEPARTMENT_NAMES[p.group as DepartmentId]) : p.id ? `${arrLabel(p.arr as number)} arrondissement` : "";
     const head = title + (sub ? `<div class="pt-sub">${sub}</div>` : "");
