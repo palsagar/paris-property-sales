@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Data rule
 
-Never commit `artifacts/api-server/data/sales.duckdb` or `data-raw/src/`. The raw files link prices to street addresses and exact coordinates, and the built file holds street names and positions rounded to about 100 m. The repository is public. The DVF reuse conditions are the reason. See "Data and licences" in `README.md`. A fresh clone has neither file, so run the two data scripts below first.
+Never commit `artifacts/api-server/data/sales.duckdb` or `data-raw/src/`. The raw files link prices to street addresses and exact coordinates, and the built file holds street names and positions rounded to about 100 m. The repository is public. The DVF reuse conditions are the reason. See "Data and licences" in `README.md`. A fresh clone has neither file, so run the update command below first.
 
 ## Documentation
 
@@ -21,9 +21,9 @@ The repository has no linter. The automated checks are `pnpm run typecheck`, the
 pnpm is not installed globally on this machine. Use `npx -y pnpm@10.26.1` in place of `pnpm`, or install pnpm first.
 
 ```sh
-# Data: required once per clone. The download is about 610 MB and takes about a minute and a half.
-python3 scripts/fetch_dvf.py            # writes data-raw/src/paris.csv
-uv run scripts/build_paris_sales.py     # writes artifacts/api-server/data/sales.duckdb
+# Data: required once per clone, and again after each DVF release. The download is about 610 MB and takes about a minute and a half.
+# This runs fetch_dvf.py and then build_paris_sales.py, and the build checks the release before it replaces sales.duckdb.
+uv run scripts/update_data.py           # writes data-raw/src/paris.csv and artifacts/api-server/data/sales.duckdb
 
 # Run everything in one container on http://localhost:3000. Compose mounts the data folder.
 docker compose up --build -d
@@ -65,7 +65,7 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 
 **Two pieces of code depend on the exact requests the dashboard makes.**
 - `lib/responseCache.ts` caches successful `/api` GETs in memory, up to a limit in total bytes. The key is the path plus the query after validation, with the same Zod schema the route uses, so the cache and the route always agree on what a request means. A new route is not cached until you add it and its schema to `QUERY_SCHEMAS`. The cache assumes that the data never changes while the process runs, so a server must restart to show new data.
-- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 2,600 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
+- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 2,800 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
 
 **The dashboard is one page.** `pages/dashboard.tsx` owns the view and passes filters to the panels in `components/`. Each panel fetches its own data through the generated hooks. The view state (`lib/view-state.ts`) is mirrored into the URL query string, and links depend on it, so a new filter belongs there. Charts use Recharts, and the map uses Leaflet.
 
@@ -76,4 +76,3 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 - This project came from a Replit template. `lib/db`, `scripts/src/hello.ts`, the root `@replit/connectors-sdk` dependency and the `@replit/*` Vite plugins are leftovers. Nothing imports `@workspace/db` or the connectors SDK. Most of `components/ui/` is an unused UI kit, so check for imports before you rely on or edit a component there.
 - `pnpm-workspace.yaml` still has `'-'` overrides for `@expo/ngrok-bin`. They do no harm. Do not restore the overrides for `rollup`, `esbuild`, `lightningcss` or `@tailwindcss/oxide`, because those break the build on every platform except Linux x64.
 - `minimumReleaseAge: 1440` in `pnpm-workspace.yaml` makes pnpm reject package versions published less than a day ago.
-- If the data's end date changes, several hardcoded places need an update. "Update the data" in `README.md` lists them.

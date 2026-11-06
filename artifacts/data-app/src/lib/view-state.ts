@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { nearestValidPeriod } from "./period";
 import type { PropertyTypeParameter, GranularityParameter } from "@workspace/api-client-react";
 
 export type Area = { kind: "all" } | { kind: "arr"; arr: number } | { kind: "q"; id: string };
@@ -39,8 +40,14 @@ function read(): ViewState {
 }
 
 /** View state mirrored into the query string so a link reproduces the view. */
-export function useViewState() {
-  const [state, setState] = useState<ViewState>(read);
+export function useViewState(datasetFrom: string, datasetTo: string) {
+  // The first state holds the moved dates, so no request uses the expired ones.
+  const [first] = useState(() => {
+    const s = read();
+    const p = nearestValidPeriod(s.from, s.to, datasetFrom, datasetTo);
+    return { state: { ...s, from: p.from, to: p.to }, movedTo: p.moved ? { from: p.from, to: p.to } : null };
+  });
+  const [state, setState] = useState<ViewState>(first.state);
   useEffect(() => {
     const sp = new URLSearchParams();
     if (state.ptype !== "all") sp.set("type", state.ptype);
@@ -55,5 +62,5 @@ export function useViewState() {
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
   }, [state]);
   const patch = (p: Partial<ViewState>) => setState((s) => ({ ...s, ...p }));
-  return [state, patch] as const;
+  return [state, patch, first.movedTo] as const;
 }

@@ -24,18 +24,21 @@ flowchart LR
 
 ## Data pipeline
 
-The pipeline has two Python scripts, and it runs outside the application. The first uses only the standard library. The second runs with `uv` and needs the `duckdb` package.
+The pipeline has three Python scripts, and it runs outside the application. `uv` runs them and installs the `duckdb` package.
 
-1. `scripts/fetch_dvf.py` streams the national DVF file, keeps the rows for department 75, and writes `data-raw/src/paris.csv`. The download is about 610 MB.
-2. `scripts/build_paris_sales.py` reads `paris.csv` and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It also assigns each Sale to a Quartier by its coordinates. It writes `sales.duckdb` to `artifacts/api-server/data/` and the two boundary files to `artifacts/api-server/boundaries/`.
+1. `scripts/fetch_dvf.py` finds the latest five-year DVF file on data.gouv.fr by its resource title, streams it, keeps the rows for department 75, and writes `data-raw/src/paris.csv` and `data-raw/src/release.txt`. The download is about 610 MB.
+2. `scripts/build_paris_sales.py` reads `paris.csv`, `release.txt` and the raw boundary files. It groups rows into Mutations and applies the inclusion rules described in [decision record 4](adr/0004-sale-inclusion-rules.md). It also assigns each Sale to a Quartier by its coordinates. It writes `sales.duckdb`, which records the release month, to `artifacts/api-server/data/`, and the two boundary files to `artifacts/api-server/boundaries/`.
+3. `scripts/update_data.py` runs the first script and then the second. Both scripts also run alone, so a rebuild does not need another download.
+
+Before the build replaces any file, it checks the new release. The release must have the expected columns. Its Sale count must be within 15% of the previous file. Every Arrondissement and every Quartier must have Sales. Every date must be in ISO format. No Sale may be dated after the release month. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason, exits with an error, and leaves the previous `sales.duckdb` and the boundary files in place.
 
 | Output file | Contents | In git |
 | --- | --- | --- |
-| `data/sales.duckdb` | 128,114 Sales and the exclusion counts | No |
+| `data/sales.duckdb` | The Sales, the exclusion counts and the release month | No |
 | `boundaries/arrondissements.geojson` | The boundaries of the 20 Arrondissements | Yes |
 | `boundaries/quartiers.geojson` | The boundaries of the 80 Quartiers | Yes |
 
-The November 2026 download reproduces the same 128,114 Sales as the original dataset. A later DVF release can change the figures, because the DGFiP can correct past periods.
+A new DVF release can change the figures, because the DGFiP can correct past periods.
 
 ## API contract
 
@@ -71,7 +74,7 @@ sequenceDiagram
 - **Sales file:** `salesData.ts` opens `sales.duckdb` when the process starts. `salesDb.ts` opens it read-only and uses one connection for each query. See [decision record 7](adr/0007-duckdb-rebuilt-for-each-release.md).
 - **Calculations:** `routes/sales.ts` calls `salesQueries.ts`, which holds all the SQL and calculates each response from the matching Sales. `timeStats.ts` holds the time buckets and the SQL for the Change.
 - **Response cache:** `responseCache.ts` keeps responses in memory, up to 256 MB in total, and removes the least recently used first. The key is the path plus the query after validation, with the same schema the route uses. Unknown parameters and different spellings of a value therefore share one entry, and the cache and the route always agree on what a request means. A path that is not listed in `QUERY_SCHEMAS` is not cached.
-- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. In testing, it stored 2,610 responses in about 17 seconds. The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
+- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. In testing, it stored 2,804 responses in about 22 seconds. The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
 
 ## Dashboard
 
@@ -111,13 +114,15 @@ The image sets `PORT`, `STATIC_DIR` and `NODE_ENV`, so the application needs no 
 
 ### Update the data
 
-DVF is published as a series of releases. After each DVF release:
+DGFiP publishes a DVF release each April and October. After each release:
 
-1. Follow "Update the data" in the [README](../README.md#update-the-data) on your machine.
-2. Run the `rsync` command above.
+1. Run `uv run scripts/update_data.py` on your machine, as the [README](../README.md#update-the-data) explains.
+2. Run the `rsync` command in "First deployment" above.
 3. Restart the application in Coolify. The image does not need a rebuild.
 
-Coolify's storage is not a backup, but the data does not need one. The two scripts can rebuild it from the source for as long as DVF publishes those periods.
+If a release needs a new image as well, copy the new file before the new image starts. The server stops at startup when the file has no release month.
+
+Coolify's storage is not a backup, but the data does not need one. The scripts can rebuild it from the source for as long as DVF publishes those periods.
 
 ## Before public launch
 
@@ -140,14 +145,12 @@ These items do not block launch.
 - A clear statement that the site gives no Valuation, and warnings for small samples.
 - Copy fixes: "Every recorded" in the introduction, "of this selection" in the data note, "Carrez or built surface" on the surface card, and "transactions" in the sales list.
 - A warning for a Change over a Period of less than 12 months.
-- Removal of the hardcoded dates, so that a new DVF release needs fewer manual edits.
 - A proxy for `/api` in the Vite development server.
 - Removal of the unused template code: `lib/db`, `scripts/src/hello.ts`, the Replit dependencies and the unused UI components.
 
 ## Planned work
 
-This document describes the site as it is today. The next iteration adds the Communes around Paris. It has three parts, in this order, and the public launch follows them.
+This document describes the site as it is today. The next iteration adds the Communes around Paris. It has two parts, in this order, and the public launch follows them.
 
-1. [Take all dates from the data, and check each DVF update](https://github.com/palsagar/paris-property-sales/issues/3).
-2. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
-3. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).
+1. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
+2. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).

@@ -5,7 +5,7 @@
 """Builds the cleaned Paris residential sales dataset used by the API server.
 
 Source: DVF géolocalisées (data.gouv.fr), the five-year file filtered to department 75.
-Inputs (in data-raw/, not committed): src/paris.csv, arr.geojson, q2.geojson
+Inputs (in data-raw/, not committed): src/paris.csv, src/release.txt, arr.geojson, q2.geojson
 Outputs: artifacts/api-server/data/sales.duckdb (not committed), and
 artifacts/api-server/boundaries/arrondissements.geojson and quartiers.geojson.
 
@@ -16,9 +16,11 @@ Run: uv run scripts/build_paris_sales.py
 import csv
 import json
 import os
+import re
 import tempfile
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import date
 from typing import Any, TypedDict
 
 import duckdb
@@ -35,6 +37,14 @@ MIN_SURFACE, MAX_SURFACE = 9, 300
 MIN_PPSM, MAX_PPSM = 2_000, 35_000
 # Three decimal places of a degree are about 100 m, too coarse to find one building.
 POSITION_DECIMALS = 3
+# A new release may change the Sale count by at most this share of the previous count.
+MAX_COUNT_CHANGE = 0.15
+# The columns of the DVF file that this script reads.
+EXPECTED_COLUMNS = (
+    "id_mutation", "date_mutation", "nature_mutation", "valeur_fonciere", "adresse_nom_voie",
+    "code_commune", "type_local", "surface_reelle_bati", "nombre_pieces_principales",
+    "longitude", "latitude",
+)
 
 
 class Sale(TypedDict):
@@ -302,7 +312,168 @@ def classify_mutation(
     }
 
 
-def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> None:
+def check_columns(fieldnames: Sequence[str] | None) -> list[str]:
+    """Find the expected DVF columns that the file does not have.
+
+    Parameters
+    ----------
+    fieldnames : sequence of str or None
+        The header of the CSV file, or None when the file is empty.
+
+    Returns
+    -------
+    list of str
+        The reasons for failure. The list is empty when every column is present.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        reasons = check_columns(["id_mutation", "date_mutation"])
+        # ["The file has no column valeur_fonciere, ..."]
+    """
+    if fieldnames is None:
+        return ["The file has no header row."]
+    missing = [c for c in EXPECTED_COLUMNS if c not in fieldnames]
+    return [f"The file has no column {c}." for c in missing]
+
+
+def read_previous(path: str) -> tuple[int, str] | None:
+    """Read the Sale count and the end date of an existing Sales file.
+
+    Parameters
+    ----------
+    path : str
+        The DuckDB file written by ``write_database``.
+
+    Returns
+    -------
+    tuple of (int, str) or None
+        The number of Sales and the latest Sale date, or None when the file
+        does not exist.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        previous = read_previous("artifacts/api-server/data/sales.duckdb")
+        # (62000, "2026-06-30")
+    """
+    if not os.path.exists(path):
+        return None
+    con = duckdb.connect(path, read_only=True)
+    try:
+        row = con.execute("SELECT count(*), max(sale_date) FROM sales").fetchone()
+    finally:
+        con.close()
+    assert row is not None
+    return row[0], row[1]
+
+
+def check_release(
+    sales: Sequence[Sale],
+    previous: tuple[int, str] | None,
+    arrondissements: Iterable[int],
+    quartiers: Iterable[str],
+    release_month: str,
+) -> list[str]:
+    """Decide whether a new release is safe to replace the existing file.
+
+    The checks are: the release has Sales, every date is in ISO format, no
+    Sale is dated after the release month, the Sale count is within
+    ``MAX_COUNT_CHANGE`` of the previous count, every Arrondissement and
+    Quartier has a Sale, and the end date is not earlier than the previous one.
+
+    Parameters
+    ----------
+    sales : sequence of Sale
+        The Sales of the new release.
+    previous : tuple of (int, str) or None
+        The Sale count and end date of the existing file, or None when there is none.
+    arrondissements : iterable of int
+        Every Arrondissement number of the boundary file.
+    quartiers : iterable of str
+        Every Quartier id of the boundary file.
+    release_month : str
+        The month of the release, as ``YYYY-MM``. No Sale may be dated after it.
+
+    Returns
+    -------
+    list of str
+        The reasons for failure. The list is empty on success.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        reasons = check_release(sales, (62000, "2026-06-30"), range(1, 21), quartier_ids, "2026-10")
+        if reasons:
+            raise SystemExit("\\n".join(reasons))
+    """
+    if not sales:
+        return ["No Sales: the file has no usable rows."]
+    # A string comparison of dates is correct only for ISO dates, so check them first.
+    bad_dates = sorted({s["date"] for s in sales if not _is_iso_date(s["date"])})
+    if bad_dates:
+        return [f"Dates not in YYYY-MM-DD format, for example {bad_dates[0]}."]
+    reasons: list[str] = []
+    end_date = max(s["date"] for s in sales)
+    # One mistyped future date would become the end date and lock out every corrected release.
+    if end_date[:7] > release_month:
+        reasons.append(f"The end date {end_date} is later than the release month {release_month}.")
+    if previous is not None:
+        count, previous_end = previous
+        change = (len(sales) - count) / count
+        if abs(change) > MAX_COUNT_CHANGE:
+            reasons.append(
+                f"Sale count changed by {change:+.1%} ({count} to {len(sales)}). "
+                f"The limit is {MAX_COUNT_CHANGE:.0%}."
+            )
+        if end_date < previous_end:
+            reasons.append(f"The end date {end_date} is earlier than the previous end date {previous_end}.")
+    seen_arr = {s["arr"] for s in sales}
+    seen_quartier = {s["quartier"] for s in sales}
+    empty_arr = sorted(set(arrondissements) - seen_arr)
+    if empty_arr:
+        reasons.append(f"Arrondissements with no Sales: {', '.join(map(str, empty_arr))}.")
+    empty_quartier = sorted(set(quartiers) - seen_quartier)
+    if empty_quartier:
+        reasons.append(f"Quartiers with no Sales: {', '.join(empty_quartier)}.")
+    return reasons
+
+
+def _is_iso_date(value: str) -> bool:
+    """Tell whether a string is a valid ``YYYY-MM-DD`` date.
+
+    Parameters
+    ----------
+    value : str
+        The text to test.
+
+    Returns
+    -------
+    bool
+        True when ``value`` has exactly four, two and two digits separated by
+        hyphens and names a real calendar day.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        _is_iso_date("2026-06-30")  # True
+        _is_iso_date("20260630")    # False
+    """
+    # Python 3.11 also reads forms such as 20260630 and 2026-W26-2, which sort wrongly.
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def write_database(sales: list[Sale], stats: Mapping[str, int], release_month: str, path: str) -> None:
     """Write the Sales and the exclusion counts to a DuckDB file.
 
     The data goes to ``<path>.part`` first and replaces ``path`` only after
@@ -314,6 +485,8 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
         The Sales to store. Their positions are already rounded. The list must not be empty.
     stats : mapping of str to int
         The number of mutations per outcome, such as ``kept``.
+    release_month : str
+        The month of the DVF release as ``YYYY-MM``. It goes to the metadata table.
     path : str
         Where to write the file.
 
@@ -321,7 +494,7 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
     --------
     .. code-block:: python
 
-        write_database(sales, stats, "artifacts/api-server/data/sales.duckdb")
+        write_database(sales, stats, "2026-10", "artifacts/api-server/data/sales.duckdb")
     """
     if not sales:
         raise ValueError("No Sales to write. The input has no usable rows, so the existing file stays unchanged.")
@@ -361,6 +534,7 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
                 [csv_path],
             )
             con.execute("INSERT INTO metadata VALUES ('source', ?)", [SOURCE])
+            con.execute("INSERT INTO metadata VALUES ('release_month', ?)", [release_month])
             con.executemany("INSERT INTO filter_counts VALUES (?, ?)", list(stats.items()))
         finally:
             con.close()
@@ -374,9 +548,11 @@ def write_database(sales: list[Sale], stats: Mapping[str, int], path: str) -> No
 def main() -> None:
     """Build the Sales database and the boundary files.
 
-    The function reads the boundaries and ``data-raw/src/paris.csv``, groups the
-    rows by mutation, keeps the mutations that count as one Sale, and writes
-    ``sales.duckdb`` and the two boundary GeoJSON files. It prints the
+    The function reads the boundaries, ``data-raw/src/paris.csv`` and
+    ``data-raw/src/release.txt``, groups the rows by mutation, and keeps the
+    mutations that count as one Sale. It checks the release against the
+    existing file and exits with the reasons when a check fails. Only then does
+    it write ``sales.duckdb`` and the two boundary GeoJSON files. It prints the
     exclusion counts and the period of the data.
 
     Examples
@@ -385,6 +561,11 @@ def main() -> None:
 
         main()
     """
+    try:
+        with open(os.path.join(RAW, "src", "release.txt"), encoding="utf-8") as f:
+            release_month = f.read().strip()
+    except FileNotFoundError:
+        raise SystemExit("data-raw/src/release.txt is missing. Run scripts/fetch_dvf.py first.")
     arr_geo = load_geo(
         os.path.join(RAW, "arr.geojson"),
         lambda p: {"arr": int(p["c_ar"]), "name": p["l_aroff"]},
@@ -397,7 +578,11 @@ def main() -> None:
 
     mutations: dict[str, list[dict[str, str]]] = defaultdict(list)
     with open(os.path.join(RAW, "src", "paris.csv"), encoding="utf-8", newline="") as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        reasons = check_columns(reader.fieldnames)
+        if reasons:
+            raise SystemExit("\n".join(reasons))
+        for row in reader:
             mutations[row["id_mutation"]].append(row)
 
     stats: dict[str, int] = defaultdict(int)
@@ -409,10 +594,25 @@ def main() -> None:
         if sale is not None:
             sales.append(sale)
 
+    db_path = os.path.join(OUT, "sales.duckdb")
+    previous = read_previous(db_path)
+    if previous is None:
+        # Without a previous file the two comparison checks cannot run, so say so.
+        print("No previous sales.duckdb, so the Sale count and end date checks did not run.")
+    reasons = check_release(
+        sales,
+        previous,
+        [ft["properties"]["arr"] for ft in arr_geo["features"]],
+        [ft["properties"]["id"] for ft in quartier_geo["features"]],
+        release_month,
+    )
+    if reasons:
+        raise SystemExit("\n".join(reasons))
+
     sales.sort(key=lambda s: s["date"], reverse=True)
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(BOUNDARIES, exist_ok=True)
-    write_database(sales, stats, os.path.join(OUT, "sales.duckdb"))
+    write_database(sales, stats, release_month, db_path)
     with open(os.path.join(BOUNDARIES, "arrondissements.geojson"), "w", encoding="utf-8") as f:
         json.dump(arr_geo, f, separators=(",", ":"))
     with open(os.path.join(BOUNDARIES, "quartiers.geojson"), "w", encoding="utf-8") as f:

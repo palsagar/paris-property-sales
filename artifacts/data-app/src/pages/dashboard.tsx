@@ -5,11 +5,11 @@ import {
   useGetSalesByArrondissement, getGetSalesByArrondissementQueryKey,
   useGetAreaTrend, getGetAreaTrendQueryKey,
   useGetArrondissementBoundaries, useGetQuartierBoundaries,
-  type PropertyTypeParameter,
+  type PropertyTypeParameter, type YearRange,
 } from "@workspace/api-client-react";
 import { RefreshCw, ChevronDown, Check, Sun, Moon, Printer, X, Info, MapPin } from "lucide-react";
 import { useViewState, type MapLevel } from "@/lib/view-state";
-import { makeScale, arrLabel, rangeLabel, quantile, num, sqm, pct } from "@/lib/fmt";
+import { makeScale, arrLabel, rangeLabel, longMonthLabel, quantile, num, sqm, pct } from "@/lib/fmt";
 import { btnCls, FetchDot } from "@/components/ui-bits";
 import { TimeControl } from "@/components/time-control";
 import { Kpis } from "@/components/kpis";
@@ -29,11 +29,27 @@ const INTERVAL_OPTIONS = [
   { label: "Every 24 hours", ms: 24 * 60 * 60 * 1000 },
 ];
 const DATA_SOURCES = ["DVF open data (DGFiP)", "Paris OpenData boundaries"];
-const COVERAGE = "Jan 2022 - Jun 2026, latest official release";
 
+// Wait for the dates: the first state of the view needs them to move an expired link.
 export default function Dashboard() {
+  const first = useGetSalesSummary({ propertyType: "all" });
+  if (!first.data) {
+    return first.isError ? (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3 bg-background text-[14px]" data-testid="dashboard-error">
+        <p>The sales data did not load.</p>
+        <button onClick={() => first.refetch()} data-testid="button-retry" className={`h-8 px-3 rounded-md ${btnCls}`}>Try again</button>
+      </div>
+    ) : (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background text-[14px] text-muted-foreground" data-testid="dashboard-loading">Loading the sales data...</div>
+    );
+  }
+  const { datasetFrom, datasetTo, releaseMonth, years } = first.data;
+  return <DashboardView datasetFrom={datasetFrom} datasetTo={datasetTo} releaseMonth={releaseMonth} years={years} />;
+}
+
+function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datasetFrom: string; datasetTo: string; releaseMonth: string; years: YearRange[] }) {
   const qc = useQueryClient();
-  const [view, patch] = useViewState();
+  const [view, patch, movedTo] = useViewState(datasetFrom, datasetTo);
   const { ptype, area, from, to, mapMode, mapLevel, gran } = view;
   const [isDark, setIsDark] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -75,8 +91,6 @@ export default function Dashboard() {
   const hp = { level: "arrondissement" as const, propertyType: ptype, from, to, granularity: "quarter" as const, window: 1 };
   const heat = useGetAreaTrend(hp, { query: { queryKey: getGetAreaTrendQueryKey(hp) } });
 
-  const datasetFrom = summary.data?.datasetFrom ?? "2022-01-01";
-  const datasetTo = summary.data?.datasetTo ?? "2026-06-30";
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
 
   const fetchingCount = useIsFetching();
@@ -116,7 +130,10 @@ export default function Dashboard() {
       <div className="max-w-[1480px] mx-auto">
         {/* Masthead: one line */}
         <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b-2 border-foreground pb-2">
-          <div className="font-display font-bold text-[20px] leading-tight" data-testid="text-title">Paris Property Sales</div>
+          <div className="flex flex-wrap items-baseline gap-x-4">
+            <div className="font-display font-bold text-[20px] leading-tight" data-testid="text-title">Paris Property Sales</div>
+            <div className="text-[13px] text-muted-foreground" data-testid="text-coverage">Data to {longMonthLabel(datasetTo)}, {longMonthLabel(releaseMonth)} release</div>
+          </div>
           <div className="flex items-center gap-2 print:hidden">
             <div className="relative" ref={dropdownRef}>
               <div className={`flex items-center rounded-md overflow-hidden h-8 text-[13px] ${btnCls}`}>
@@ -153,9 +170,9 @@ export default function Dashboard() {
         {/* Intro band: scrolls away, the filter bar below stays sticky */}
         <section className="py-3 md:py-4 border-b flex flex-wrap items-end justify-between gap-x-8 gap-y-3" data-testid="intro">
           <div className="max-w-[760px]">
-            <h1 className="font-display font-bold text-[24px] md:text-[32px] leading-[1.1]" data-testid="text-headline">What homes in Paris have sold for since January 2022, and where prices moved</h1>
+            <h1 className="font-display font-bold text-[24px] md:text-[32px] leading-[1.1]" data-testid="text-headline">What homes in Paris have sold for since {longMonthLabel(datasetFrom)}, and where prices moved</h1>
             <p className="mt-1.5 text-[14px] md:text-[15px] text-muted-foreground leading-snug">
-              Every recorded apartment and house sale from the DGFiP's Demandes de valeurs foncières, from January 2022 to June 2026, the latest official release.
+              Every recorded apartment and house sale from the DGFiP's Demandes de valeurs foncières, from {longMonthLabel(datasetFrom)} to {longMonthLabel(datasetTo)}, the latest official release.
               <span className="hidden md:inline"> Pick a period, a property type or an area, or click the map to drill down.</span>
             </p>
           </div>
@@ -170,7 +187,7 @@ export default function Dashboard() {
 
         {/* Sticky filters: time, property type, area */}
         <div className="md:sticky top-0 z-[500] -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-3 bg-background border-b space-y-2 print:static">
-          <TimeControl ptype={ptype} areaParams={areaParams} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
+          <TimeControl ptype={ptype} areaParams={areaParams} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
             onChange={(f, t) => patch({ from: f, to: t })} isDark={isDark} />
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div className="flex items-center gap-2">
@@ -195,6 +212,11 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+        {movedTo && from === movedTo.from && to === movedTo.to && (
+          <p className="mb-3 text-[13px] text-muted-foreground print:hidden" data-testid="period-moved-notice">
+            The dates in this link are outside the latest DVF release, so the Period moved to {rangeLabel(ef, et)}.
+          </p>
+        )}
 
         <main>
           {/* Map first */}
@@ -225,7 +247,7 @@ export default function Dashboard() {
           <Kpis s={summary.data} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
 
           <div className="mb-4">
-            <HeroTrend filters={filters} areaName={areaName} hasArea={area.kind !== "all"} isQuartier={area.kind === "q"} gran={gran} setGran={(g) => patch({ gran: g })} isDark={isDark} />
+            <HeroTrend filters={filters} areaName={areaName} hasArea={area.kind !== "all"} isQuartier={area.kind === "q"} gran={gran} setGran={(g) => patch({ gran: g })} isDark={isDark} years={years} />
           </div>
 
           <div className="mb-4">
@@ -256,7 +278,7 @@ export default function Dashboard() {
         </main>
 
         <footer className="mt-6 pt-4 border-t text-[13px] text-muted-foreground flex flex-wrap justify-between gap-2">
-          <span>Source: DVF, Direction générale des Finances publiques. {COVERAGE}. Nominal euros.</span>
+          <span>Source: DVF, Direction générale des Finances publiques. {rangeLabel(datasetFrom, datasetTo)}, {longMonthLabel(releaseMonth)} release. Nominal euros.</span>
           <span>Basemap tiles &copy; Esri.</span>
         </footer>
       </div>

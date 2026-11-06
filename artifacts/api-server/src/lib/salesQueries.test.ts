@@ -194,3 +194,122 @@ test("an offset beyond the INTEGER range gives an empty page", async () => {
   const past = await transactionPage(db, {}, "price", "asc", 15, 3_000_000_000);
   assert.deepEqual([past.total, past.items], [5, []]);
 });
+
+/** A Sale of 10 m² at the given Price per m², so its price is ten times that. */
+function ppsmSale(id: string, date: string, ppsm: number, arr = 1, quartier: string | null = null): FixtureSale {
+  return {
+    id, date, type: "Appartement", price: ppsm * 10, surface: 10, pricePerSqm: ppsm,
+    rooms: 1, arr, quartier, lon: null, lat: null, street: "Rue X",
+  };
+}
+
+const repeat = (prefix: string, n: number, date: string, ppsm: number, arr = 1) =>
+  Array.from({ length: n }, (_, i) => ppsmSale(`${prefix}${i}`, date, ppsm, arr));
+
+test("Area Change compares the first and last Change window of each Area", async () => {
+  // Period 2023-01-01 to 2023-12-31: 12 months, so each Change window covers 6 months.
+  const areaChangeDb = await createSalesFixture([
+    // Arrondissement 1: 5 Sales at 10,000 then 5 at 12,000. (12,000 - 10,000) / 10,000 = +20%.
+    ...repeat("a", 5, "2023-02-10", 10000, 1), ...repeat("b", 5, "2023-11-10", 12000, 1),
+    // Arrondissement 2: 5 Sales at the start but only 4 at the end, so there is no Change.
+    ...repeat("c", 5, "2023-02-10", 10000, 2), ...repeat("d", 4, "2023-11-10", 12000, 2),
+    // Arrondissement 3: start median of 6000, 8000, 10000, 12000, 14000 is 10,000. End median is 9,000. -10%.
+    ...[6000, 8000, 10000, 12000, 14000].map((p, i) => ppsmSale(`e${i}`, "2023-02-10", p, 3)),
+    ...repeat("f", 5, "2023-11-10", 9000, 3),
+  ]);
+  const rows = await areaStats(areaChangeDb, {}, "arrondissement", changeWindows("2023-01-01", "2023-12-31"));
+  assert.deepEqual(rows.map((r) => [r.area, r.count]), [["1", 10], ["2", 9], ["3", 10]]);
+  assert.deepEqual([rows[0]!.startMedianPricePerSqm, rows[0]!.endMedianPricePerSqm], [10000, 12000]);
+  assert.ok(Math.abs(rows[0]!.changePct! - 20) < 1e-9);
+  assert.deepEqual([rows[1]!.startMedianPricePerSqm, rows[1]!.endMedianPricePerSqm, rows[1]!.changePct], [null, null, null]);
+  assert.deepEqual([rows[2]!.startMedianPricePerSqm, rows[2]!.endMedianPricePerSqm], [10000, 9000]);
+  assert.ok(Math.abs(rows[2]!.changePct! + 10) < 1e-9);
+});
+
+test("without Change windows, Area figures have no Change", async () => {
+  const rows = await areaStats(db, {}, "arrondissement", null);
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((r) => r.changePct === null && r.startMedianPricePerSqm === null));
+});
+
+test("distribution on Price per m²", async () => {
+  // Prices per m² are 6000, 10000, 10000, 10000, 20000. Quantiles interpolate at position q * (5 - 1).
+  // p99 sits at position 3.96: 10000 + 0.96 * 10000 = 19600.
+  // Raw bin width (19600 - 6000) / 45 = 302.2, so the nice step is 500. The first bin starts at 6000.
+  // The bin count is ceil((19600 - 6000) / 500) = 28.
+  const d = await distribution(db, {}, "price_per_sqm", 45);
+  assert.equal(d.bins.length, 28);
+  assert.deepEqual(d.bins[0], { from: 6000, to: 6500, count: 1 });
+  // 10000 falls in bin (10000 - 6000) / 500 = 8, which holds three Sales.
+  assert.deepEqual(d.bins[8], { from: 10000, to: 10500, count: 3 });
+  // 20000 is above the 99th percentile, so no bin counts it.
+  assert.equal(d.bins.reduce((n, b) => n + b.count, 0), 4);
+  assert.equal(d.mean, 11200); // (6000 + 30000 + 20000) / 5
+  assert.equal(d.median, 10000);
+  assert.equal(d.p25, 10000); // position 1
+  assert.equal(d.p75, 10000); // position 3
+  assert.ok(Math.abs(d.p10 - 7600) < 1e-6); // position 0.4: 6000 + 0.4 * 4000
+  assert.ok(Math.abs(d.p90 - 16000) < 1e-6); // position 3.6: 10000 + 0.6 * 10000
+});
+
+// Change windows for 2023-01-01 to 2023-06-15: 6 months, so each covers 3 months.
+// The start window is before 2023-04-01 (exclusive). The end window is after 2023-03-15 (exclusive). They overlap.
+const boundaryWindows = changeWindows("2023-01-01", "2023-06-15");
+
+async function changeWith(extra: FixtureSale[], startCount: number, endCount: number) {
+  const dbForCase = await createSalesFixture([
+    ...repeat("s", startCount, "2023-01-10", 10000),
+    ...repeat("e", endCount, "2023-06-10", 12000),
+    ...extra,
+  ]);
+  return (await summaryStats(dbForCase, {}, boundaryWindows)).changePct;
+}
+
+test("the start Change window excludes its upper bound", async () => {
+  assert.deepEqual(boundaryWindows && [boundaryWindows.startEnd, boundaryWindows.endStart], ["2023-04-01", "2023-03-15"]);
+  // 4 Sales in January plus one on 2023-04-01: the Sale on the bound is not in the start window, so it has 4 Sales.
+  assert.equal(await changeWith([ppsmSale("x", "2023-04-01", 10000)], 4, 5), null);
+  // A Sale on 2023-03-31 is inside the start window, so it has 5 Sales. Median 10,000 to 12,000 is +20%.
+  assert.ok(Math.abs((await changeWith([ppsmSale("x", "2023-03-31", 10000)], 4, 5))! - 20) < 1e-9);
+});
+
+test("the end Change window excludes its lower bound", async () => {
+  // 4 Sales in June plus one on 2023-03-15: the Sale on the bound is not in the end window, so it has 4 Sales.
+  assert.equal(await changeWith([ppsmSale("x", "2023-03-15", 12000)], 5, 4), null);
+  // A Sale on 2023-03-16 is inside the end window, so it has 5 Sales. Start median is 10,000 (5 of its 6 Sales). End is 12,000.
+  assert.ok(Math.abs((await changeWith([ppsmSale("x", "2023-03-16", 12000)], 5, 4))! - 20) < 1e-9);
+});
+
+test("trend quartiles of Price per m² follow the Smoothing window", async () => {
+  // Smoothing window 1, March: Sales at 10000 and 20000. p25 at position 0.25 is 12500, p75 at position 0.75 is 17500.
+  const one = await trendPoints(db, {}, "month", 1, month("2024-03-01"), month("2024-03-01"));
+  assert.deepEqual(
+    one.map((r) => [r.label, r.medianPricePerSqm, r.p25PricePerSqm, r.p75PricePerSqm]),
+    [["2024-03", 15000, 12500, 17500]],
+  );
+  // Smoothing window 2, February pools January and February: 6000, 10000, 10000.
+  // p25 at position 0.5 is 8000 and p75 at position 1.5 is 10000.
+  // March pools February and March: 6000, 10000, 20000. p25 is 8000, p75 at position 1.5 is 15000.
+  const two = await trendPoints(db, {}, "month", 2, month("2024-02-01"), month("2024-03-01"));
+  assert.deepEqual(
+    two.map((r) => [r.label, r.medianPricePerSqm, r.p25PricePerSqm, r.p75PricePerSqm]),
+    [["2024-02", 10000, 8000, 10000], ["2024-03", 10000, 8000, 15000]],
+  );
+});
+
+test("buckets beyond the first quarter and month of a year", async () => {
+  const yearDb = await createSalesFixture([
+    ppsmSale("q2a", "2024-04-01", 10000), ppsmSale("q2b", "2024-06-30", 10000),
+    ppsmSale("q3", "2024-09-30", 10000),
+    ppsmSale("q4a", "2024-10-01", 10000), ppsmSale("q4b", "2024-11-20", 10000), ppsmSale("q4c", "2024-12-31", 10000),
+  ]);
+  // Quarter ordinal is year * 4 + (month - 1) // 3: April and June give 2, September gives 2 (Q3 is index 2), November gives 3.
+  const q = await trendPoints(yearDb, {}, "quarter", 1, bucketOrdinal("2024-01-01", "quarter"), bucketOrdinal("2024-12-31", "quarter"));
+  assert.deepEqual(
+    q.map((r) => [r.label, r.period, r.count]),
+    [["2024 Q2", "2024-04-01", 2], ["2024 Q3", "2024-07-01", 1], ["2024 Q4", "2024-10-01", 3]],
+  );
+  // November alone sits in month ordinal 2024 * 12 + 10.
+  const m = await trendPoints(yearDb, {}, "month", 1, month("2024-11-01"), month("2024-12-01"));
+  assert.deepEqual(m.map((r) => [r.label, r.count]), [["2024-11", 1], ["2024-12", 1]]);
+});

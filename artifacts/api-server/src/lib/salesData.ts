@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openSalesDb, type SalesDb } from "./salesDb";
+import { yearRanges } from "./yearRanges";
 
 export interface GeoFeatureCollection {
   type: string;
@@ -40,6 +41,14 @@ const [dates] = await salesDb.query<{ from: string; to: string }>(
 const [source] = await salesDb.query<{ value: string }>(
   "SELECT value FROM metadata WHERE key = 'source'",
 );
+const [release] = await salesDb.query<{ value: string }>(
+  "SELECT value FROM metadata WHERE key = 'release_month'",
+);
+if (!release) {
+  throw new Error(
+    "sales.duckdb has no release month. Run scripts/update_data.py, copy the file and restart.",
+  );
+}
 // Residential sales that were dropped to keep price per m2 reliable.
 const [excluded] = await salesDb.query<{ total: number }>(
   `SELECT coalesce(sum(mutations), 0)::INTEGER AS total FROM filter_counts
@@ -54,8 +63,10 @@ const [excluded] = await salesDb.query<{ total: number }>(
 );
 
 export const datasetRange = { from: dates!.from, to: dates!.to };
+export const datasetYears = yearRanges(dates!.from, dates!.to);
 export const datasetMeta = {
   source: source!.value,
+  releaseMonth: release.value,
   excludedCount: excluded!.total,
 };
 
