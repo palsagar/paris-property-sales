@@ -12,7 +12,7 @@ import { RefreshCw, ChevronDown, Check, Sun, Moon, Printer, X, Info, MapPin } fr
 import { useViewState } from "@/lib/view-state";
 import { areaParams, featureArea, groupOfArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
-import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct } from "@/lib/fmt";
+import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct, houseShareLabel } from "@/lib/fmt";
 import { btnCls, FetchDot } from "@/components/ui-bits";
 import { TimeControl } from "@/components/time-control";
 import { Kpis } from "@/components/kpis";
@@ -162,6 +162,9 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
   const scopeLabel = `${typeLabel}, ${areaName}, ${rangeLabel(ef, et)}`;
   const lastRefreshed = summary.dataUpdatedAt ? new Date(summary.dataUpdatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
 
+  // A Selection of one type says nothing through its House share, and with no median there is nothing to note.
+  const introShare = ptype === "all" && summary.data?.medianPricePerSqm != null ? houseShareLabel(summary.data.houseShare) : null;
+
   const typeSentence = typeLabel[0].toUpperCase() + typeLabel.slice(1);
   const focusLine = summary.data ? `${typeSentence}, ${rangeLabel(ef, et)}: ${num(summary.data.count)} sales.` : `${typeSentence}, ${rangeLabel(ef, et)}.`;
 
@@ -217,11 +220,14 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
             </p>
           </div>
           {summary.data && (
-            <dl className="hidden xl:flex gap-8 text-right" data-testid="intro-figures">
-              <div><dt className="text-[13px] text-muted-foreground">Sales</dt><dd className="font-display font-bold text-[22px] text-primary">{num(summary.data.count)}</dd></div>
-              <div><dt className="text-[13px] text-muted-foreground">Median per m²</dt><dd className="font-display font-bold text-[22px] text-primary">{sqmOrTooFew(summary.data.medianPricePerSqm)}</dd></div>
-              <div><dt className="text-[13px] text-muted-foreground">Change over the period</dt><dd className="font-display font-bold text-[22px] text-primary">{summary.data.changePct != null ? pct(summary.data.changePct) : "n/a"}</dd></div>
-            </dl>
+            <div className="hidden xl:block text-right" data-testid="intro-figures">
+              <p className="text-[13px] font-medium mb-1" data-testid="text-intro-area">Figures for {areaName}</p>
+              <dl className="flex gap-8">
+                <div><dt className="text-[13px] text-muted-foreground">Sales</dt><dd className="font-display font-bold text-[22px] text-primary">{num(summary.data.count)}</dd></div>
+                <div><dt className="text-[13px] text-muted-foreground">Median per m²</dt><dd className="font-display font-bold text-[22px] text-primary">{sqmOrTooFew(summary.data.medianPricePerSqm)}</dd>{introShare && <dd className="text-[12.5px] text-muted-foreground" data-testid="text-intro-house-share">{introShare}</dd>}</div>
+                <div><dt className="text-[13px] text-muted-foreground">Change over the period</dt><dd className="font-display font-bold text-[22px] text-primary">{summary.data.changePct != null ? pct(summary.data.changePct) : "n/a"}</dd></div>
+              </dl>
+            </div>
           )}
         </section>
 

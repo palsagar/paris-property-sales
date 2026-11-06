@@ -17,9 +17,9 @@ export function Kpis({ s, ptype, loading, fetching, error }: { s?: SalesSummary;
     { label: "Sales recorded", value: num(s.count), sub: `${dateLabel(s.periodFrom)} to ${dateLabel(s.periodTo)}` },
     { label: "Median price", value: orTooFew(s.medianPrice, eur), sub: `Average ${orTooFew(s.averagePrice, eurShort)}`, note, change: s.priceChangePct, startEnd: [s.startMedianPrice, s.endMedianPrice, eurShort] },
     { label: "Median price per m²", value: sqmOrTooFew(s.medianPricePerSqm), sub: `Average ${sqmOrTooFew(s.averagePricePerSqm)}`, note, change: s.changePct, startEnd: [s.startMedianPricePerSqm, s.endMedianPricePerSqm, sqm] },
-    { label: "Total volume", value: eurShort(s.totalVolume), sub: "Sum of all sale prices" },
+    { label: "Total volume", value: s.count === 0 ? "No sales" : eurShort(s.totalVolume), sub: "Sum of all sale prices" },
     { label: "Median surface", value: orTooFew(s.medianSurface, (v) => `${num(v)} m²`), sub: "Carrez or built surface", note },
-    { label: "Price range", value: `${eurShort(s.minPrice)} - ${eurShort(s.maxPrice)}`, sub: "Cheapest and dearest sale" },
+    { label: "Price range", value: s.count === 0 ? "No sales" : `${eurShort(s.minPrice)} - ${eurShort(s.maxPrice)}`, sub: "Cheapest and dearest sale" },
   ] : [];
   return (
     <div className={`grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4 transition-opacity ${fetching && !loading ? "opacity-70" : ""}`}>
