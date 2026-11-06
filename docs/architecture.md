@@ -78,7 +78,7 @@ sequenceDiagram
 - **Areas:** a request with no Area means Paris. The Areas are the Arrondissement, the Quartier, the Department (92, 93 or 94) and the Commune.
 - **Calculations:** `routes/sales.ts` calls `salesQueries.ts`, which holds all the SQL and calculates each response from the matching Sales. `timeStats.ts` holds the time buckets and the SQL for the Change.
 - **Response cache:** `responseCache.ts` keeps responses in memory, up to 256 MB in total, and removes the least recently used first. The key is the path plus the query after validation, with the same schema the route uses. Unknown parameters and different spellings of a value therefore share one entry, and the cache and the route always agree on what a request means. A path that is not listed in `QUERY_SCHEMAS` is not cached.
-- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. `warmUrls()` produces 4,463 URLs. The time it takes is not yet measured on the new data (TIME_TO_BE_MEASURED_IN_TASK_11). The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
+- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. `warmUrls()` produces 4,463 URLs. It takes about 40 seconds: 36 to 41 seconds in three runs with no other traffic, with Docker on Apple Silicon. The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
 
 ## Dashboard
 
@@ -112,7 +112,7 @@ These steps have not yet run on a real Coolify server. A local test covered the 
 5. Under **Configuration**, **Persistent Storage**, add a **Directory Mount** from `/srv/paris-property-sales/data` to `/app/data`.
 6. Add the domain. Coolify's proxy handles HTTPS.
 7. Leave the health check in the Coolify dashboard turned off. It needs `curl` or `wget` in the image, and this image has neither. The Dockerfile has its own health check, which calls `/api/healthz` through Node.
-8. Give the application at least 3 GB of memory. The container used about 250 to 440 MiB after the warm-up finished, measured twice with Docker. Under load it needs much more. In a test of 120 requests, three quarters of them `/sales/points` for the whole city with different `from` dates, sent 10, 20 and 40 at a time, a container limited to 1 GB was killed for lack of memory in all three runs. With no limit and 40 requests at a time, the peak was 2.2 GiB, against 1.13 GiB for the server before DuckDB. Each setting ran once, with Docker on Apple Silicon.
+8. Give the application at least 3 GB of memory. The container used about 465 to 485 MiB after the warm-up finished, measured three times with Docker on the 404,582 Sales. Under load it needs much more. These load figures come from the earlier data, with about 128,000 Sales in Paris only, and have not been repeated on the larger data. In a test of 120 requests, three quarters of them `/sales/points` for the whole city with different `from` dates, sent 10, 20 and 40 at a time, a container limited to 1 GB was killed for lack of memory in all three runs. With no limit and 40 requests at a time, the peak was 2.2 GiB, against 1.13 GiB for the server before DuckDB. Each setting ran once, with Docker on Apple Silicon.
 
 The image sets `PORT`, `STATIC_DIR` and `NODE_ENV`, so the application needs no environment variables in Coolify.
 
@@ -137,7 +137,7 @@ The site is not ready for the public yet. These items must be complete first.
 - **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts.
 - **Self-host the fonts and replace the Esri tiles.** We could not confirm that Esri's tile address can be used on a public site without an account. Choose a map provider with terms that clearly allow public use.
 - **Accept the re-identification risk knowingly.** No Sale holds its `id_mutation` any more, so a Visitor cannot join a Sale to the public DVF file by that identifier. Date, price, surface and street together still identify 404,405 of the 404,582 Sales uniquely. We accept this risk, and the DGFiP condition against indirect re-identification is not fully met. [Decision record 6](adr/0006-public-site-limits.md) records it.
-- **Design the map for rounded Sale locations.** Several dots stack on one position. Several Sales share one position, and the stacks are larger now that the Communes are included.
+- **Design the map for rounded Sale locations.** Several dots stack on one position. 395,228 of the 404,110 points share a position with at least one other point, and the largest stack holds 407 Sales. A position holds about 22 Sales on average in Paris and about 7 in the Communes.
 
 [Decision record 6](adr/0006-public-site-limits.md) explains the location, search engine and API limits.
 
