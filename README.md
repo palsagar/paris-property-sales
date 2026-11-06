@@ -107,7 +107,7 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 
 ## Things to know
 
-- **Startup:** the server pre-computes about 2,600 common responses when it starts, which takes about 17 seconds. The API answers during that time, but the first requests can be slower.
+- **Startup:** the server pre-computes about 2,800 common responses when it starts, which takes about 22 seconds. The API answers during that time, but the first requests can be slower.
 - **Memory:** the container used about 250 to 440 MiB after the warm-up finished, measured twice with Docker. Under load it needs much more. In a test of 120 requests, three quarters of them `/sales/points` for the whole city with different `from` dates, sent 10, 20 and 40 at a time, a container limited to 1 GB was killed for lack of memory in all three runs. With no limit and 40 requests at a time, the peak was 2.2 GiB, against 1.13 GiB for the server before DuckDB. Each setting ran once, with Docker on Apple Silicon. Give the container at least 3 GB.
 - **External services:** the browser loads fonts from Google Fonts and map tiles from Esri, so it needs internet access to both. To self-host the fonts, replace the `@import url(...)` line at the top of `artifacts/data-app/src/index.css`. To use another map provider, replace the tile URL in `artifacts/data-app/src/components/sales-map.tsx`. Check Esri's terms of use for your level of traffic.
 - **Coverage:** the data covers the latest DVF release, and the dashboard shows its first and last dates. Prices are nominal euros, not adjusted for inflation.
