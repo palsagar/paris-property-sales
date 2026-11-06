@@ -26,6 +26,8 @@ HEADERS = {"User-Agent": "paris-property-sales-data-fetch"}
 # The title of the national file contains this text. The resource id and the
 # URL change at each release, so the title is the stable way to find the file.
 TITLE_MARKER = "fichier unique"
+# Seconds without data before a request fails. It limits a stalled connection, not the length of a download.
+TIMEOUT_SECONDS = 60
 
 
 def copy_paris_rows(reader: Iterable[list[str]], writer: Any) -> int:
@@ -117,7 +119,7 @@ def fetch_dataset() -> dict[str, Any]:
         resources = fetch_dataset()["resources"]
     """
     request = urllib.request.Request(DATASET_URL, headers=HEADERS)
-    with urllib.request.urlopen(request) as response:
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
         return json.load(response)
 
 
@@ -146,7 +148,7 @@ def fetch_paris_rows(url: str, path: str) -> int:
     # partial paris.csv for the build script to read.
     partial = f"{path}.part"
     request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request) as response, open(
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response, open(
         partial, "w", encoding="utf-8", newline=""
     ) as out:
         lines = io.TextIOWrapper(gzip.GzipFile(fileobj=response), encoding="utf-8", newline="")
