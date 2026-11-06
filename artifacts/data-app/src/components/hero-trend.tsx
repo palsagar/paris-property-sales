@@ -107,7 +107,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
                   if (share) rows.push(["House share", share]);
                   if (d.yoy != null) rows.push(["Change on a year earlier", pct(d.yoy)]);
                   if (d.paris != null) rows.push(["All Paris", sqm(d.paris), c.second]);
-                  return <TipBox title={d.shown} rows={rows} note={d.low ? "Fewer than 10 sales in this period, so treat the figure with care." : undefined} />;
+                  return <TipBox title={d.shown} rows={rows} note={d.low && d.medianPricePerSqm != null ? "Fewer than 10 sales in this period, so treat the figure with care." : undefined} />;
                 }} />
               {showBand && <Area dataKey="band" stroke="none" fill={c.accent} fillOpacity={0.06} isAnimationActive={false} type="linear" activeDot={false} />}
               {showBand && <Line dataKey="p25PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}

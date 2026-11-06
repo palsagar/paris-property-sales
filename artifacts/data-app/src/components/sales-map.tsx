@@ -22,7 +22,8 @@ function PointsLayer({ points, scale, boundaries }: { points: SalePoint[]; scale
         () => `<div class="pt-title">${p.address}</div><div class="pt-sub">${p.areaName}</div><div>${p.type === "Maison" ? "House" : "Apartment"} of ${num(p.surface)} m², sold on ${p.date.slice(0, 10)}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`,
         { className: "pt", sticky: true }
       );
-      // The dot takes the click, so pass it to the boundary under it. `_containsPoint` is Leaflet's private hit test.
+      // The dot takes the click, so pass it to the boundary under the dot's centre. Leaflet gives a marker event the
+      // marker's own `layerPoint`, not the pointer's, so the hit test uses that centre. `_containsPoint` is Leaflet's private hit test.
       m.on("click", (e) => (boundaries.current?.getLayers() as (L.Layer & { _containsPoint(p: L.Point): boolean })[] | undefined)?.find((l) => l._containsPoint(e.layerPoint))?.fire("click"));
       group.addLayer(m);
     }

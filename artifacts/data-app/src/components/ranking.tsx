@@ -17,7 +17,7 @@ export function RankSwitch({ value, onChange, testId }: { value: RankGroup; onCh
 }
 
 /** The Area that a row of the ranking or the heat map stands for. */
-export const statArea = (s: AreaStat): Area => (s.arrondissement != null ? { kind: "arr", arr: s.arrondissement } : { kind: "commune", id: s.id });
+const statArea = (s: AreaStat): Area => (s.arrondissement != null ? { kind: "arr", arr: s.arrondissement } : { kind: "commune", id: s.id });
 
 export function Ranking({ stats, trend, loading, fetching, error, retry, scale, selId, onSelect, rank, onRank, ptype, isDark }: {
   stats: AreaStat[]; trend: AreaTrendPoint[]; loading: boolean; fetching: boolean; error: boolean; retry: () => void;

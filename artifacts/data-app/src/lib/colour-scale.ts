@@ -1,6 +1,6 @@
 import { interpolateMagma } from "d3-scale-chromatic";
 
-export const COLOUR_STEPS = 9;
+const COLOUR_STEPS = 9;
 
 export interface StepScale {
   color(v: number): string;

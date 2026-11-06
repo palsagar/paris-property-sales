@@ -16,7 +16,7 @@ export const orTooFew = (n: number | null | undefined, format: (n: number) => st
 export const sqmOrTooFew = (n: number | null | undefined) => orTooFew(n, sqm);
 
 /** Houses above this share of the Sales (in percent) get a warning. */
-export const HOUSE_SHARE_LIMIT = 10;
+const HOUSE_SHARE_LIMIT = 10;
 export const houseShareLabel = (share: number | null | undefined) => (share == null ? null : `${Math.round(share)}% houses`);
 export const houseShareWarning = (share: number | null | undefined) =>
   share == null || share <= HOUSE_SHARE_LIMIT
