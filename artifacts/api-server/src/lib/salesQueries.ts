@@ -297,7 +297,15 @@ export async function trendPoints(
     b: number; count: number; medianPrice: number | null; medianPricePerSqm: number | null;
     p25PricePerSqm: number | null; p75PricePerSqm: number | null; houseShare: number | null;
   }>(`${q.sql} ORDER BY b`, q.params);
-  return rows.map(({ b, ...r }) => ({ ...bucketInfo(b, g), ...r }));
+  // Buckets with no Sales between the first and the last one that has Sales stay in the series as empty points,
+  // so that a chart on a time axis shows the gap. The range never grows past the request's first and last.
+  const byBucket = new Map(rows.map((r) => [r.b, r]));
+  const points = [];
+  for (let b = rows[0]?.b ?? 0; b <= (rows[rows.length - 1]?.b ?? -1); b++) {
+    const { b: _b, ...r } = byBucket.get(b) ?? { b, count: 0, medianPrice: null, medianPricePerSqm: null, p25PricePerSqm: null, p75PricePerSqm: null, houseShare: null };
+    points.push({ ...bucketInfo(b, g), ...r });
+  }
+  return points;
 }
 
 export async function areaTrendPoints(

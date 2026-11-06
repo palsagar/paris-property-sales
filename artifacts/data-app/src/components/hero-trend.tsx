@@ -97,6 +97,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload as (typeof data)[number];
+                  if (d.count === 0) return <TipBox title={d.shown} rows={[["Sales", "No sales"]]} />;
                   const rows: [string, string, string?][] = [
                     ["Median per m²", sqmOrTooFew(d.medianPricePerSqm), c.accent],
                     ["P25 to P75", d.p25PricePerSqm != null && d.p75PricePerSqm != null ? `${num(d.p25PricePerSqm)} to ${num(d.p75PricePerSqm)}` : TOO_FEW],

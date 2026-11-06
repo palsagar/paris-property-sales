@@ -139,12 +139,28 @@ test("Change needs 5 Sales in each Change window", async () => {
 
 const month = (d: string) => bucketOrdinal(d, "month");
 
-test("trend with no pooling skips empty buckets", async () => {
+test("trend stops at the last bucket with Sales", async () => {
   const rows = await trendPoints(db, {}, "month", 1, month("2024-01-01"), month("2024-05-01"));
   assert.deepEqual(
     rows.map((r) => [r.label, r.count]),
     [["2024-01", 2], ["2024-02", 1], ["2024-03", 2]],
   );
+});
+
+test("trend keeps empty buckets between the first and last bucket with Sales", async () => {
+  const sale = (id: string, date: string): FixtureSale => ({
+    id, date, type: "Appartement", price: 100000, surface: 10, pricePerSqm: 10000,
+    rooms: 1, arr: 1, quartier: null, lon: null, lat: null, street: "Rue X",
+  });
+  const gapDb = await createSalesFixture([sale("g1", "2024-01-10"), sale("g2", "2024-04-10")]);
+  // The range reaches past both ends, and the series does not.
+  const rows = await trendPoints(gapDb, {}, "month", 1, month("2023-11-01"), month("2024-06-01"));
+  assert.deepEqual(rows.map((r) => [r.label, r.count]), [["2024-01", 1], ["2024-02", 0], ["2024-03", 0], ["2024-04", 1]]);
+  assert.equal(rows[1]!.medianPrice, null);
+  assert.equal(rows[1]!.medianPricePerSqm, null);
+  assert.equal(rows[1]!.houseShare, null);
+  assert.equal(rows[1]!.period, "2024-02-01");
+  assert.deepEqual(await trendPoints(gapDb, {}, "month", 1, month("2024-02-01"), month("2024-03-01")), []);
 });
 
 test("Smoothing window pools each bucket with the ones before it", async () => {
