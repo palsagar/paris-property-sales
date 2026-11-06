@@ -1,4 +1,4 @@
-import { interpolateMagma, interpolateRdBu } from "d3-scale-chromatic";
+import { interpolateRdBu } from "d3-scale-chromatic";
 
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 export const num = (n: number) => nf.format(Math.round(n)).replace(/[\u202f\u00a0]/g, " ");
@@ -22,14 +22,6 @@ export const houseShareWarning = (share: number | null | undefined) =>
     ? null
     : `Houses are ${Math.round(share)}% of these sales. A house's price includes its land, so this median is harder to compare.`;
 export const kShort = (n: number) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : Math.abs(n) >= 1e3 ? `${Math.round(n / 1e3)}k` : `${Math.round(n)}`);
-
-export function makeScale(min: number, max: number) {
-  const span = Math.max(1, max - min);
-  return (v: number) => {
-    const t = Math.min(1, Math.max(0, (v - min) / span));
-    return interpolateMagma(0.93 - 0.78 * t);
-  };
-}
 
 export const arrLabel = (n: number) => (n === 1 ? "1er" : `${n}e`);
 
@@ -72,8 +64,3 @@ export function monthsBetween(a: string, b: string) {
   return (y2 - y1) * 12 + (m2 - m1) + 1;
 }
 export const rangeLabel = (from: string, to: string) => `${monthLabel(from.slice(0, 7))} - ${monthLabel(to.slice(0, 7))}`;
-export function quantile(sorted: number[], q: number) {
-  if (!sorted.length) return 0;
-  const i = Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))));
-  return sorted[i];
-}

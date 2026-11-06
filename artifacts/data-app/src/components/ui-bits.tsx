@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { CSVLink } from "react-csv";
 import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
+import type { StepScale } from "@/lib/colour-scale";
 
 export type ChartColors = {
   grid: string; tick: string; accent: string; second: string; bg: string; cursor: string; ink: string; paper: string; nodata: string;
@@ -114,6 +115,20 @@ export function GradientLegend({ title, min, max, scale, fmt, mid }: { title: Re
       <div className="text-[12px] mb-1 text-foreground">{title}</div>
       <div className="h-2.5 rounded-sm" style={{ background: `linear-gradient(90deg, ${stops.join(",")})` }} />
       <div className="flex justify-between font-num text-[11.5px] mt-1"><span>{fmt(min)}</span><span>{fmt(mid ?? (min + max) / 2)}</span><span>{fmt(max)}</span></div>
+    </div>
+  );
+}
+
+/** One colour for each step of the scale, with each threshold written under the edge between two steps. */
+export function StepLegend({ title, scale, fmt }: { title: ReactNode; scale: StepScale; fmt: (n: number) => string }) {
+  const step = 100 / scale.colors.length;
+  return (
+    <div className="w-[min(320px,calc(100vw-124px))]" data-testid="step-legend">
+      <div className="text-[12px] mb-1 text-foreground">{title}</div>
+      <div className="flex h-2.5 rounded-sm overflow-hidden">{scale.colors.map((c) => <span key={c} className="flex-1" style={{ background: c }} />)}</div>
+      <div className="relative h-4 mt-1 font-num text-[9.5px] sm:text-[10.5px]">
+        {scale.thresholds.map((t, i) => <span key={t} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${step * (i + 1)}%` }}>{fmt(t)}</span>)}
+      </div>
     </div>
   );
 }

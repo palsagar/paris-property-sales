@@ -3,13 +3,16 @@ import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import {
   useGetSalesSummary, getGetSalesSummaryQueryKey,
   useGetSalesByArrondissement, getGetSalesByArrondissementQueryKey,
+  useGetSalesByCommune, getGetSalesByCommuneQueryKey,
   useGetAreaTrend, getGetAreaTrendQueryKey,
-  useGetArrondissementBoundaries, useGetQuartierBoundaries,
-  type PropertyTypeParameter, type YearRange,
+  useGetArrondissementBoundaries, useGetQuartierBoundaries, useGetCommuneBoundaries,
+  type AreaStat, type AreaTrendPoint, type PropertyTypeParameter, type YearRange,
 } from "@workspace/api-client-react";
 import { RefreshCw, ChevronDown, Check, Sun, Moon, Printer, X, Info, MapPin } from "lucide-react";
-import { useViewState, type MapLevel } from "@/lib/view-state";
-import { makeScale, arrLabel, rangeLabel, longMonthLabel, quantile, num, sqm, pct } from "@/lib/fmt";
+import { useViewState } from "@/lib/view-state";
+import { areaParams, featureArea, groupOfArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
+import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
+import { arrLabel, rangeLabel, longMonthLabel, num, sqm, pct } from "@/lib/fmt";
 import { btnCls, FetchDot } from "@/components/ui-bits";
 import { TimeControl } from "@/components/time-control";
 import { Kpis } from "@/components/kpis";
@@ -20,7 +23,6 @@ import { Heatmap } from "@/components/heatmap";
 import { Distributions, RoomsChart } from "@/components/distributions";
 import { Transactions } from "@/components/transactions";
 import { QuartierPicker, type QMeta } from "@/components/area-picker";
-import type { FeatureProps } from "@/components/sales-map";
 
 const INTERVAL_OPTIONS = [
   { label: "Every 5 min", ms: 5 * 60 * 1000 },
@@ -80,14 +82,25 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
     return { id: String(p.id), name: p.name, arr: p.arr };
   }).sort((a, b) => a.arr - b.arr || a.name.localeCompare(b.name)), [qB.data]);
   const qById = useMemo(() => new Map(quartiers.map((q) => [q.id, q])), [quartiers]);
+  const communeB = useGetCommuneBoundaries();
+  const communes = useMemo(() => (communeB.data?.features ?? []).map((f) => {
+    const { id, name, group } = (f as { properties: { id: string; name: string; group: RankGroup } }).properties;
+    return { id, name, group };
+  }).sort((a, b) => a.name.localeCompare(b.name, "fr")), [communeB.data]);
 
-  const areaParams = area.kind === "arr" ? { arrondissement: area.arr } : area.kind === "q" ? { quartier: area.id } : {};
-  const filters: Filters = { propertyType: ptype, ...areaParams, from, to };
+  const areaP = areaParams(area);
+  const filters: Filters = { propertyType: ptype, ...areaP, from, to };
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
 
   const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters) } });
   const ap = { propertyType: ptype, from, to };
   const byArr = useGetSalesByArrondissement(ap, { query: { queryKey: getGetSalesByArrondissementQueryKey(ap) } });
+  const byCommune = useGetSalesByCommune(ap, { query: { queryKey: getGetSalesByCommuneQueryKey(ap) } });
+  // The colour scale reads these two whatever the map shows, so they always load.
+  const arrTrendP = { level: "arrondissement" as const, ...ap, granularity: "quarter" as const, window: 4 };
+  const arrTrendQ = useGetAreaTrend(arrTrendP, { query: { queryKey: getGetAreaTrendQueryKey(arrTrendP) } });
+  const communeTrendP = { ...arrTrendP, level: "commune" as const };
+  const communeTrendQ = useGetAreaTrend(communeTrendP, { query: { queryKey: getGetAreaTrendQueryKey(communeTrendP) } });
   const hp = { level: "arrondissement" as const, propertyType: ptype, from, to, granularity: "quarter" as const, window: 1 };
   const heat = useGetAreaTrend(hp, { query: { queryKey: getGetAreaTrendQueryKey(hp) } });
 
@@ -101,23 +114,33 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
   }, [fetchingCount]);
 
   const arrStats = useMemo(() => byArr.data ?? [], [byArr.data]);
+  const communeStats = useMemo(() => byCommune.data ?? [], [byCommune.data]);
+  const arrTrend = useMemo(() => arrTrendQ.data ?? [], [arrTrendQ.data]);
+  const communeTrend = useMemo(() => communeTrendQ.data ?? [], [communeTrendQ.data]);
   const heatData = useMemo(() => heat.data ?? [], [heat.data]);
-  // One fixed price scale for the whole range: map, time travel, ranking, heat map.
-  const domain = useMemo<[number, number]>(() => {
-    const v = [...heatData.filter((r) => r.count >= 10).map((r) => r.medianPricePerSqm), ...arrStats.map((s) => s.medianPricePerSqm)].sort((a, b) => a - b);
-    if (!v.length) return [8000, 16000];
-    return [Math.floor(quantile(v, 0.02) / 500) * 500, Math.ceil(quantile(v, 0.98) / 500) * 500];
-  }, [heatData, arrStats]);
-  const scale = useMemo(() => makeScale(domain[0], domain[1]), [domain]);
-  const arrColor = (a: number) => scale(arrStats.find((s) => s.arrondissement === a)?.medianPricePerSqm ?? 0);
+  // One price scale for the whole range: map, time travel, ranking, heat map. Quartiers do not enter it,
+  // so switching the map level keeps the colours.
+  const scale = useMemo(() => {
+    const figures = (stats: AreaStat[], trend: AreaTrendPoint[]) => [
+      ...stats.map((s) => s.medianPricePerSqm),
+      ...trend.filter((r) => r.count >= 10).map((r) => r.medianPricePerSqm),
+    ].filter((v): v is number => v != null);
+    return makeStepScale(quantileThresholds(figures(arrStats, arrTrend), figures(communeStats, communeTrend)));
+  }, [arrStats, arrTrend, communeStats, communeTrend]);
+  const domain: [number, number] = [scale.thresholds[0] ?? 0, scale.thresholds[scale.thresholds.length - 1] ?? 0];
+  const arrColor = (a: number) => scale.color(arrStats.find((s) => s.arrondissement === a)?.medianPricePerSqm ?? 0);
 
-  const selectArr = (a?: number) => patch({ area: a && !(area.kind === "arr" && area.arr === a) ? { kind: "arr", arr: a } : { kind: "all" } });
-  const selectQ = (id: string) => patch({ area: area.kind === "q" && area.id === id ? { kind: "all" } : { kind: "q", id } });
-  const onMapSelect = (p: FeatureProps, level: MapLevel) => (level === "quartier" && p.id ? selectQ(String(p.id)) : selectArr(p.arr));
+  const selectArea = (a: Area) => patch({ area: JSON.stringify(a) === JSON.stringify(area) ? { kind: "paris" } : a, rank: groupOfArea(a) });
+  const selectArr = (arr: number) => selectArea({ kind: "arr", arr });
 
-  const areaName = area.kind === "arr" ? arrStats.find((s) => s.arrondissement === area.arr)?.name ?? `${arrLabel(area.arr)} arrondissement`
+  const communeGroup = groupOfArea(area);
+  const areaName = area.kind === "department" ? DEPARTMENT_NAMES[area.id]
+    : area.kind === "commune" ? communes.find((c) => c.id === area.id)?.name ?? "Commune"
+    : area.kind === "arr" ? arrStats.find((s) => s.arrondissement === area.arr)?.name ?? `${arrLabel(area.arr)} arrondissement`
     : area.kind === "q" ? qById.get(area.id)?.name ?? "Quartier" : "All Paris";
-  const areaKicker = area.kind === "arr" ? "Arrondissement" : area.kind === "q" ? `Quartier in the ${selArr ? arrLabel(selArr) : ""} arrondissement` : "";
+  const areaKicker = area.kind === "department" ? "Department"
+    : area.kind === "commune" ? (communeGroup === "major" ? "Major town" : `Commune in ${DEPARTMENT_NAMES[communeGroup as DepartmentId]}`)
+    : area.kind === "arr" ? "Arrondissement" : area.kind === "q" ? `Quartier in the ${selArr ? arrLabel(selArr) : ""} arrondissement` : "";
   const typeLabel = ptype === "all" ? "all homes" : ptype === "Appartement" ? "apartments" : "houses";
   const scopeLabel = `${typeLabel}, ${areaName}, ${rangeLabel(ef, et)}`;
   const lastRefreshed = summary.dataUpdatedAt ? new Date(summary.dataUpdatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
@@ -187,7 +210,7 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
 
         {/* Sticky filters: time, property type, area */}
         <div className="md:sticky top-0 z-[500] -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-3 bg-background border-b space-y-2 print:static">
-          <TimeControl ptype={ptype} areaParams={areaParams} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
+          <TimeControl ptype={ptype} areaParams={areaP} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
             onChange={(f, t) => patch({ from: f, to: t })} isDark={isDark} />
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div className="flex items-center gap-2">
@@ -202,13 +225,13 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <span className="text-[13px] text-muted-foreground">Area</span>
               <div className="flex flex-wrap gap-0.5" role="group" aria-label="Arrondissement">
-                <button onClick={() => patch({ area: { kind: "all" } })} data-testid="filter-arr-all" aria-pressed={area.kind === "all"} className={`px-2 h-7 text-[13px] rounded transition-colors ${area.kind === "all" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Paris</button>
+                <button onClick={() => selectArea({ kind: "paris" })} data-testid="filter-arr-all" aria-pressed={area.kind === "paris"} className={`px-2 h-7 text-[13px] rounded transition-colors ${area.kind === "paris" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Paris</button>
                 {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
                   <button key={n} onClick={() => selectArr(n)} data-testid={`filter-arr-${n}`} aria-pressed={area.kind === "arr" && area.arr === n} aria-label={`${arrLabel(n)} arrondissement`}
                     className={`w-7 h-7 text-[12.5px] font-num rounded transition-colors ${area.kind === "arr" && area.arr === n ? "bg-primary text-primary-foreground" : selArr === n ? "ring-1 ring-primary text-primary" : "hover:bg-muted"}`}>{n}</button>
                 ))}
               </div>
-              <QuartierPicker quartiers={quartiers} selected={area.kind === "q" ? area.id : undefined} onSelect={(q) => patch({ area: { kind: "q", id: q.id } })} />
+              <QuartierPicker quartiers={quartiers} selected={area.kind === "q" ? area.id : undefined} onSelect={(q) => selectArea({ kind: "q", id: q.id })} />
             </div>
           </div>
         </div>
@@ -222,22 +245,24 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
           {/* Map first */}
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-4 mb-5">
             <MapPanel isDark={isDark} ptype={ptype} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
-              area={area} selArr={selArr} areaParams={areaParams} mode={mapMode} setMode={(m) => patch({ mapMode: m })}
-              level={mapLevel} setLevel={(l) => patch({ mapLevel: l })} arrStats={arrStats} arrLoading={byArr.isLoading} arrError={byArr.isError}
-              retryArr={() => byArr.refetch()} arrBounds={arrB.data} qBounds={qB.data} scale={scale} domain={domain}
-              travel={travel} setTravel={setTravel} onSelect={onMapSelect} />
+              area={area} selArr={selArr} areaParams={areaP} mode={mapMode} setMode={(m) => patch({ mapMode: m })}
+              level={mapLevel} setLevel={(l) => patch({ mapLevel: l })} arrStats={arrStats} communeStats={communeStats}
+              statsLoading={byArr.isLoading || byCommune.isLoading} statsError={byArr.isError || byCommune.isError}
+              retryStats={() => { byArr.refetch(); byCommune.refetch(); }} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
+              arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
+              travel={travel} setTravel={setTravel} onSelect={(p) => selectArea(featureArea(p))} />
             <Ranking stats={arrStats} trend={heatData} loading={byArr.isLoading} fetching={byArr.isFetching || heat.isFetching} error={byArr.isError}
-              retry={() => byArr.refetch()} scale={scale} domain={domain} selArr={selArr} onSelect={(a) => selectArr(a)} isDark={isDark} />
+              retry={() => byArr.refetch()} scale={scale.color} domain={domain} selArr={selArr} onSelect={(a) => selectArr(a)} isDark={isDark} />
           </div>
 
           {/* Focus header */}
           <div className="flex flex-wrap items-end justify-between gap-3 mb-3" data-testid="focus-header">
             <div>
               <h2 className="font-display font-bold text-[26px] leading-tight flex items-center gap-2" data-testid="text-area-name"><MapPin className="w-5 h-5 text-primary" aria-hidden />{areaName}</h2>
-              <p className="text-[14px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{area.kind !== "all" && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
+              <p className="text-[14px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{area.kind !== "paris" && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
             </div>
-            {area.kind !== "all" && (
-              <button onClick={() => patch({ area: { kind: "all" } })} data-testid="button-clear-area"
+            {area.kind !== "paris" && (
+              <button onClick={() => selectArea({ kind: "paris" })} data-testid="button-clear-area"
                 className="h-8 px-3 rounded-md border border-primary/40 text-primary text-[13px] flex items-center gap-1.5 hover:bg-primary/5 transition-colors print:hidden">
                 <X className="w-3.5 h-3.5" />Back to All Paris
               </button>
@@ -247,12 +272,12 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
           <Kpis s={summary.data} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
 
           <div className="mb-4">
-            <HeroTrend filters={filters} areaName={areaName} hasArea={area.kind !== "all"} isQuartier={area.kind === "q"} gran={gran} setGran={(g) => patch({ gran: g })} isDark={isDark} years={years} />
+            <HeroTrend filters={filters} areaName={areaName} hasArea={area.kind !== "paris"} isQuartier={area.kind === "q"} gran={gran} setGran={(g) => patch({ gran: g })} isDark={isDark} years={years} />
           </div>
 
           <div className="mb-4">
             <Heatmap data={heatData} loading={heat.isLoading} fetching={heat.isFetching} error={heat.isError} retry={() => heat.refetch()}
-              scale={scale} domain={domain} selArr={selArr} onSelectArr={(a) => selectArr(a)} travel={travel}
+              scale={scale.color} domain={domain} selArr={selArr} onSelectArr={(a) => selectArr(a)} travel={travel}
               onSelectPeriod={(p) => { setTravel(p); patch({ mapMode: "level" }); }} isDark={isDark} />
           </div>
 
@@ -272,9 +297,9 @@ function DashboardView({ datasetFrom, datasetTo, releaseMonth, years }: { datase
             </section>
           </div>
 
-          <Transactions filters={filters} scopeLabel={scopeLabel} scale={scale} arrColor={arrColor} isDark={isDark}
+          <Transactions filters={filters} scopeLabel={scopeLabel} scale={scale.color} arrColor={arrColor} isDark={isDark}
             onSelectArr={(a) => selectArr(a)}
-            onSelectQuartierName={(name) => { const q = quartiers.find((x) => x.name === name); if (q) patch({ area: { kind: "q", id: q.id } }); }} />
+            onSelectQuartierName={(name) => { const q = quartiers.find((x) => x.name === name); if (q) selectArea({ kind: "q", id: q.id }); }} />
         </main>
 
         <footer className="mt-6 pt-4 border-t text-[13px] text-muted-foreground flex flex-wrap justify-between gap-2">
