@@ -122,7 +122,7 @@ DGFiP publishes a DVF release each April and October. After each release:
 
 If a release needs a new image as well, copy the new file before the new image starts. The server stops at startup when the file has no release month.
 
-Coolify's storage is not a backup, but the data does not need one. The two scripts can rebuild it from the source for as long as DVF publishes those periods.
+Coolify's storage is not a backup, but the data does not need one. The scripts can rebuild it from the source for as long as DVF publishes those periods.
 
 ## Before public launch
 
@@ -150,8 +150,7 @@ These items do not block launch.
 
 ## Planned work
 
-This document describes the site as it is today. The next iteration adds the Communes around Paris. It has three parts, in this order, and the public launch follows them.
+This document describes the site as it is today. The next iteration adds the Communes around Paris. It has two parts, in this order, and the public launch follows them.
 
-1. [Take all dates from the data, and check each DVF update](https://github.com/palsagar/paris-property-sales/issues/3).
-2. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
-3. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).
+1. [Add the Communes around Paris and the Major towns](https://github.com/palsagar/paris-property-sales/issues/4).
+2. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).

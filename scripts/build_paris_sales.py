@@ -437,7 +437,26 @@ def check_release(
 
 
 def _is_iso_date(value: str) -> bool:
-    """Tell whether a string is a valid ``YYYY-MM-DD`` date."""
+    """Tell whether a string is a valid ``YYYY-MM-DD`` date.
+
+    Parameters
+    ----------
+    value : str
+        The text to test.
+
+    Returns
+    -------
+    bool
+        True when ``value`` has exactly four, two and two digits separated by
+        hyphens and names a real calendar day.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        _is_iso_date("2026-06-30")  # True
+        _is_iso_date("20260630")    # False
+    """
     # Python 3.11 also reads forms such as 20260630 and 2026-W26-2, which sort wrongly.
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
         return False
@@ -570,9 +589,13 @@ def main() -> None:
             sales.append(sale)
 
     db_path = os.path.join(OUT, "sales.duckdb")
+    previous = read_previous(db_path)
+    if previous is None:
+        # Without a previous file the two comparison checks cannot run, so say so.
+        print("No previous sales.duckdb, so the Sale count and end date checks did not run.")
     reasons = check_release(
         sales,
-        read_previous(db_path),
+        previous,
         [ft["properties"]["arr"] for ft in arr_geo["features"]],
         [ft["properties"]["id"] for ft in quartier_geo["features"]],
     )

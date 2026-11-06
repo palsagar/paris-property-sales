@@ -17,7 +17,7 @@ An interactive dashboard of private home sales in Paris. It is built from DVF (D
 
 ## Quick start
 
-You need [Docker](https://docs.docker.com/get-docker/), Python 3 and [uv](https://docs.astral.sh/uv/). The app needs no database server, login or API key.
+You need [Docker](https://docs.docker.com/get-docker/) and [uv](https://docs.astral.sh/uv/). The app needs no database server, login or API key.
 
 **1. Get the data.** The sales data is not in this repository (see [Data and licences](#data-and-licences)). This command downloads it from data.gouv.fr and builds the dataset. `uv` installs the `duckdb` package on the first run. The download is about 610 MB, because the source file covers all of France, but only the Paris rows are saved.
 
@@ -118,7 +118,7 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 DGFiP publishes a new DVF release each April and October. After each release, update the data by hand. No scheduled job does it.
 
 1. Run `uv run scripts/update_data.py`. The script finds the latest five-year file on data.gouv.fr, downloads it, and rebuilds `sales.duckdb` in full. The dashboard takes every date from the new file, so no text needs an edit.
-2. Load the new file. On a local machine, run `docker compose restart`. On the VPS, copy the file with the `rsync` command in [`docs/architecture.md`](docs/architecture.md#update-the-data), and then restart the application. The server opens the data file at startup and caches responses in memory, so it must restart to show the new data. The image does not need a rebuild.
+2. Load the new file. On a local machine, run `docker compose restart`. On the VPS, copy the file with the `rsync` command in [`docs/architecture.md`](docs/architecture.md#first-deployment), and then restart the application. The server opens the data file at startup and caches responses in memory, so it must restart to show the new data. The image does not need a rebuild.
 
 Before the build replaces `sales.duckdb`, it checks the new release. The release must have the expected columns. Its Sale count must be within 15% of the previous file. Every Arrondissement and every Quartier must have Sales. Every date must be in ISO format. The end date must not be earlier than the previous end date. If a check fails, the script prints the reason and exits with an error. The previous `sales.duckdb` and the boundary files stay in place.
 

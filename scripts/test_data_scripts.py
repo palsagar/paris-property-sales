@@ -71,6 +71,15 @@ class FindReleaseTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             find_release({"resources": [{**self.single, "last_modified": "soon"}]})
 
+    def test_resource_without_last_modified_raises_and_names_the_field(self) -> None:
+        without = {k: v for k, v in self.single.items() if k != "last_modified"}
+        with self.assertRaisesRegex(ValueError, "last_modified"):
+            find_release({"resources": [without]})
+
+    def test_dataset_without_resources_raises_and_names_the_field(self) -> None:
+        with self.assertRaisesRegex(ValueError, "resources"):
+            find_release({})
+
 
 def mutation_row(**overrides: str) -> dict[str, str]:
     """Return one valid invented DVF row for an apartment.
@@ -320,6 +329,9 @@ def square(lon: float, lat: float) -> dict[str, Any]:
     return {"type": "Polygon", "coordinates": [ring]}
 
 
+NO_PREVIOUS_NOTICE = "No previous sales.duckdb, so the Sale count and end date checks did not run."
+
+
 class MainTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = tempfile.TemporaryDirectory()
@@ -371,13 +383,17 @@ class MainTest(unittest.TestCase):
         finally:
             con.close()
 
-    def run_main(self) -> None:
-        with contextlib.redirect_stdout(io.StringIO()):
+    def run_main(self) -> str:
+        """Run ``main`` and return what it printed."""
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
             main()
+        return output.getvalue()
 
     def test_fresh_clone_builds_and_records_the_release_month(self) -> None:
         self.write_inputs()
-        self.run_main()
+        output = self.run_main()
+        self.assertIn(NO_PREVIOUS_NOTICE, output)
         con = duckdb.connect(self.db, read_only=True)
         try:
             self.assertEqual(con.execute("SELECT count(*) FROM sales").fetchone(), (10,))
@@ -387,6 +403,11 @@ class MainTest(unittest.TestCase):
         finally:
             con.close()
         self.assertEqual(sorted(os.listdir(self.boundaries)), ["arrondissements.geojson", "quartiers.geojson"])
+
+    def test_rebuild_does_not_print_the_no_previous_file_line(self) -> None:
+        self.write_previous()
+        self.write_inputs()
+        self.assertNotIn(NO_PREVIOUS_NOTICE, self.run_main())
 
     def test_each_failing_input_exits_and_keeps_the_previous_file(self) -> None:
         cases: list[tuple[str, dict[str, Any], str]] = [

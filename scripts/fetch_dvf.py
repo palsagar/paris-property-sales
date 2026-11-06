@@ -81,7 +81,9 @@ def find_release(dataset: Mapping[str, Any]) -> tuple[str, str]:
     ------
     ValueError
         If no resource, or more than one, has "fichier unique" in its title
-        (ignoring case), or if its ``last_modified`` date is not valid.
+        (ignoring case), if its ``last_modified`` date is not valid, or if
+        the dataset has no ``resources`` or a resource lacks ``title``,
+        ``url`` or ``last_modified``.
 
     Examples
     --------
@@ -89,19 +91,22 @@ def find_release(dataset: Mapping[str, Any]) -> tuple[str, str]:
 
         url, month = find_release(fetch_dataset())
     """
-    resources = dataset["resources"]
-    matches = [r for r in resources if TITLE_MARKER in r["title"].lower()]
-    if len(matches) != 1:
-        titles = ", ".join(r["title"] for r in resources)
-        raise ValueError(
-            f'Expected one resource with "{TITLE_MARKER}" in its title, found {len(matches)}. '
-            f"Titles: {titles}"
-        )
-    resource = matches[0]
-    month = resource["last_modified"][:7]
-    if not re.fullmatch(r"\d{4}-\d{2}", month):
-        raise ValueError(f'Cannot read the release month from last_modified "{resource["last_modified"]}"')
-    return resource["url"], month
+    try:
+        resources = dataset["resources"]
+        matches = [r for r in resources if TITLE_MARKER in r["title"].lower()]
+        if len(matches) != 1:
+            titles = ", ".join(r["title"] for r in resources)
+            raise ValueError(
+                f'Expected one resource with "{TITLE_MARKER}" in its title, found {len(matches)}. '
+                f"Titles: {titles}"
+            )
+        resource = matches[0]
+        month = resource["last_modified"][:7]
+        if not re.fullmatch(r"\d{4}-\d{2}", month):
+            raise ValueError(f'Cannot read the release month from last_modified "{resource["last_modified"]}"')
+        return resource["url"], month
+    except KeyError as error:
+        raise ValueError(f"The dataset or a resource has no {error.args[0]} field.") from error
 
 
 def fetch_dataset() -> dict[str, Any]:
