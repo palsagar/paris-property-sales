@@ -28,6 +28,11 @@ export const monthLabel = (ym: string) => {
   const [y, m] = ym.split("-").map(Number);
   return `${MONTHS[m - 1]} ${y}`;
 };
+const LONG_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export const longMonthLabel = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number);
+  return `${LONG_MONTHS[m - 1]} ${y}`;
+};
 export const dateLabel = (d: string) => {
   const [y, m, dd] = d.slice(0, 10).split("-").map(Number);
   return `${dd} ${MONTHS[m - 1]} ${y}`;

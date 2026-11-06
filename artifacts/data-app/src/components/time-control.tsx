@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useGetSalesTrend, getGetSalesTrendQueryKey, type PropertyTypeParameter } from "@workspace/api-client-react";
+import { useGetSalesTrend, getGetSalesTrendQueryKey, type PropertyTypeParameter, type YearRange } from "@workspace/api-client-react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Brush, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChartColors } from "@/components/ui-bits";
@@ -7,8 +7,8 @@ import { endOfMonth, monthsBefore, rangeLabel } from "@/lib/fmt";
 
 type AreaParams = { arrondissement?: number; quartier?: string };
 
-export function TimeControl({ ptype, areaParams, from, to, datasetFrom, datasetTo, onChange, isDark }: {
-  ptype: PropertyTypeParameter; areaParams: AreaParams; from?: string; to?: string; datasetFrom: string; datasetTo: string;
+export function TimeControl({ ptype, areaParams, from, to, datasetFrom, datasetTo, years, onChange, isDark }: {
+  ptype: PropertyTypeParameter; areaParams: AreaParams; from?: string; to?: string; datasetFrom: string; datasetTo: string; years: YearRange[];
   onChange: (from?: string, to?: string) => void; isDark: boolean;
 }) {
   const c = useChartColors(isDark);
@@ -27,8 +27,8 @@ export function TimeControl({ ptype, areaParams, from, to, datasetFrom, datasetT
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const presets: [string, string | undefined, string | undefined][] = [
-    ["Since 2022", undefined, undefined],
-    ...[2022, 2023, 2024, 2025, 2026].map((y) => [String(y), `${y}-01-01`, y === 2026 ? datasetTo : `${y}-12-31`] as [string, string, string]),
+    ["All dates", undefined, undefined],
+    ...years.map((y) => [y.label, y.from, y.to] as [string, string, string]),
     ["Last 12 months", monthsBefore(datasetTo, 11), datasetTo],
   ];
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
