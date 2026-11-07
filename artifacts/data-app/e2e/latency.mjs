@@ -16,6 +16,9 @@ const only = process.argv.slice(2);
 const results = [];
 let failed = false;
 
+// The dates of the latest DVF release, so the test does not depend on one release.
+const { datasetFrom, datasetTo, years } = await (await fetch(`${BASE}/api/sales/summary?propertyType=all`)).json();
+
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 /** One page with the counters the checks read: API requests in flight, cache misses, React commits, skeletons added. */
@@ -109,10 +112,11 @@ async function backToParis(p) {
   await settle(p.net);
 }
 
-/** A random month-aligned Period inside July 2021 to June 2026 that is neither a calendar year nor the last 12 months. */
+/** A random month-aligned Period inside the release's dates that is neither a calendar year nor the last 12 months. */
 function randomPeriod() {
-  const months = 60; // 2021-07 .. 2026-06
-  const month = (i) => { const y = 2021 + Math.floor((6 + i) / 12), m = ((6 + i) % 12) + 1; return [y, m]; };
+  const [firstY, firstM] = datasetFrom.split("-").map(Number), [lastY, lastM] = datasetTo.split("-").map(Number);
+  const months = (lastY - firstY) * 12 + lastM - firstM + 1;
+  const month = (i) => { const y = firstY + Math.floor((firstM - 1 + i) / 12), m = ((firstM - 1 + i) % 12) + 1; return [y, m]; };
   for (;;) {
     const len = 3 + Math.floor(Math.random() * 28);
     const start = Math.floor(Math.random() * (months - len + 1));
@@ -156,7 +160,11 @@ const sections = {
     await click(p.page, "map-level-arr");
     await settle(p.net);
 
-    for (const y of [2022, 2023, 2024]) await measure(p, `year button ${y}`, () => click(p.page, `preset-${y}`));
+    // Up to three full calendar years, with the button's test id built as in time-control.tsx.
+    const fullYears = years.filter((y) => y.from.endsWith("-01-01") && y.to.endsWith("-12-31")).slice(0, 3);
+    for (const { label } of fullYears) {
+      await measure(p, `year button ${label}`, () => click(p.page, `preset-${label.replace(/\s/g, "-").toLowerCase()}`));
+    }
 
     await click(p.page, "preset-all-dates");
     await settle(p.net);
