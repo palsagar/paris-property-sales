@@ -46,7 +46,8 @@ export const FilterBar = memo(function FilterBar({ chartView, datasetFrom, datas
           <AreaSearch quartiers={quartiers} communes={communes} area={area} onSelect={selectArea} />
         </div>
       </div>
-      <div className="fixed top-2 right-2 z-[1000] pointer-events-none print:hidden" aria-live="polite">
+      {/* Bottom right, where it covers none of the header's buttons. */}
+      <div className="fixed bottom-3 right-3 z-[1000] pointer-events-none print:hidden" aria-live="polite">
         {updating && (
           <span className="updating-label rounded-md border bg-card px-2.5 py-1 text-[13px] text-muted-foreground shadow-sm" data-testid="text-updating">Updating</span>
         )}

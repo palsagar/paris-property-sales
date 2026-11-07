@@ -308,6 +308,8 @@ const sections = {
       updating: await page.locator('[data-testid="text-updating"]').isVisible().catch(() => false),
       heading: await page.textContent('[data-testid="text-area-name"]'),
       kpi: await page.textContent('[data-testid="text-kpi-0"]'),
+      label: await page.locator('[data-testid="text-updating"]').boundingBox(),
+      controls: [await page.locator('[data-testid="button-pdf"]').boundingBox(), await page.locator('[data-testid="button-theme"]').boundingBox()],
     };
     await settle(net);
     await page.waitForTimeout(200);
@@ -315,6 +317,8 @@ const sections = {
     check("together: the button moves at once", at300.pressed === "true", { pressed: at300.pressed });
     check("together: the page says it is updating", at300.updating === true);
     check("together: the old name and figures stay while loading", at300.heading === name0 && at300.kpi === kpi0);
+    const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    check("together: the updating label covers no control", at300.label !== null && !at300.controls.some((c) => overlaps(at300.label, c)), { label: at300.label });
     const gap = after.nameAt.length && after.kpiAt.length ? Math.abs(after.nameAt.at(-1) - after.kpiAt.at(-1)) : null;
     check("together: the name and the figures change in one commit", gap !== null && gap <= 16, { gap, names: after.names.length });
     await p.ctx.close();
