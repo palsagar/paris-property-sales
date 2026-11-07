@@ -10,7 +10,10 @@ import type { ViewState } from "./view-state";
 
 /**
  * The requests of a view, in one place. The panels build their params with these functions and the page loads
- * `selectionQueries` before it shows a new view, so the two can never ask for different keys.
+ * `selectionQueries` before it shows a new view, so the params of the two always agree. The rule that decides whether
+ * a panel makes a request at all is not shared: each panel has its own `enabled` rule, and `selectionQueries` writes
+ * it again. Keep these in step by hand: the map's Quartier stats, Quartier trend and points (map level and mode, in
+ * `map-panel.tsx`) and the All Paris line beside an Area's trend (in `hero-trend.tsx`).
  */
 
 /** A Visitor's Smoothing switch. It applies only to the granularity and Area level it was set on. */
