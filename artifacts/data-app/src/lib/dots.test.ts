@@ -90,3 +90,8 @@ test("a single Sale keeps today's tooltip", () => {
   assert.equal(dotTooltip(d!, "2e arrondissement"),
     `<div class="pt-title">Rue A</div><div class="pt-sub">2e arrondissement</div><div>Apartment of 40 m², sold on 2024-03-05</div><div class="pt-num">400 000 EUR, <b>10 000 EUR/m²</b></div>`);
 });
+
+test("a stacked dot's rows sit in a block that wraps, so the tooltip fits a phone's map", () => {
+  const [d] = groupDots([sale(), sale()], "arr");
+  assert.match(dotTooltip(d!, "1er"), /<div class="pt-rows">(<div class="pt-row">.*?<\/div>){2}<\/div>/);
+});

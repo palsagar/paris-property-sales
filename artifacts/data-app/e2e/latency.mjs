@@ -1,6 +1,7 @@
 // Latency test for issue #5: every Selection change is drawn within 200 ms of main-thread work,
 // on Chrome at a 2x CPU slowdown, with reduced motion. It needs the full data and a running server.
 // Run: pnpm --filter @workspace/data-app run latency [section ...]   (BASE_URL defaults to http://localhost:3000)
+// MOTION=1 runs without reduced motion, to measure the map's fly-to, which is outside the 200 ms.
 // DIST=<folder of a dashboard build> serves that build in place of the server's, with the API still from BASE_URL.
 import { chromium } from "playwright-core";
 import { readFile } from "node:fs/promises";
@@ -18,7 +19,7 @@ const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 /** One page with the counters the checks read: API requests in flight, cache misses, React commits, skeletons added. */
 async function openPage(path = "/") {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
   const page = await ctx.newPage();
   await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
   if (DIST) {

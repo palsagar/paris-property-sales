@@ -71,6 +71,6 @@ export function dotTooltip(dot: SaleDot, areaName: string): string {
   const rows = dot.sales.slice(0, ROWS).map((p) =>
     `<div class="pt-row">${p.date.slice(0, 10)}, ${escapeHtml(p.address)}, ${typeLabel(p.type).toLowerCase()} of ${num(p.surface)} m², <span class="pt-num">${eur(p.price)}</span></div>`);
   const rest = dot.sales.length - ROWS;
-  return `<div class="pt-title">${name}</div><div class="pt-sub">${num(dot.sales.length)} sales near here</div>` + rows.join("") +
+  return `<div class="pt-title">${name}</div><div class="pt-sub">${num(dot.sales.length)} sales near here</div><div class="pt-rows">${rows.join("")}</div>` +
     (rest > 0 ? `<div class="pt-sub">and ${num(rest)} more sales</div>` : "");
 }
