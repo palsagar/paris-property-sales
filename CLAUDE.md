@@ -46,6 +46,10 @@ pnpm --filter @workspace/api-server exec node --import tsx --test --test-name-pa
 # Regenerate the client hooks and validators after editing lib/api-spec/openapi.yaml
 pnpm --filter @workspace/api-spec run codegen
 
+# Measure each Selection change at a 2x CPU slowdown and check the page's behaviour, with the installed Chrome.
+# It needs the full data and a running server (docker compose up). DIST=<build folder> tests a local dashboard build against that server.
+pnpm --filter @workspace/data-app run latency
+
 # Build the dashboard. The Vite config throws an error if PORT or BASE_PATH is missing.
 BASE_PATH=/ PORT=3000 pnpm --filter @workspace/data-app run build
 
@@ -63,11 +67,12 @@ This is a pnpm monorepo with two apps in `artifacts/` and shared packages in `li
 
 **The server reads all Sales from one DuckDB file.** `salesDb.ts` opens `sales.duckdb` read-only and uses one connection for each query. `salesQueries.ts` holds all the SQL, and the routes in `routes/sales.ts` call it. `timeStats.ts` builds the time buckets and the SQL for the Change. `salesData.ts` opens the file at import time with a top-level await. The bundle finds the file at `../data` and the boundary files at `../boundaries`, both relative to `dist/`, so `dist/`, `data/` and `boundaries/` must stay next to each other at runtime. The `boundaries` folder is in git and in the image. In Docker, `data` is a mount at `/app/data`. The image has no such folder, and the mount must hold `sales.duckdb`. The `@duckdb/node-api` package is a native module that the bundle does not include, so the `Dockerfile` installs it into the image.
 
-**Two pieces of code depend on the exact requests the dashboard makes.**
+**Three pieces of code depend on the exact requests the dashboard makes.**
+- `artifacts/data-app/src/lib/selection-queries.ts` builds the params of every request the panels make, and `selectionQueries()` lists the requests of one view. The page loads them all before it shows a new Selection, so a panel must build its params with these functions, or its request starts late and the panel waits.
 - `lib/responseCache.ts` caches successful `/api` GETs in memory, up to a limit in total bytes. The key is the path plus the query after validation, with the same Zod schema the route uses, so the cache and the route always agree on what a request means. A new route is not cached until you add it and its schema to `QUERY_SCHEMAS`. The cache assumes that the data never changes while the process runs, so a server must restart to show new data.
-- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with about 4,463 URLs. These URLs copy the parameters the dashboard sends. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses.
+- `lib/prewarm.ts` fills that cache at startup by calling the server's own API with the 1,683 URLs of `warmUrls()` in `lib/warmUrls.ts`: the default view of each Area. These URLs copy `selectionQueries()`. If you change the parameters a component sends, update `warmUrls()` as well, or those requests become slow cache misses. The `warm` section of the latency test checks this.
 
-**The dashboard is one page.** `pages/dashboard.tsx` owns the view and passes filters to the panels in `components/`. Each panel fetches its own data through the generated hooks. The view state (`lib/view-state.ts`) is mirrored into the URL query string, and links depend on it, so a new filter belongs there. Charts use Recharts, and the map uses Leaflet.
+**The dashboard is one page.** `pages/dashboard.tsx` owns the view and passes filters to the panels in `components/`. `lib/shown-view.tsx` keeps two views: the requested view drives the filter buttons and the URL at once, and the shown view drives every panel and heading, and changes only when all its data has loaded. Each panel fetches its own data through the generated hooks. The view state (`lib/view-state.ts`) is mirrored into the URL query string, and links depend on it, so a new filter belongs there. Charts use Recharts, and the map uses Leaflet.
 
 **The data pipeline's rules are shown to users.** `scripts/build_paris_sales.py` decides which DVF rows count as one sale, and it records its exclusion counts in the dataset's `filters` field. `salesData.ts` sums selected counts into `excludedCount`, which the dashboard's data note displays. If you change the rules, update that sum, the note and the README.
 

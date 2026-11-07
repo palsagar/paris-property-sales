@@ -260,6 +260,27 @@ const sections = {
     await p.ctx.close();
   },
 
+  /** Every request of each Area's default view is in the server's warmed cache. Run it after the warm-up. */
+  async warm() {
+    for (const path of ["/", "/?arr=7", "/?q=7510501", "/?commune=78646", "/?dept=93"]) {
+      const misses = [];
+      let seen = 0;
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      const page = await ctx.newPage();
+      await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
+      page.on("response", (r) => {
+        if (!r.url().includes("/api/")) return;
+        seen++;
+        if (r.headers()["x-cache"] !== "HIT") misses.push(r.url().split("/api")[1]);
+      });
+      await page.goto(BASE + path, { waitUntil: "networkidle" });
+      await page.waitForSelector('[data-testid="card-kpi-0"]');
+      await page.waitForTimeout(1000);
+      check(`warm: every request of ${path} is a cache hit`, seen > 0 && misses.length === 0, { requests: seen, misses });
+      await ctx.close();
+    }
+  },
+
   /** The page changes at once: the old Selection stays, correctly named, until all new data is in. No slowdown. */
   async behaviour() {
     // Together
