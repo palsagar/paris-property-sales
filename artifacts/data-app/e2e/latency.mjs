@@ -200,7 +200,74 @@ const sections = {
       await p.ctx.close();
     }
   },
+
+  /** The time slider applies a change when the drag or the key press ends, and never during a drag. No slowdown. */
+  async slider() {
+    const p = await openPage("/");
+    const { page, net } = p;
+    const handle = () => page.locator('[data-testid="time-control"] .recharts-brush-traveller').first();
+    const brushBox = () => page.locator('[data-testid="time-control"] .recharts-brush').first().boundingBox();
+    const range = () => page.textContent('[data-testid="text-range"]');
+    const from = () => new URL(page.url()).searchParams.get("from");
+    const centre = async () => { const b = await handle().boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
+
+    await settle(net);
+    let [x, y] = await centre();
+    let brush = await brushBox();
+    const text0 = await range(), from0 = from();
+    net.requests = 0;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(brush.x + brush.width * 0.3, y, { steps: 8 });
+    await page.waitForTimeout(100);
+    const textDuring = await range();
+    await page.waitForTimeout(700);
+    const requestsDuring = net.requests;
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    check("slider: no request while the mouse is down", requestsDuring === 0, { requestsDuring });
+    check("slider: the dates follow the drag", textDuring !== text0, { text0, textDuring });
+    check("slider: the release applies the change", net.requests > 0 && from() !== from0, { requests: net.requests, from: from() });
+    await settle(net);
+
+    const from1 = from();
+    await handle().focus();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(500);
+    check("slider: an arrow key applies the change", from() !== from1, { before: from1, after: from() });
+    await settle(net);
+
+    [x, y] = await centre();
+    const from2 = from();
+    net.requests = 0;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(800);
+    check("slider: a click with no movement requests nothing", net.requests === 0 && from() === from2, { requests: net.requests });
+    await settle(net);
+
+    [x, y] = await centre();
+    brush = await brushBox();
+    const from3 = from();
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(brush.x + brush.width * 0.1, y, { steps: 8 });
+    await page.mouse.move(brush.x + brush.width * 0.1, y + 300, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+    check("slider: a release outside the chart applies the change", from() !== from3, { before: from3, after: from() });
+    await p.ctx.close();
+  },
 };
+
+/** Records a pass or fail behaviour check. */
+function check(name, ok, detail = {}) {
+  if (!ok) failed = true;
+  const r = { name, pass: ok, ...detail };
+  console.log(JSON.stringify(r));
+  results.push(r);
+}
 
 for (const [name, run] of Object.entries(sections)) {
   if (only.length && !only.includes(name)) continue;
@@ -212,6 +279,7 @@ await browser.close();
 if (results.length) {
   console.log("\nstep".padEnd(36) + "work ms  longest  req  miss  commits  blanks  result");
   for (const r of results) {
+    if (r.workMs === undefined) { console.log(r.name.padEnd(80) + (r.pass ? "pass" : "FAIL")); continue; }
     console.log(r.name.padEnd(35) + String(r.workMs).padStart(7) + String(r.longestTaskMs).padStart(9) + String(r.requests).padStart(5)
       + String(r.misses).padStart(6) + String(r.commits).padStart(9) + String(r.blanks).padStart(8) + "  " + (r.pass ? "pass" : "FAIL"));
   }
