@@ -334,6 +334,26 @@ const sections = {
     check("rapid: the heading goes straight to the second Area", rapid.length === 2 && new URL(page.url()).searchParams.get("arr") === "9", { names: rapid.length });
     await p.ctx.close();
 
+    // A second click on an Area while it loads
+    p = await openPage("/");
+    ({ page, net } = p);
+    await settle(net);
+    await delay(page, /\/api\/sales\/by-rooms/, 1000);
+    await click(page, "filter-arr-5");
+    await page.waitForTimeout(300);
+    await click(page, "filter-arr-5");
+    await settle(net);
+    await page.waitForTimeout(200);
+    const twice = { arr: new URL(page.url()).searchParams.get("arr"), heading: await page.textContent('[data-testid="text-area-name"]') };
+    check("second click: a click on the Area that is loading keeps it", twice.arr === "5" && twice.heading !== "All Paris", twice);
+    // Nothing is loading now, so a click on the selected Area clicks it off.
+    await click(page, "filter-arr-5");
+    await settle(net);
+    await page.waitForTimeout(200);
+    const off = { arr: new URL(page.url()).searchParams.get("arr"), heading: await page.textContent('[data-testid="text-area-name"]') };
+    check("second click: with nothing loading, a click on the selected Area goes back to Paris", off.arr === null && off.heading === "All Paris", off);
+    await p.ctx.close();
+
     // Failure of one panel
     p = await openPage("/");
     ({ page, net } = p);

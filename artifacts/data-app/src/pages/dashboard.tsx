@@ -52,8 +52,14 @@ function ViewHost(props: DatasetProps) {
   const [view, patch, movedTo] = useViewState(props.datasetFrom, props.datasetTo);
   const [choices, setChoices] = useState<PanelChoices>({ smooth: null, sortBy: "date", sortDir: "desc" });
   const { shown, updating } = useShownView(view, choices);
-  // A click on the selected Area clicks it off, back to Paris.
-  const selectArea = useCallback((a: Area) => patch((s) => areaChange(s.area, a)), [patch]);
+  // A click on the selected Area clicks it off, back to Paris. While the page loads, the panels do not yet show the
+  // requested Area as selected, so a second click on it does nothing. A ref keeps selectArea stable.
+  const updatingRef = useRef(updating);
+  updatingRef.current = updating;
+  const selectArea = useCallback((a: Area) => {
+    const clickOff = !updatingRef.current;
+    patch((s) => areaChange(s.area, a, clickOff));
+  }, [patch]);
   const selectAreaOnly = useCallback((a: Area) => patch((s) => areaChange(s.area, a, false)), [patch]);
   const requested = useMemo(() => ({ view, patch, selectArea, updating }), [view, patch, selectArea, updating]);
   const panelChoices = useMemo(() => ({ choices, setChoices }), [choices]);
