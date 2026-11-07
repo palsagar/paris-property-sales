@@ -1,20 +1,21 @@
 import { useMemo, useRef, useState } from "react";
-import { useGetSalesTrend, getGetSalesTrendQueryKey, type PropertyTypeParameter, type YearRange } from "@workspace/api-client-react";
+import { useGetSalesTrend, getGetSalesTrendQueryKey, type YearRange } from "@workspace/api-client-react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Brush, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChartColors } from "@/components/ui-bits";
 import { endOfMonth, monthsBefore, rangeLabel } from "@/lib/fmt";
-import { keepInSameArea, type areaParams as areaParamsOf } from "@/lib/areas";
+import { areaParams, keepInSameArea } from "@/lib/areas";
+import { timeTrendParams } from "@/lib/selection-queries";
+import type { ViewState } from "@/lib/view-state";
 
-type AreaParams = ReturnType<typeof areaParamsOf>;
-
-export function TimeControl({ ptype, areaParams, from, to, datasetFrom, datasetTo, years, onChange, isDark }: {
-  ptype: PropertyTypeParameter; areaParams: AreaParams; from?: string; to?: string; datasetFrom: string; datasetTo: string; years: YearRange[];
+/** `chartView` is the shown view, for the small chart. `from` and `to` are the requested Period, for the handles. */
+export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years, onChange, isDark }: {
+  chartView: ViewState; from?: string; to?: string; datasetFrom: string; datasetTo: string; years: YearRange[];
   onChange: (from?: string, to?: string) => void; isDark: boolean;
 }) {
   const c = useChartColors(isDark);
-  const params = { propertyType: ptype, ...areaParams, granularity: "month" as const, window: 1 };
-  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(areaParams) } });
+  const params = timeTrendParams(chartView);
+  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(areaParams(chartView.area)) } });
   const data = useMemo(() => q.data ?? [], [q.data]);
   const periods = data.map((d) => d.period);
 

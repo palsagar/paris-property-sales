@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { nearestValidPeriod } from "./period";
 import { groupOfArea, type Area, type DepartmentId, type RankGroup } from "./areas";
 import type { PropertyTypeParameter, GranularityParameter } from "@workspace/api-client-react";
@@ -83,6 +83,9 @@ export function useViewState(datasetFrom: string, datasetTo: string) {
     const qs = viewQuery(state);
     window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
   }, [state]);
-  const patch = (p: Partial<ViewState>) => setState((s) => ({ ...s, ...p }));
+  const patch = useCallback(
+    (p: Partial<ViewState> | ((s: ViewState) => Partial<ViewState>)) => setState((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) })),
+    [],
+  );
   return [state, patch, first.movedTo] as const;
 }

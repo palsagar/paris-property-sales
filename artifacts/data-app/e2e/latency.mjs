@@ -259,7 +259,119 @@ const sections = {
     check("slider: a release outside the chart applies the change", from() !== from3, { before: from3, after: from() });
     await p.ctx.close();
   },
+
+  /** The page changes at once: the old Selection stays, correctly named, until all new data is in. No slowdown. */
+  async behaviour() {
+    // Together
+    let p = await openPage("/");
+    let { page, net } = p;
+    await settle(net);
+    await delay(page, /\/api\/sales\/by-rooms/, 1000);
+    await watchHeading(page);
+    const name0 = await page.textContent('[data-testid="text-area-name"]');
+    const kpi0 = await page.textContent('[data-testid="text-kpi-0"]');
+    const asked = Date.now();
+    await click(page, "filter-arr-5");
+    await page.waitForTimeout(300);
+    const at300 = {
+      pressed: await page.getAttribute('[data-testid="filter-arr-5"]', "aria-pressed"),
+      updating: await page.locator('[data-testid="text-updating"]').isVisible().catch(() => false),
+      heading: await page.textContent('[data-testid="text-area-name"]'),
+      kpi: await page.textContent('[data-testid="text-kpi-0"]'),
+    };
+    await settle(net);
+    await page.waitForTimeout(200);
+    const after = await page.evaluate(() => ({ names: window.__names, nameAt: window.__nameAt, kpiAt: window.__kpiAt }));
+    check("together: the button moves at once", at300.pressed === "true", { pressed: at300.pressed });
+    check("together: the page says it is updating", at300.updating === true);
+    check("together: the old name and figures stay while loading", at300.heading === name0 && at300.kpi === kpi0);
+    const gap = after.nameAt.length && after.kpiAt.length ? Math.abs(after.nameAt.at(-1) - after.kpiAt.at(-1)) : null;
+    check("together: the name and the figures change in one commit", gap !== null && gap <= 16, { gap, names: after.names.length });
+    await p.ctx.close();
+
+    // Rapid changes
+    p = await openPage("/");
+    ({ page, net } = p);
+    await settle(net);
+    await delay(page, /\/api\/sales\/by-rooms/, 1000);
+    await watchHeading(page);
+    await click(page, "filter-arr-5");
+    await page.waitForTimeout(200);
+    await click(page, "filter-arr-9");
+    await settle(net);
+    await page.waitForTimeout(200);
+    const rapid = await page.evaluate(() => window.__names);
+    check("rapid: the heading goes straight to the second Area", rapid.length === 2 && new URL(page.url()).searchParams.get("arr") === "9", { names: rapid.length });
+    await p.ctx.close();
+
+    // Failure of one panel
+    p = await openPage("/");
+    ({ page, net } = p);
+    await settle(net);
+    await page.route(/\/api\/sales\/by-rooms\?.*arrondissement=7/, (r) => r.abort());
+    const nameBefore = await page.textContent('[data-testid="text-area-name"]');
+    await click(page, "filter-arr-7");
+    const switched = await page.waitForFunction((n) => document.querySelector('[data-testid="text-area-name"]').textContent !== n, nameBefore, { timeout: 5000 }).then(() => true, () => false);
+    const roomsError = await page.locator('[data-testid="card-rooms"] [data-testid="button-retry"]').waitFor({ timeout: 20000 }).then(() => true, () => false);
+    const kpiOk = await page.locator('[data-testid="card-kpi-0"] [data-testid="button-retry"]').count() === 0;
+    check("failure: the page still switches", switched);
+    check("failure: only the failed panel shows its error", roomsError && kpiOk, { roomsError, kpiOk });
+    await p.ctx.close();
+
+    // Panel state at an Area change, and no late requests
+    p = await openPage("/");
+    ({ page, net } = p);
+    await settle(net);
+    await click(page, "sort-price");
+    await settle(net);
+    await click(page, "button-next");
+    await settle(net);
+    await click(page, "button-next");
+    await settle(net);
+    await page.evaluate(() => { window.__countBlanks = true; window.__blanks = 0; });
+    await watchHeading(page);
+    const startedAt = [];
+    page.on("request", (r) => { if (r.url().includes("/api/")) startedAt.push(Date.now()); });
+    await click(page, "filter-arr-6");
+    await settle(net);
+    const pageText = await page.textContent('[data-testid="card-transactions"] span.font-num.px-2');
+    const sortKept = await page.locator('[data-testid="sort-price"] svg').count() === 1;
+    let st = await page.evaluate(() => ({ blanks: window.__blanks, nameAt: window.__nameAt }));
+    check("panel state: no panel blanks at an Area change", st.blanks === 0, { blanks: st.blanks });
+    check("panel state: the Sales list goes to its first page and keeps its sort", pageText.trim().startsWith("1 /") && sortKept, { pageText, sortKept });
+    const lateRequests = startedAt.filter((t) => st.nameAt.length && t > st.nameAt.at(-1) + 5).length;
+    check("no late requests: no panel asks for data after the heading changed", st.nameAt.length > 0 && lateRequests === 0, { lateRequests });
+    await click(page, "toggle-smooth");
+    await settle(net);
+    await page.evaluate(() => { window.__blanks = 0; });
+    await click(page, "filter-arr-8");
+    await settle(net);
+    st = await page.evaluate(() => ({ blanks: window.__blanks }));
+    check("panel state: no blank after Smoothing was switched by hand", st.blanks === 0, { blanks: st.blanks });
+    await p.ctx.close();
+  },
 };
+
+/** Records the time of each change of the heading and of the first KPI, in the page's clock. */
+async function watchHeading(page) {
+  await page.evaluate(() => {
+    window.__names = [document.querySelector('[data-testid="text-area-name"]').textContent];
+    window.__nameAt = [];
+    window.__kpiAt = [];
+    const obs = (sel, list, onText) => {
+      const el = document.querySelector(sel);
+      let last = el.textContent;
+      new MutationObserver(() => { if (el.textContent !== last) { last = el.textContent; list.push(Date.now()); onText?.(last); } })
+        .observe(el, { childList: true, subtree: true, characterData: true });
+    };
+    obs('[data-testid="text-area-name"]', window.__nameAt, (t) => window.__names.push(t));
+    obs('[data-testid="text-kpi-0"]', window.__kpiAt);
+  });
+}
+
+/** Delays or fails one endpoint for the rest of the page's life. */
+const delay = (page, pattern, ms) => page.route(pattern, async (r) => { await new Promise((res) => setTimeout(res, ms)); await r.continue().catch(() => {}); });
+
 
 /** Records a pass or fail behaviour check. */
 function check(name, ok, detail = {}) {

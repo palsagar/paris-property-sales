@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, type PropertyTypeParameter, type YearRange } from "@workspace/api-client-react";
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, TipBox, useChartColors } from "@/components/ui-bits";
 import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, TOO_FEW } from "@/lib/fmt";
 import { keepInSameArea, type areaParams } from "@/lib/areas";
+import { parisTrendParams, smoothOn, summaryParams, trendParams } from "@/lib/selection-queries";
+import { usePanelChoices } from "@/lib/shown-view";
+import type { ViewState } from "@/lib/view-state";
 import { yearBucketLabel } from "@/lib/period";
 
 export type Filters = ReturnType<typeof areaParams> & { propertyType: PropertyTypeParameter; from?: string; to?: string };
@@ -25,18 +28,18 @@ function Switch({ on, onClick, label, disabled, testId }: { on: boolean; onClick
   );
 }
 
-export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGran, isDark, years }: {
-  filters: Filters; areaName: string; hasArea: boolean; isQuartier: boolean; gran: GranularityParameter; setGran: (g: GranularityParameter) => void; isDark: boolean; years: YearRange[];
+export function HeroTrend({ view, areaName, setGran, isDark, years }: {
+  view: ViewState; areaName: string; setGran: (g: GranularityParameter) => void; isDark: boolean; years: YearRange[];
 }) {
   const c = useChartColors(isDark);
-  const [override, setOverride] = useState<boolean | null>(null);
+  const { choices, setChoices } = usePanelChoices();
   const [showBand, setShowBand] = useState(true);
-  useEffect(() => setOverride(null), [gran, isQuartier]);
-  const smooth = gran === "year" ? false : override ?? (gran === "month" || isQuartier);
-  const win = smooth ? 3 : 1;
-  const params = { ...filters, granularity: gran, window: win };
-  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(filters) } });
-  const allP = { propertyType: filters.propertyType, from: filters.from, to: filters.to, granularity: gran, window: win };
+  const gran = view.gran, isQuartier = view.area.kind === "q", hasArea = view.area.kind !== "paris";
+  const smooth = smoothOn(gran, isQuartier, choices.smooth);
+  const params = trendParams(view, choices);
+  const win = params.window;
+  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(summaryParams(view)) } });
+  const allP = parisTrendParams(view, choices);
   const all = useGetSalesTrend(allP, { query: { queryKey: getGetSalesTrendQueryKey(allP), enabled: hasArea } });
 
   const data = useMemo(() => {
@@ -80,7 +83,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
       right={
         <>
           <Segmented testId="gran" label="Granularity" value={gran} onChange={setGran} options={[["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]]} />
-          <Switch testId="toggle-smooth" on={smooth} disabled={gran === "year"} onClick={() => setOverride(!smooth)} label="Smoothing" />
+          <Switch testId="toggle-smooth" on={smooth} disabled={gran === "year"} onClick={() => setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on: !smooth } }))} label="Smoothing" />
           <Switch testId="toggle-band" on={showBand} onClick={() => setShowBand((b) => !b)} label="P25-P75" />
         </>
       }>
@@ -104,7 +107,7 @@ export function HeroTrend({ filters, areaName, hasArea, isQuartier, gran, setGra
                     ["Median price", orTooFew(d.medianPrice, eur)],
                     ["Sales", num(d.count)],
                   ];
-                  const share = filters.propertyType === "all" ? houseShareLabel(d.houseShare) : null;
+                  const share = view.ptype === "all" ? houseShareLabel(d.houseShare) : null;
                   if (share) rows.push(["House share", share]);
                   if (d.yoy != null) rows.push(["Change on a year earlier", pct(d.yoy)]);
                   if (d.paris != null) rows.push(["All Paris", sqm(d.paris), c.second]);

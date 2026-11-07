@@ -13,10 +13,11 @@ import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, TOO_FEW, houseS
 import { groupDots, type SaleDot } from "@/lib/dots";
 import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
-import type { MapLevel, MapMode } from "@/lib/view-state";
+import { pointParams, quartierStatParams, quartierTrendParams } from "@/lib/selection-queries";
+import type { MapLevel, MapMode, ViewState } from "@/lib/view-state";
 
 export function MapPanel(props: {
-  isDark: boolean; ptype: PropertyTypeParameter; from?: string; to?: string; datasetFrom: string; datasetTo: string;
+  view: ViewState; isDark: boolean; ptype: PropertyTypeParameter; from?: string; to?: string; datasetFrom: string; datasetTo: string;
   area: Area; selArr?: number; areaParams: ReturnType<typeof areaParams>;
   mode: MapMode; setMode: (m: MapMode) => void; level: MapLevel; setLevel: (l: MapLevel) => void;
   arrStats: AreaStat[]; communeStats: AreaStat[]; statsLoading: boolean; statsError: boolean; retryStats: () => void;
@@ -29,13 +30,13 @@ export function MapPanel(props: {
   const { isDark, ptype, from, to, datasetFrom, datasetTo, area, selArr, areaParams: areaP, mode, setMode, level, setLevel, arrStats, communeStats, arrTrend, communeTrend, scale, travel, setTravel } = props;
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
 
-  const qp = { propertyType: ptype, from, to };
+  const qp = quartierStatParams(props.view);
   const qStats = useGetSalesByQuartier(qp, { query: { queryKey: getGetSalesByQuartierQueryKey(qp), enabled: level === "quartier" && mode !== "dots" } });
-  const tp = { level: "quartier" as const, propertyType: ptype, from, to, granularity: "quarter" as const, window: 4 };
+  const tp = quartierTrendParams(props.view);
   const qTrend = useGetAreaTrend(tp, { query: { queryKey: getGetAreaTrendQueryKey(tp), enabled: level === "quartier" && mode === "level" } });
 
   // Points: the server returns the newest 5,000 Sales of the Selection at most, and the total.
-  const pp = { propertyType: ptype, ...areaP, from, to };
+  const pp = pointParams(props.view);
   const points = useGetSalesPoints(pp, { query: { queryKey: getGetSalesPointsQueryKey(pp), enabled: mode === "dots", placeholderData: keepInSameArea(areaP) } });
   const items = points.data?.items;
   const total = points.data?.total ?? 0;

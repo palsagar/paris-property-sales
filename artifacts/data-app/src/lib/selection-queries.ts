@@ -1,0 +1,75 @@
+import {
+  getGetAreaTrendQueryOptions, getGetPriceDistributionQueryOptions, getGetPricePerSqmDistributionQueryOptions,
+  getGetSalesByArrondissementQueryOptions, getGetSalesByCommuneQueryOptions, getGetSalesByQuartierQueryOptions,
+  getGetSalesByRoomsQueryOptions, getGetSalesPointsQueryOptions, getGetSalesSummaryQueryOptions, getGetSalesTrendQueryOptions,
+  getListTransactionsQueryOptions,
+  type GetAreaTrendLevel, type GranularityParameter, type ListTransactionsSortBy, type ListTransactionsSortDir,
+} from "@workspace/api-client-react";
+import { areaParams } from "./areas";
+import type { ViewState } from "./view-state";
+
+/**
+ * The requests of a view, in one place. The panels build their params with these functions and the page loads
+ * `selectionQueries` before it shows a new view, so the two can never ask for different keys.
+ */
+
+/** A Visitor's Smoothing switch. It applies only to the granularity and Area level it was set on. */
+export type SmoothChoice = { gran: GranularityParameter; isQuartier: boolean; on: boolean };
+/** Panel settings that change requests but are not part of the link. */
+export type PanelChoices = { smooth: SmoothChoice | null; sortBy: ListTransactionsSortBy; sortDir: ListTransactionsSortDir };
+
+export const TRANSACTIONS_PAGE = 15;
+
+/** The Smoothing window of the trend: 1 for a year, otherwise the Visitor's choice, else 3 for months or a Quartier. */
+export function trendWindow(gran: GranularityParameter, isQuartier: boolean, smooth: SmoothChoice | null): 1 | 3 {
+  if (gran === "year") return 1;
+  if (smooth && smooth.gran === gran && smooth.isQuartier === isQuartier) return smooth.on ? 3 : 1;
+  return gran === "month" || isQuartier ? 3 : 1;
+}
+export const smoothOn = (gran: GranularityParameter, isQuartier: boolean, smooth: SmoothChoice | null) => trendWindow(gran, isQuartier, smooth) === 3;
+
+const isQuartier = (v: ViewState) => v.area.kind === "q";
+
+/** The Selection: property type, Area and Period. Summary, distributions, rooms. */
+export const summaryParams = (v: ViewState) => ({ propertyType: v.ptype, ...areaParams(v.area), from: v.from, to: v.to });
+/** Figures of every Arrondissement, Commune or Quartier: the Selection without its Area. */
+export const areaStatParams = (v: ViewState) => ({ propertyType: v.ptype, from: v.from, to: v.to });
+export const quartierStatParams = areaStatParams;
+export const areaTrendParams = (v: ViewState, level: GetAreaTrendLevel, window: number) =>
+  ({ level, ...areaStatParams(v), granularity: "quarter" as const, window });
+export const heatParams = (v: ViewState) => areaTrendParams(v, v.rank === "paris" ? "arrondissement" : "commune", 1);
+export const quartierTrendParams = (v: ViewState) => areaTrendParams(v, "quartier", 4);
+export const pointParams = summaryParams;
+/** The small chart of the time slider: the whole range, so it does not depend on the Period. */
+export const timeTrendParams = (v: ViewState) => ({ propertyType: v.ptype, ...areaParams(v.area), granularity: "month" as const, window: 1 });
+export const trendParams = (v: ViewState, c: PanelChoices) =>
+  ({ ...summaryParams(v), granularity: v.gran, window: trendWindow(v.gran, isQuartier(v), c.smooth) });
+/** The All Paris line beside an Area's trend. */
+export const parisTrendParams = (v: ViewState, c: PanelChoices) =>
+  ({ ...areaStatParams(v), granularity: v.gran, window: trendWindow(v.gran, isQuartier(v), c.smooth) });
+export const transactionParams = (v: ViewState, c: PanelChoices, offset: number) =>
+  ({ ...summaryParams(v), sortBy: c.sortBy, sortDir: c.sortDir, limit: TRANSACTIONS_PAGE, offset });
+
+/** The query options of exactly the requests that the panels of this view make. */
+export function selectionQueries(v: ViewState, c: PanelChoices) {
+  const s = summaryParams(v), a = areaStatParams(v);
+  const out: { queryKey: readonly unknown[] }[] = [
+    getGetSalesSummaryQueryOptions(s),
+    getGetSalesByArrondissementQueryOptions(a),
+    getGetSalesByCommuneQueryOptions(a),
+    getGetAreaTrendQueryOptions(areaTrendParams(v, "arrondissement", 4)),
+    getGetAreaTrendQueryOptions(areaTrendParams(v, "commune", 4)),
+    getGetAreaTrendQueryOptions(heatParams(v)),
+    getGetSalesTrendQueryOptions(timeTrendParams(v)),
+    getGetSalesTrendQueryOptions(trendParams(v, c)),
+    getGetPriceDistributionQueryOptions(s),
+    getGetPricePerSqmDistributionQueryOptions(s),
+    getGetSalesByRoomsQueryOptions(s),
+    getListTransactionsQueryOptions(transactionParams(v, c, 0)),
+  ];
+  if (v.area.kind !== "paris") out.push(getGetSalesTrendQueryOptions(parisTrendParams(v, c)));
+  if (v.mapLevel === "quartier" && v.mapMode !== "dots") out.push(getGetSalesByQuartierQueryOptions(quartierStatParams(v)));
+  if (v.mapLevel === "quartier" && v.mapMode === "level") out.push(getGetAreaTrendQueryOptions(quartierTrendParams(v)));
+  if (v.mapMode === "dots") out.push(getGetSalesPointsQueryOptions(pointParams(v)));
+  return out;
+}
