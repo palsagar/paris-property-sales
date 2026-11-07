@@ -28,26 +28,29 @@ export function trendWindow(gran: GranularityParameter, isQuartier: boolean, smo
 }
 export const smoothOn = (gran: GranularityParameter, isQuartier: boolean, smooth: SmoothChoice | null) => trendWindow(gran, isQuartier, smooth) === 3;
 
-const isQuartier = (v: ViewState) => v.area.kind === "q";
+/** The parts of a view that most requests read. A panel can pass these alone, so it does not redraw when another part changes. */
+export type Selection = Pick<ViewState, "ptype" | "area" | "from" | "to">;
+
+const isQuartier = (v: Selection) => v.area.kind === "q";
 
 /** The Selection: property type, Area and Period. Summary, distributions, rooms. */
-export const summaryParams = (v: ViewState) => ({ propertyType: v.ptype, ...areaParams(v.area), from: v.from, to: v.to });
+export const summaryParams = (v: Selection) => ({ propertyType: v.ptype, ...areaParams(v.area), from: v.from, to: v.to });
 /** Figures of every Arrondissement, Commune or Quartier: the Selection without its Area. */
-export const areaStatParams = (v: ViewState) => ({ propertyType: v.ptype, from: v.from, to: v.to });
+export const areaStatParams = (v: Selection) => ({ propertyType: v.ptype, from: v.from, to: v.to });
 export const quartierStatParams = areaStatParams;
-export const areaTrendParams = (v: ViewState, level: GetAreaTrendLevel, window: number) =>
+export const areaTrendParams = (v: Selection, level: GetAreaTrendLevel, window: number) =>
   ({ level, ...areaStatParams(v), granularity: "quarter" as const, window });
-export const heatParams = (v: ViewState) => areaTrendParams(v, v.rank === "paris" ? "arrondissement" : "commune", 1);
-export const quartierTrendParams = (v: ViewState) => areaTrendParams(v, "quartier", 4);
+export const heatParams = (v: Selection & Pick<ViewState, "rank">) => areaTrendParams(v, v.rank === "paris" ? "arrondissement" : "commune", 1);
+export const quartierTrendParams = (v: Selection) => areaTrendParams(v, "quartier", 4);
 export const pointParams = summaryParams;
 /** The small chart of the time slider: the whole range, so it does not depend on the Period. */
-export const timeTrendParams = (v: ViewState) => ({ propertyType: v.ptype, ...areaParams(v.area), granularity: "month" as const, window: 1 });
-export const trendParams = (v: ViewState, c: PanelChoices) =>
+export const timeTrendParams = (v: Pick<ViewState, "ptype" | "area">) => ({ propertyType: v.ptype, ...areaParams(v.area), granularity: "month" as const, window: 1 });
+export const trendParams = (v: Selection & Pick<ViewState, "gran">, c: PanelChoices) =>
   ({ ...summaryParams(v), granularity: v.gran, window: trendWindow(v.gran, isQuartier(v), c.smooth) });
 /** The All Paris line beside an Area's trend. */
-export const parisTrendParams = (v: ViewState, c: PanelChoices) =>
+export const parisTrendParams = (v: Selection & Pick<ViewState, "gran">, c: PanelChoices) =>
   ({ ...areaStatParams(v), granularity: v.gran, window: trendWindow(v.gran, isQuartier(v), c.smooth) });
-export const transactionParams = (v: ViewState, c: PanelChoices, offset: number) =>
+export const transactionParams = (v: Selection, c: PanelChoices, offset: number) =>
   ({ ...summaryParams(v), sortBy: c.sortBy, sortDir: c.sortDir, limit: TRANSACTIONS_PAGE, offset });
 
 /** The query options of exactly the requests that the panels of this view make. */

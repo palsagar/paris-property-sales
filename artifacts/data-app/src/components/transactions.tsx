@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useListTransactions, getListTransactionsQueryKey, type ListTransactionsSortBy } from "@workspace/api-client-react";
 import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState } from "@/components/ui-bits";
 import { eur, sqm, num, dateLabel } from "@/lib/fmt";
 import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
-import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE } from "@/lib/selection-queries";
+import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
-import type { ViewState } from "@/lib/view-state";
 
 const COLS: { key: string; label: string; sort?: ListTransactionsSortBy; right?: boolean }[] = [
   { key: "date", label: "Date", sort: "date" }, { key: "address", label: "Street" }, { key: "area", label: "Area" }, { key: "quartier", label: "Quartier" },
@@ -15,8 +14,8 @@ const COLS: { key: string; label: string; sort?: ListTransactionsSortBy; right?:
   { key: "price", label: "Price", sort: "price", right: true }, { key: "ppsqm", label: "Price / m²", sort: "pricePerSqm", right: true },
 ];
 
-export function Transactions({ view, scopeLabel, scale, areaColor, onSelectArea, onSelectQuartierName, isDark }: {
-  view: ViewState; scopeLabel: string; scale: (v: number) => string; areaColor: (id: string) => string;
+export const Transactions = memo(function Transactions({ selection: view, scopeLabel, scale, areaColor, onSelectArea, onSelectQuartierName, isDark }: {
+  selection: Selection; scopeLabel: string; scale: (v: number) => string; areaColor: (id: string) => string;
   onSelectArea: (a: Area) => void; onSelectQuartierName: (name: string) => void; isDark: boolean;
 }) {
   const { choices, setChoices } = usePanelChoices();
@@ -94,4 +93,4 @@ export function Transactions({ view, scopeLabel, scale, areaColor, onSelectArea,
       )}
     </ChartCard>
   );
-}
+});

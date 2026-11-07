@@ -10,7 +10,7 @@ import type { ViewState } from "@/lib/view-state";
 
 /** `chartView` is the shown view, for the small chart. `from` and `to` are the requested Period, for the handles. */
 export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years, onChange, isDark }: {
-  chartView: ViewState; from?: string; to?: string; datasetFrom: string; datasetTo: string; years: YearRange[];
+  chartView: Pick<ViewState, "ptype" | "area">; from?: string; to?: string; datasetFrom: string; datasetTo: string; years: YearRange[];
   onChange: (from?: string, to?: string) => void; isDark: boolean;
 }) {
   const c = useChartColors(isDark);

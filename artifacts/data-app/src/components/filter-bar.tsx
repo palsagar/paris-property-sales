@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { PropertyTypeParameter, YearRange } from "@workspace/api-client-react";
 import { TimeControl } from "@/components/time-control";
 import { AreaSearch, type QMeta } from "@/components/area-picker";
@@ -10,8 +11,8 @@ import type { ViewState } from "@/lib/view-state";
  * The sticky Selection controls. They read the requested view, so a click shows at once, while the panels below
  * keep the shown view until its data has loaded.
  */
-export function FilterBar({ shown, datasetFrom, datasetTo, years, isDark, quartiers, communes, qById }: {
-  shown: ViewState; datasetFrom: string; datasetTo: string; years: YearRange[]; isDark: boolean;
+export const FilterBar = memo(function FilterBar({ chartView, datasetFrom, datasetTo, years, isDark, quartiers, communes, qById }: {
+  chartView: Pick<ViewState, "ptype" | "area">; datasetFrom: string; datasetTo: string; years: YearRange[]; isDark: boolean;
   quartiers: QMeta[]; communes: { id: string; name: string; group: RankGroup }[]; qById: Map<string, QMeta>;
 }) {
   const { view, patch, selectArea, updating } = useRequestedView();
@@ -21,7 +22,7 @@ export function FilterBar({ shown, datasetFrom, datasetTo, years, isDark, quarti
 
   return (
     <div className="md:sticky top-0 z-[500] -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-3 bg-background border-b space-y-2 print:static">
-      <TimeControl chartView={shown} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
+      <TimeControl chartView={chartView} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
         onChange={(f, t) => patch({ from: f, to: t })} isDark={isDark} />
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex items-center gap-2">
@@ -52,4 +53,4 @@ export function FilterBar({ shown, datasetFrom, datasetTo, years, isDark, quarti
       </div>
     </div>
   );
-}
+});

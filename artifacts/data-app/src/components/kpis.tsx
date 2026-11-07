@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { PropertyTypeParameter, SalesSummary } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,7 +8,7 @@ import { eur, eurShort, sqm, num, dateLabel, orTooFew, sqmOrTooFew, houseShareLa
 
 type Kpi = { label: string; value: string; sub: string; note?: string | null; change?: number | null; startEnd?: [number | null, number | null, (n: number) => string] };
 
-export function Kpis({ s, ptype, loading, fetching, error }: { s?: SalesSummary; ptype: PropertyTypeParameter; loading: boolean; fetching: boolean; error: boolean }) {
+export const Kpis = memo(function Kpis({ s, ptype, loading, fetching, error }: { s?: SalesSummary; ptype: PropertyTypeParameter; loading: boolean; fetching: boolean; error: boolean }) {
   const n = s?.changeWindowMonths ?? 3;
   // A Selection of one type says nothing through its House share, and with no median there is nothing to warn about.
   const share = ptype === "all" && s?.medianPricePerSqm != null ? s.houseShare : null;
@@ -53,4 +54,4 @@ export function Kpis({ s, ptype, loading, fetching, error }: { s?: SalesSummary;
       {warning && <p className="col-span-full text-[13px] text-muted-foreground" data-testid="text-house-share-warning">{warning}</p>}
     </div>
   );
-}
+});

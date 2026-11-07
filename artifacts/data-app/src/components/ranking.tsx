@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { AreaStat, AreaTrendPoint } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, DeltaChip, ErrorState, Segmented, Sparkline, useChartColors } from "@/components/ui-bits";
@@ -19,7 +19,7 @@ export function RankSwitch({ value, onChange, testId }: { value: RankGroup; onCh
 /** The Area that a row of the ranking or the heat map stands for. */
 const statArea = (s: AreaStat): Area => (s.arrondissement != null ? { kind: "arr", arr: s.arrondissement } : { kind: "commune", id: s.id });
 
-export function Ranking({ stats, trend, loading, fetching, error, retry, scale, selId, onSelect, rank, onRank, ptype, isDark }: {
+export const Ranking = memo(function Ranking({ stats, trend, loading, fetching, error, retry, scale, selId, onSelect, rank, onRank, ptype, isDark }: {
   stats: AreaStat[]; trend: AreaTrendPoint[]; loading: boolean; fetching: boolean; error: boolean; retry: () => void;
   scale: StepScale; selId?: string; onSelect: (a: Area) => void; rank: RankGroup; onRank: (r: RankGroup) => void;
   ptype: PropertyTypeParameter; isDark: boolean;
@@ -82,4 +82,4 @@ export function Ranking({ stats, trend, loading, fetching, error, retry, scale, 
         )}
     </ChartCard>
   );
-}
+});

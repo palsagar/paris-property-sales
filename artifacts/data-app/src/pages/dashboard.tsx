@@ -5,11 +5,11 @@ import {
   useGetSalesByCommune, getGetSalesByCommuneQueryKey,
   useGetAreaTrend, getGetAreaTrendQueryKey,
   useGetArrondissementBoundaries, useGetQuartierBoundaries, useGetCommuneBoundaries,
-  type AreaStat, type AreaTrendPoint, type YearRange,
+  type AreaStat, type AreaTrendPoint, type GranularityParameter, type YearRange,
 } from "@workspace/api-client-react";
 import { Sun, Moon, Printer, X, Info, MapPin } from "lucide-react";
-import { useViewState, type ViewState } from "@/lib/view-state";
-import { areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
+import { useViewState, type MapLevel, type MapMode, type ViewState } from "@/lib/view-state";
+import { areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
 import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct, houseShareLabel } from "@/lib/fmt";
 import { areaStatParams, areaTrendParams, heatParams, summaryParams, type PanelChoices } from "@/lib/selection-queries";
@@ -89,7 +89,11 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
     return { id, name, group };
   }).sort((a, b) => a.name.localeCompare(b.name, "fr")), [communeB.data]);
 
-  const filters = useMemo(() => summaryParams(view), [view]);
+  // The Selection keeps its identity when only the map, the trend's granularity or the ranking's group changes,
+  // so the panels that read only the Selection do not redraw.
+  const selection = useMemo(() => ({ ptype, area, from, to }), [ptype, area, from, to]);
+  const filters = useMemo(() => summaryParams(selection), [selection]);
+  const chartView = useMemo(() => ({ ptype, area }), [ptype, area]);
   const areaP = useMemo(() => areaParams(area), [area]);
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
 
@@ -97,13 +101,13 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   // The data note's figures do not depend on the Area, so the note keeps the last summary while a new Area loads.
   const noteSummary = useRef(summary.data);
   if (summary.data) noteSummary.current = summary.data;
-  const ap = areaStatParams(view);
+  const ap = areaStatParams(selection);
   const byArr = useGetSalesByArrondissement(ap, { query: { queryKey: getGetSalesByArrondissementQueryKey(ap) } });
   const byCommune = useGetSalesByCommune(ap, { query: { queryKey: getGetSalesByCommuneQueryKey(ap) } });
   // The colour scale reads these two whatever the map shows, so they always load.
-  const arrTrendP = areaTrendParams(view, "arrondissement", 4);
+  const arrTrendP = areaTrendParams(selection, "arrondissement", 4);
   const arrTrendQ = useGetAreaTrend(arrTrendP, { query: { queryKey: getGetAreaTrendQueryKey(arrTrendP) } });
-  const communeTrendP = areaTrendParams(view, "commune", 4);
+  const communeTrendP = areaTrendParams(selection, "commune", 4);
   const communeTrendQ = useGetAreaTrend(communeTrendP, { query: { queryKey: getGetAreaTrendQueryKey(communeTrendP) } });
   const hp = heatParams(view);
   const heat = useGetAreaTrend(hp, { query: { queryKey: getGetAreaTrendQueryKey(hp) } });
@@ -136,14 +140,25 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
     ].filter((v): v is number => v != null);
     return makeStepScale(quantileThresholds(figures(arrStats, arrTrend), figures(communeStats, communeTrend)));
   }, [arrStats, arrTrend, communeStats, communeTrend]);
-  const domain: [number, number] = [scale.thresholds[0] ?? 0, scale.thresholds[scale.thresholds.length - 1] ?? 0];
+  const domain = useMemo<[number, number]>(() => [scale.thresholds[0] ?? 0, scale.thresholds[scale.thresholds.length - 1] ?? 0], [scale]);
   const areaMedians = useMemo(() => new Map([...arrStats, ...communeStats].map((s) => [s.id, s.medianPricePerSqm])), [arrStats, communeStats]);
-  const areaColor = (id: string) => {
+  const areaColor = useCallback((id: string) => {
     const m = areaMedians.get(id);
     return m == null ? "transparent" : scale.color(m);
-  };
+  }, [areaMedians, scale]);
 
-  const selectRow = (id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id });
+  const selectRow = useCallback((id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }), [rank, selectArea]);
+  // Stable callbacks, so the memoised panels redraw only when their data changes.
+  const setMode = useCallback((m: MapMode) => patch({ mapMode: m }), [patch]);
+  const setLevel = useCallback((l: MapLevel) => patch({ mapLevel: l }), [patch]);
+  const setRank = useCallback((r: RankGroup) => patch({ rank: r }), [patch]);
+  const setGran = useCallback((g: GranularityParameter) => patch({ gran: g }), [patch]);
+  const selectFeature = useCallback((p: MapFeature) => selectArea(featureArea(p)), [selectArea]);
+  const { refetch: refetchArr } = byArr, { refetch: refetchCommune } = byCommune, { refetch: refetchHeat } = heat;
+  const retryStats = useCallback(() => { refetchArr(); refetchCommune(); }, [refetchArr, refetchCommune]);
+  const retryHeat = useCallback(() => { refetchHeat(); refetchArr(); refetchCommune(); }, [refetchHeat, refetchArr, refetchCommune]);
+  const selectQuartierName = useCallback((name: string) => { const q = quartiers.find((x) => x.name === name); if (q) selectArea({ kind: "q", id: q.id }); }, [quartiers, selectArea]);
+  const showTravel = useCallback((p: string) => { setTravel(p); patch({ mapMode: "level" }); }, [patch]);
 
   const communeGroup = groupOfArea(area);
   const areaName = area.kind === "department" ? DEPARTMENT_NAMES[area.id]
@@ -201,7 +216,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
         </section>
 
         {/* Sticky filters: time, property type, area */}
-        <FilterBar shown={view} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById} />
+        <FilterBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById} />
         {movedTo && from === movedTo.from && to === movedTo.to && (
           <p className="mb-3 text-[13px] text-muted-foreground print:hidden" data-testid="period-moved-notice">
             The dates in this link are outside the latest DVF release, so the Period moved to {rangeLabel(ef, et)}.
@@ -211,16 +226,16 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
         <main>
           {/* Map first */}
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_520px] gap-4 mb-5">
-            <MapPanel view={view} isDark={isDark} ptype={ptype} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
-              area={area} selArr={selArr} areaParams={areaP} mode={mapMode} setMode={(m) => patch({ mapMode: m })}
-              level={mapLevel} setLevel={(l) => patch({ mapLevel: l })} arrStats={arrStats} communeStats={communeStats}
+            <MapPanel isDark={isDark} ptype={ptype} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
+              area={area} selArr={selArr} areaParams={areaP} mode={mapMode} setMode={setMode}
+              level={mapLevel} setLevel={setLevel} arrStats={arrStats} communeStats={communeStats}
               statsLoading={byArr.isLoading || byCommune.isLoading} statsError={byArr.isError || byCommune.isError}
-              retryStats={() => { byArr.refetch(); byCommune.refetch(); }} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
+              retryStats={retryStats} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
               arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
-              travel={travel} setTravel={setTravel} onSelect={(p) => selectArea(featureArea(p))} onSelectArea={selectArea} />
+              travel={travel} setTravel={setTravel} onSelect={selectFeature} onSelectArea={selectArea} />
             <Ranking stats={rankStats} trend={heatData} loading={rankLoading} fetching={byArr.isFetching || byCommune.isFetching || heat.isFetching} error={rankError}
-              retry={() => { byArr.refetch(); byCommune.refetch(); }} scale={scale} selId={selId} onSelect={selectArea}
-              rank={rank} onRank={(r) => patch({ rank: r })} ptype={ptype} isDark={isDark} />
+              retry={retryStats} scale={scale} selId={selId} onSelect={selectArea}
+              rank={rank} onRank={setRank} ptype={ptype} isDark={isDark} />
           </div>
 
           {/* Focus header */}
@@ -240,13 +255,13 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           <Kpis s={summary.data} ptype={ptype} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
 
           <div className="mb-4">
-            <HeroTrend view={view} areaName={areaName} setGran={(g) => patch({ gran: g })} isDark={isDark} years={years} />
+            <HeroTrend selection={selection} gran={view.gran} areaName={areaName} setGran={setGran} isDark={isDark} years={years} />
           </div>
 
           <div className="mb-4">
-            <Heatmap data={heatData} rows={rankRows} loading={heat.isLoading || heat.isPlaceholderData || rankLoading} fetching={heat.isFetching} error={heat.isError || rankError} retry={() => { heat.refetch(); byArr.refetch(); byCommune.refetch(); }}
-              scale={scale.color} domain={domain} selId={selId} onSelectRow={selectRow} rank={rank} onRank={(r) => patch({ rank: r })} ptype={ptype} travel={travel}
-              onSelectPeriod={(p) => { setTravel(p); patch({ mapMode: "level" }); }} isDark={isDark} />
+            <Heatmap data={heatData} rows={rankRows} loading={heat.isLoading || heat.isPlaceholderData || rankLoading} fetching={heat.isFetching} error={heat.isError || rankError} retry={retryHeat}
+              scale={scale.color} domain={domain} selId={selId} onSelectRow={selectRow} rank={rank} onRank={setRank} ptype={ptype} travel={travel}
+              onSelectPeriod={showTravel} isDark={isDark} />
           </div>
 
           <Distributions filters={filters} houseShare={ptype === "all" ? summary.data?.houseShare : null} isDark={isDark} />
@@ -265,9 +280,9 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
             </section>
           </div>
 
-          <Transactions view={view} scopeLabel={scopeLabel} scale={scale.color} areaColor={areaColor} isDark={isDark}
+          <Transactions selection={selection} scopeLabel={scopeLabel} scale={scale.color} areaColor={areaColor} isDark={isDark}
             onSelectArea={selectArea}
-            onSelectQuartierName={(name) => { const q = quartiers.find((x) => x.name === name); if (q) selectArea({ kind: "q", id: q.id }); }} />
+            onSelectQuartierName={selectQuartierName} />
         </main>
 
         <footer className="mt-6 pt-4 border-t text-[13px] text-muted-foreground flex flex-wrap justify-between gap-2">

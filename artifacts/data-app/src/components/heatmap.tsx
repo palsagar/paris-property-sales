@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { AreaTrendPoint, PropertyTypeParameter } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, GradientLegend, Segmented } from "@/components/ui-bits";
@@ -6,7 +6,7 @@ import { RankSwitch } from "@/components/ranking";
 import { num, sqm, pct, makeDivScale, TOO_FEW, houseShareLabel } from "@/lib/fmt";
 import type { RankGroup } from "@/lib/areas";
 
-export function Heatmap({ data, rows, loading, fetching, error, retry, scale, domain, selId, onSelectRow, rank, onRank, ptype, travel, onSelectPeriod, isDark }: {
+export const Heatmap = memo(function Heatmap({ data, rows, loading, fetching, error, retry, scale, domain, selId, onSelectRow, rank, onRank, ptype, travel, onSelectPeriod, isDark }: {
   data: AreaTrendPoint[]; rows: { id: string; label: string }[]; loading: boolean; fetching: boolean; error: boolean; retry: () => void;
   scale: (v: number) => string; domain: [number, number]; selId?: string; onSelectRow: (id: string) => void;
   rank: RankGroup; onRank: (r: RankGroup) => void; ptype: PropertyTypeParameter;
@@ -91,4 +91,4 @@ export function Heatmap({ data, rows, loading, fetching, error, retry, scale, do
       )}
     </ChartCard>
   );
-}
+});

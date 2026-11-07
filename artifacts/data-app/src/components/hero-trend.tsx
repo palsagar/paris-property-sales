@@ -1,13 +1,12 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, type PropertyTypeParameter, type YearRange } from "@workspace/api-client-react";
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, TipBox, useChartColors } from "@/components/ui-bits";
 import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, TOO_FEW } from "@/lib/fmt";
 import { keepInSameArea, type areaParams } from "@/lib/areas";
-import { parisTrendParams, smoothOn, summaryParams, trendParams } from "@/lib/selection-queries";
+import { parisTrendParams, smoothOn, summaryParams, trendParams, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
-import type { ViewState } from "@/lib/view-state";
 import { yearBucketLabel } from "@/lib/period";
 
 export type Filters = ReturnType<typeof areaParams> & { propertyType: PropertyTypeParameter; from?: string; to?: string };
@@ -28,13 +27,14 @@ function Switch({ on, onClick, label, disabled, testId }: { on: boolean; onClick
   );
 }
 
-export function HeroTrend({ view, areaName, setGran, isDark, years }: {
-  view: ViewState; areaName: string; setGran: (g: GranularityParameter) => void; isDark: boolean; years: YearRange[];
+export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, setGran, isDark, years }: {
+  selection: Selection; gran: GranularityParameter; areaName: string; setGran: (g: GranularityParameter) => void; isDark: boolean; years: YearRange[];
 }) {
   const c = useChartColors(isDark);
   const { choices, setChoices } = usePanelChoices();
   const [showBand, setShowBand] = useState(true);
-  const gran = view.gran, isQuartier = view.area.kind === "q", hasArea = view.area.kind !== "paris";
+  const view = { ...selection, gran };
+  const isQuartier = selection.area.kind === "q", hasArea = selection.area.kind !== "paris";
   const smooth = smoothOn(gran, isQuartier, choices.smooth);
   const params = trendParams(view, choices);
   const win = params.window;
@@ -74,23 +74,10 @@ export function HeroTrend({ view, areaName, setGran, isDark, years }: {
   }, [data, showBand]);
   const lowN = data.filter((d) => d.low).length;
   const noMedian = data.every((d) => d.medianPricePerSqm == null);
-
-  return (
-    <ChartCard testId="trend" title={`Price per m² over time in ${areaName}`} isDark={isDark}
-      loading={q.isLoading} fetching={q.isFetching || all.isFetching}
-      csv={data.map(({ band: _b, shown: _s, ...r }) => r)} csvName="price-trend.csv"
-      desc={<>The line is the median price per m² for each {gran}{hasArea && <>; the dashed line is All Paris</>}. The strip below counts sales. {smooth ? `Each point averages ${win} periods to reduce noise.` : ""}</>}
-      right={
-        <>
-          <Segmented testId="gran" label="Granularity" value={gran} onChange={setGran} options={[["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]]} />
-          <Switch testId="toggle-smooth" on={smooth} disabled={gran === "year"} onClick={() => setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on: !smooth } }))} label="Smoothing" />
-          <Switch testId="toggle-band" on={showBand} onClick={() => setShowBand((b) => !b)} label="P25-P75" />
-        </>
-      }>
-      {q.isLoading ? <Skeleton className="w-full" style={{ height: PLOT_H + STRIP_H }} /> : q.isError ? <ErrorState onRetry={() => q.refetch()} /> : data.length === 0 ? (
-        <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H + STRIP_H }}>No sales match this selection. Try a longer period or a larger area.</div>
-      ) : (
-        <>
+  // The charts depend only on their data and settings, so a change elsewhere on the page does not redraw them.
+  const ptype = view.ptype;
+  const charts = useMemo(() => (
+    <>
           {noMedian ? <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H }}>{TOO_FEW}</div> : <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
             <ComposedChart data={data} syncId="trend" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
@@ -107,7 +94,7 @@ export function HeroTrend({ view, areaName, setGran, isDark, years }: {
                     ["Median price", orTooFew(d.medianPrice, eur)],
                     ["Sales", num(d.count)],
                   ];
-                  const share = view.ptype === "all" ? houseShareLabel(d.houseShare) : null;
+                  const share = ptype === "all" ? houseShareLabel(d.houseShare) : null;
                   if (share) rows.push(["House share", share]);
                   if (d.yoy != null) rows.push(["Change on a year earlier", pct(d.yoy)]);
                   if (d.paris != null) rows.push(["All Paris", sqm(d.paris), c.second]);
@@ -135,6 +122,26 @@ export function HeroTrend({ view, areaName, setGran, isDark, years }: {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+    </>
+  ), [data, domain, showBand, hasArea, noMedian, c, ptype]);
+
+  return (
+    <ChartCard testId="trend" title={`Price per m² over time in ${areaName}`} isDark={isDark}
+      loading={q.isLoading} fetching={q.isFetching || all.isFetching}
+      csv={data.map(({ band: _b, shown: _s, ...r }) => r)} csvName="price-trend.csv"
+      desc={<>The line is the median price per m² for each {gran}{hasArea && <>; the dashed line is All Paris</>}. The strip below counts sales. {smooth ? `Each point averages ${win} periods to reduce noise.` : ""}</>}
+      right={
+        <>
+          <Segmented testId="gran" label="Granularity" value={gran} onChange={setGran} options={[["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]]} />
+          <Switch testId="toggle-smooth" on={smooth} disabled={gran === "year"} onClick={() => setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on: !smooth } }))} label="Smoothing" />
+          <Switch testId="toggle-band" on={showBand} onClick={() => setShowBand((b) => !b)} label="P25-P75" />
+        </>
+      }>
+      {q.isLoading ? <Skeleton className="w-full" style={{ height: PLOT_H + STRIP_H }} /> : q.isError ? <ErrorState onRetry={() => q.refetch()} /> : data.length === 0 ? (
+        <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H + STRIP_H }}>No sales match this selection. Try a longer period or a larger area.</div>
+      ) : (
+        <>
+          {charts}
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5"><span className="w-4 h-0.5" style={{ background: c.accent }} />Median per m²</span>
             {showBand && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted" style={{ borderColor: c.accent }} />P25 and P75, the middle half of sales</span>}
@@ -146,4 +153,4 @@ export function HeroTrend({ view, areaName, setGran, isDark, years }: {
       )}
     </ChartCard>
   );
-}
+});
