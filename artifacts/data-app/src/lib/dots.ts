@@ -66,10 +66,10 @@ export function dotTooltip(dot: SaleDot, areaName: string): string {
   const name = escapeHtml(areaName);
   if (dot.sales.length === 1) {
     const p = dot.sales[0]!;
-    return `<div class="pt-title">${escapeHtml(p.address)}</div><div class="pt-sub">${name}</div><div>${typeLabel(p.type)} of ${num(p.surface)} m², sold on ${p.date.slice(0, 10)}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`;
+    return `<div class="pt-title">${escapeHtml(p.address)}</div><div class="pt-sub">${name}</div><div>${typeLabel(p.type)} of ${num(p.surface)} m², sold on ${escapeHtml(p.date.slice(0, 10))}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`;
   }
   const rows = dot.sales.slice(0, ROWS).map((p) =>
-    `<div class="pt-row">${p.date.slice(0, 10)}, ${escapeHtml(p.address)}, ${typeLabel(p.type).toLowerCase()} of ${num(p.surface)} m², <span class="pt-num">${eur(p.price)}</span></div>`);
+    `<div class="pt-row">${escapeHtml(p.date.slice(0, 10))}, ${escapeHtml(p.address)}, ${typeLabel(p.type).toLowerCase()} of ${num(p.surface)} m², <span class="pt-num">${eur(p.price)}</span></div>`);
   const rest = dot.sales.length - ROWS;
   return `<div class="pt-title">${name}</div><div class="pt-sub">${num(dot.sales.length)} sales near here</div><div class="pt-rows">${rows.join("")}</div>` +
     (rest > 0 ? `<div class="pt-sub">and ${num(rest)} more sales</div>` : "");

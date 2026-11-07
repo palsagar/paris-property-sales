@@ -85,6 +85,12 @@ test("the tooltip escapes street names and states no median", () => {
   }
 });
 
+test("the tooltip escapes the date", () => {
+  const [one] = groupDots([sale({ date: "<i>2024</i>" })], "arr");
+  const [many] = groupDots([sale({ date: "<i>2024</i>" }), sale({ date: "<i>2024</i>" })], "arr");
+  for (const html of [dotTooltip(one!, "1er"), dotTooltip(many!, "1er")]) assert.ok(!html.includes("<i>"), html);
+});
+
 test("a single Sale keeps today's tooltip", () => {
   const [d] = groupDots([sale({ address: "Rue A", surface: 40, price: 400000, pricePerSqm: 10000, date: "2024-03-05" })], "arr");
   assert.equal(dotTooltip(d!, "2e arrondissement"),
