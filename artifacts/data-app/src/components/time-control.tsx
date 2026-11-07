@@ -24,13 +24,17 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
   if (to) { const i = periods.map((p) => p.slice(0, 7) <= to.slice(0, 7)).lastIndexOf(true); if (i >= 0) endIdx = i; }
 
   // A drag or a key press only moves a draft. The change applies when the drag or the key press ends.
-  const pending = useRef<{ s: number; e: number } | null>(null);
-  const [draft, setDraft] = useState<{ s: number; e: number } | null>(null);
+  // A draft keeps the data it was made on: the shown view can swap mid-drag, and its indices then point into another timeline.
+  type Draft = { s: number; e: number; data: typeof data };
+  const pending = useRef<Draft | null>(null);
+  const [draftState, setDraft] = useState<Draft | null>(null);
+  const draft = draftState?.data === data ? draftState : null;
   const commit = () => {
     const r = pending.current;
     if (!r) return;
     pending.current = null;
     setDraft(null);
+    if (r.data !== data) return;
     if (r.s === 0 && r.e === periods.length - 1) onChange(undefined, undefined);
     else onChange(periods[r.s], endOfMonth(periods[r.e]));
   };
@@ -67,7 +71,7 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
           startIndex={startIdx} endIndex={endIdx} stroke={c.accent} fill="transparent"
           tickFormatter={() => ""}
           onChange={(r) => {
-            const next = { s: r.startIndex ?? 0, e: r.endIndex ?? data.length - 1 };
+            const next = { s: r.startIndex ?? 0, e: r.endIndex ?? data.length - 1, data };
             pending.current = next;
             setDraft(next);
           }}

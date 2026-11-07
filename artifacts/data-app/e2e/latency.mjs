@@ -275,6 +275,42 @@ const sections = {
     await page.waitForTimeout(500);
     check("slider: a release outside the chart applies the change", from() !== from3, { before: from3, after: from() });
     await p.ctx.close();
+
+    // A drag that is still held when the page swaps to an Area with a shorter timeline (Houses in the 8th).
+    const q = await openPage("/");
+    const errors = [];
+    q.page.on("pageerror", (e) => errors.push(e.message));
+    await click(q.page, "filter-type-Maison");
+    await settle(q.net);
+    await delay(q.page, /\/api\/sales\/by-rooms\?.*arrondissement=8/, 1500);
+    const nameBefore = await q.page.textContent('[data-testid="text-area-name"]');
+    await click(q.page, "filter-arr-8");
+    const end = await q.page.locator('[data-testid="time-control"] .recharts-brush-traveller').nth(1).boundingBox();
+    const box = await q.page.locator('[data-testid="time-control"] .recharts-brush').first().boundingBox();
+    const ey = end.y + end.height / 2;
+    await q.page.mouse.move(end.x + end.width / 2, ey);
+    await q.page.mouse.down();
+    await q.page.mouse.move(box.x + box.width * 0.9, ey, { steps: 4 });
+    await q.page.waitForFunction((n) => document.querySelector('[data-testid="text-area-name"]')?.textContent !== n, nameBefore, { timeout: 8000 }).catch(() => {});
+    await q.page.waitForTimeout(300);
+    const state = async () => ({
+      dashboard: await q.page.locator('[data-testid="card-kpi-0"]').isVisible(),
+      dashboardError: await q.page.locator('[data-testid="dashboard-error"]').count(),
+      crashed: await q.page.getByText("Something went wrong").count(),
+      range: await q.page.locator('[data-testid="text-range"]').textContent().catch(() => null),
+      errors: errors.length,
+    });
+    const fine = (s) => s.dashboard && !s.dashboardError && !s.crashed && !s.errors && !!s.range && !/undefined|Invalid/.test(s.range);
+    const held = await state();
+    check("slider: a drag held through the swap to a shorter timeline does not break the page", fine(held), held);
+    await q.page.mouse.up();
+    await q.page.waitForTimeout(500);
+    const released = await state();
+    const u = new URL(q.page.url()).searchParams;
+    const valid = (d) => d === null || (/^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d)) && d >= datasetFrom && d <= datasetTo);
+    const dates = { from: u.get("from"), to: u.get("to") };
+    check("slider: its release after the swap applies only valid dates", fine(released) && valid(dates.from) && valid(dates.to), { ...released, ...dates });
+    await q.ctx.close();
   },
 
   /** Every request of each Area's default view is in the server's warmed cache. Run it after the warm-up. */
