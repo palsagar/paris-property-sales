@@ -240,15 +240,16 @@ router.get("/sales/by-commune", async (req, res): Promise<void> => {
 
 router.get("/sales/points", async (req, res): Promise<void> => {
   const q = GetSalesPointsQueryParams.parse(req.query);
-  const points = await salePoints(salesDb, toFilter(q));
+  const { total, items } = await salePoints(salesDb, toFilter(q));
   res.json(
-    GetSalesPointsResponse.parse(
-      points.map(({ arr, ...point }) => ({
+    GetSalesPointsResponse.parse({
+      total,
+      items: items.map(({ arr, ...point }) => ({
         ...point,
         arrondissement: arr,
         areaName: saleAreaName(arr, point.commune, communeNames),
       })),
-    ),
+    }),
   );
 });
 

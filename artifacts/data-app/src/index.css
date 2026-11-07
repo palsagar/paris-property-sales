@@ -500,6 +500,9 @@ body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index
 .pt-sub { color: hsl(var(--muted-foreground)); }
 .pt-em { color: hsl(var(--primary)); font-weight: 600; margin-top: 4px; }
 .pt-num { font-family: var(--app-font-mono); }
+.pt-row { font-size: 12px; margin-top: 2px; }
+/* Leaflet tooltips do not wrap. The rows of a stacked dot do, so the tooltip fits the map on a phone. */
+.pt-rows { white-space: normal; width: 230px; }
 
 /* Focus: visible, instant */
 :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; transition: none !important; }
@@ -517,3 +520,6 @@ body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index
   .rise { animation: none; }
   .leaflet-interactive { transition: none; }
 }
+/* The "Updating" label waits 150 ms, so it does not flash when the data is already loaded. */
+.updating-label { animation: updating-in 0.2s ease-out 0.15s both; }
+@keyframes updating-in { from { opacity: 0; } to { opacity: 1; } }

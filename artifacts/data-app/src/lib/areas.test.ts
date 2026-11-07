@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { areaParams, featureArea, featureId, featureState, groupOfArea, keepInSameArea, pointArea, saleArea, searchScore, searchValue } from "./areas";
+import { areaChange, areaParams, featureArea, featureId, featureState, groupOfArea, keepInSameArea, pointArea, saleArea, searchScore, searchValue } from "./areas";
 
 test("areaParams gives the request parameter of each kind", () => {
   assert.deepEqual(areaParams({ kind: "paris" }), {});
@@ -119,4 +119,14 @@ test("searchScore ranks an exact name above a name that starts with the text, an
   assert.equal(searchScore(searchValue("Saint-Germain-en-Laye", "78551"), "Saint-Germain-en-Laye"), 3);
   assert.equal(searchScore(searchValue("Créteil", "94028"), "creteil"), 3);
   assert.equal(searchScore(searchValue("Évry-Courcouronnes", "91228"), "evry"), 2);
+});
+
+test("a click on the selected Area clicks it off, back to Paris", () => {
+  assert.deepEqual(areaChange({ kind: "arr", arr: 5 }, { kind: "arr", arr: 5 }), { area: { kind: "paris" }, rank: "paris" });
+  assert.deepEqual(areaChange({ kind: "paris" }, { kind: "commune", id: "92012" }), { area: { kind: "commune", id: "92012" }, rank: "92" });
+});
+
+test("a dot click on the selected Area keeps it, so a double-click does not undo the selection", () => {
+  assert.deepEqual(areaChange({ kind: "arr", arr: 17 }, { kind: "arr", arr: 17 }, false), {});
+  assert.deepEqual(areaChange({ kind: "paris" }, { kind: "q", id: "7511701" }, false), { area: { kind: "q", id: "7511701" }, rank: "paris" });
 });

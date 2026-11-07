@@ -2,9 +2,8 @@ import { useEffect, useRef, type RefObject } from "react";
 import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { SalePoint, GeoFeatureCollection } from "@workspace/api-client-react";
-import { eur, sqm, num } from "@/lib/fmt";
-import { escapeHtml } from "@/lib/escape";
+import type { GeoFeatureCollection } from "@workspace/api-client-react";
+import { dotTooltip, type SaleDot } from "@/lib/dots";
 import { featureId, type MapFeature } from "@/lib/areas";
 import { useChartColors } from "@/components/ui-bits";
 
@@ -13,22 +12,28 @@ const reduceMotion = () => typeof window !== "undefined" && window.matchMedia("(
 // Far enough out to frame Paris and the nearby Communes; Fontainebleau and Meaux need a zoom out.
 const HOME = { center: [48.85, 2.38] as [number, number], zoom: 11 };
 
-function PointsLayer({ points, scale, nameOf, onSelect }: { points: SalePoint[]; scale: (v: number) => string; nameOf: RefObject<(p: SalePoint) => string>; onSelect: RefObject<(p: SalePoint) => void> }) {
+/** One dot per position and Area, with one shared tooltip and one click handler for all of them. */
+function PointsLayer({ dots, scale, nameOf, onSelect }: { dots: SaleDot[]; scale: (v: number) => string; nameOf: RefObject<(d: SaleDot) => string>; onSelect: RefObject<(d: SaleDot) => void> }) {
   const map = useMap();
   useEffect(() => {
-    const group = L.layerGroup();
-    for (const p of points) {
-      const m = L.circleMarker([p.lat, p.lon], { radius: 3, weight: 0, fillOpacity: 0.78, fillColor: scale(p.pricePerSqm) });
-      m.bindTooltip(
-        () => `<div class="pt-title">${escapeHtml(p.address)}</div><div class="pt-sub">${escapeHtml(nameOf.current(p))}</div><div>${p.type === "Maison" ? "House" : "Apartment"} of ${num(p.surface)} m², sold on ${p.date.slice(0, 10)}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`,
-        { className: "pt", sticky: true }
-      );
-      m.on("click", () => onSelect.current(p));
+    const group = L.featureGroup();
+    const dotOf = new Map<L.Layer, SaleDot>();
+    for (const d of dots) {
+      const m = L.circleMarker([d.lat, d.lon], { radius: d.radius, weight: 0, fillOpacity: 0.78, fillColor: scale(d.medianPricePerSqm) });
+      dotOf.set(m, d);
       group.addLayer(m);
     }
+    group.bindTooltip((layer) => {
+      const d = dotOf.get(layer);
+      return d ? dotTooltip(d, nameOf.current(d)) : "";
+    }, { className: "pt", sticky: true });
+    group.on("click", (e) => {
+      const d = dotOf.get(e.propagatedFrom as L.Layer);
+      if (d) onSelect.current(d);
+    });
     group.addTo(map);
     return () => { group.remove(); };
-  }, [points, scale, map, nameOf, onSelect]);
+  }, [dots, scale, map, nameOf, onSelect]);
   return null;
 }
 
@@ -48,19 +53,19 @@ function FlyTo({ feature }: { feature: object | null }) {
  * The GeoJSON layer is created once per (level, theme, interactivity); colour and
  * selection changes only call setStyle, so animation ticks never rebuild the map.
  */
-export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, onSelect, styleKey, points, pointScale, pointName, onSelectPoint, focusFeature, outlineOnly }: {
+export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, onSelect, styleKey, dots, pointScale, dotName, onSelectDot, focusFeature, outlineOnly }: {
   level: "arr" | "quartier"; bounds?: GeoFeatureCollection; isDark: boolean;
   fillFor: (id: string) => string | null; tooltipFor: (id: string, p: MapFeature) => string;
   stateOf: (p: MapFeature) => { selected: boolean; focus: boolean }; onSelect: (p: MapFeature) => void; styleKey: string;
-  points?: SalePoint[]; pointScale: (v: number) => string; pointName: (p: SalePoint) => string; onSelectPoint: (p: SalePoint) => void; focusFeature: object | null; outlineOnly: boolean;
+  dots?: SaleDot[]; pointScale: (v: number) => string; dotName: (d: SaleDot) => string; onSelectDot: (d: SaleDot) => void; focusFeature: object | null; outlineOnly: boolean;
 }) {
   const geoRef = useRef<L.GeoJSON | null>(null);
   const fillRef = useRef(fillFor); fillRef.current = fillFor;
   const tipRef = useRef(tooltipFor); tipRef.current = tooltipFor;
   const stateRef = useRef(stateOf); stateRef.current = stateOf;
   const onSelRef = useRef(onSelect); onSelRef.current = onSelect;
-  const pointNameRef = useRef(pointName); pointNameRef.current = pointName;
-  const onPointRef = useRef(onSelectPoint); onPointRef.current = onSelectPoint;
+  const dotNameRef = useRef(dotName); dotNameRef.current = dotName;
+  const onDotRef = useRef(onSelectDot); onDotRef.current = onSelectDot;
   const c = useChartColors(isDark);
   const line = c.ink;
   const edge = c.paper;
@@ -113,7 +118,7 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
           }}
         />
       )}
-      {points && bounds && <PointsLayer points={points} scale={pointScale} nameOf={pointNameRef} onSelect={onPointRef} />}
+      {dots && bounds && <PointsLayer dots={dots} scale={pointScale} nameOf={dotNameRef} onSelect={onDotRef} />}
     </MapContainer>
   );
 }

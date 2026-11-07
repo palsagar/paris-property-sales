@@ -78,7 +78,7 @@ sequenceDiagram
 - **Areas:** a request with no Area means Paris. The Areas are the Arrondissement, the Quartier, the Department (92, 93 or 94) and the Commune.
 - **Calculations:** `routes/sales.ts` calls `salesQueries.ts`, which holds all the SQL and calculates each response from the matching Sales. `timeStats.ts` holds the time buckets and the SQL for the Change.
 - **Response cache:** `responseCache.ts` keeps responses in memory, up to 256 MB in total, and removes the least recently used first. The key is the path plus the query after validation, with the same schema the route uses. Unknown parameters and different spellings of a value therefore share one entry, and the cache and the route always agree on what a request means. A path that is not listed in `QUERY_SCHEMAS` is not cached.
-- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. `warmUrls()` produces 4,463 URLs. It takes about 40 seconds: 36 to 41 seconds in three runs with no other traffic, with Docker on Apple Silicon. The API answers during this time, but the first requests can be slower. These URLs copy the parameters that the dashboard sends, so a change to those parameters also needs a change in `prewarm.ts`.
+- **Warm-up:** after the server starts, `prewarm.ts` calls its own API with the URLs the dashboard most often requests. `warmUrls()` in `warmUrls.ts` produces 1,683 URLs: the default view of each Area, which is all dates and all property types. It takes about 15 seconds: 14.5 to 15.4 seconds in three runs with no other traffic, with Docker on Apple Silicon. The API answers during this time, but the first requests can be slower. These URLs copy `selectionQueries()` in the dashboard's `lib/selection-queries.ts`, so a change to the parameters a panel sends also needs a change in `warmUrls.ts`. A test in the dashboard's `lib/selection-queries.test.ts` fails until the two agree. Other Periods and property types are not warmed. Their first request takes 10 to 60 ms on the server.
 
 ## Dashboard
 
@@ -86,6 +86,10 @@ The dashboard is a React application with one page.
 
 - `pages/dashboard.tsx` owns the view and passes the Selection to each panel.
 - `lib/view-state.ts` mirrors the view into the URL, so a link reproduces it.
+- `lib/shown-view.tsx` keeps two views. The requested view drives the filter buttons and the URL at once. The shown view drives every panel and heading. It changes when all the data of the requested view has loaded, so the page changes in one redraw and never shows one Area's figures under another Area's name. It changes after 3 seconds at the latest, so a request that never answers cannot freeze the page, and a panel still loading then shows its loading state. An "Updating" label shows meanwhile.
+- `lib/selection-queries.ts` builds the params of every request. The page loads `selectionQueries()` before it shows a new view, and the panels build their params with the same functions, so the two always agree.
+- The dot map shows the newest 5,000 located Sales of the Selection at most. It draws one dot per rounded position and Area, moved by a fixed amount inside its 100 m cell so that the dots do not form a grid.
+- `e2e/latency.mjs` measures each Selection change at a 2x CPU slowdown and checks the behaviour above. A change takes at most 200 ms of main-thread work from the moment it is asked for, which for the time slider is the release of the handle. The drag's own frames, about 50 to 60 ms, and the map's fly-to on an Area change, about 60 to 110 ms, come on top, and the test reports them apart. Reduced motion turns the fly-to off.
 - Each panel in `components/` loads its own data through the generated hooks. React Query keeps responses for 5 minutes without fetching them again.
 - Charts use Recharts, and the map uses Leaflet.
 - The browser currently loads fonts from Google Fonts and map tiles from Esri.
@@ -112,7 +116,7 @@ These steps have not yet run on a real Coolify server. A local test covered the 
 5. Under **Configuration**, **Persistent Storage**, add a **Directory Mount** from `/srv/paris-property-sales/data` to `/app/data`.
 6. Add the domain. Coolify's proxy handles HTTPS.
 7. Leave the health check in the Coolify dashboard turned off. It needs `curl` or `wget` in the image, and this image has neither. The Dockerfile has its own health check, which calls `/api/healthz` through Node.
-8. Give the application at least 3 GB of memory. The container used about 495 to 515 MiB after the warm-up finished, measured three times with Docker on the 404,582 Sales. Under load it needs much more. These load figures come from the earlier data, with about 128,000 Sales in Paris only, and have not been repeated on the larger data. In a test of 120 requests, three quarters of them `/sales/points` for the whole city with different `from` dates, sent 10, 20 and 40 at a time, a container limited to 1 GB was killed for lack of memory in all three runs. With no limit and 40 requests at a time, the peak was 2.2 GiB, against 1.13 GiB for the server before DuckDB. Each setting ran once, with Docker on Apple Silicon.
+8. Give the application at least 3 GB of memory. The container used about 315 to 340 MiB after the warm-up finished, measured three times with Docker on the 404,582 Sales. Under load it needs more. In a test of 120 requests that were not in the cache, three quarters of them `/sales/points` for the whole city with different `from` dates and the rest `/sales/summary`, sent 10, 20 and 40 at a time, every request succeeded in every run. A container limited to 1 GB survived all three runs, with a peak of 527 to 543 MiB. With no limit, the peak was 760 to 784 MiB. Before the 5,000 Sale cap on `/sales/points`, the container limited to 1 GB was killed in all three runs. The peaks are the container's `memory.peak`, which includes the file cache. Each setting ran once, with Docker on Apple Silicon.
 
 The image sets `PORT`, `STATIC_DIR` and `NODE_ENV`, so the application needs no environment variables in Coolify.
 
@@ -133,11 +137,10 @@ Coolify's storage is not a backup, but the data does not need one. The scripts c
 The site is not ready for the public yet. These items must be complete first.
 
 - **Block search engines.** Change `robots.txt` and the `robots` meta tag, and block `/api` as well. Both currently allow indexing.
-- **Make the API private to the site.** Remove the open CORS setting, add rate limits, cap the number of records in one response, and limit exports to what is on screen. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong. Many such requests at once can also stop the server, because each one holds its whole result in memory until it finishes. The 5,000 Sale cap in issue #5 reduces this risk, and the rate limits must bound it. Rerun the burst test after issue #5 and before launch, because the Sales have tripled. Do not make the site public between #4 and #5.
+- **Make the API private to the site.** Remove the open CORS setting, add rate limits, and limit exports to what is on screen. The cap on the records in one response is done: `/sales/points` returns at most 5,000 Sales, and a page of `/sales/transactions` at most 200. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong. Many such requests at once can also stop the server, because each one holds its whole result in memory until it finishes. The 5,000 Sale cap reduces this risk, and the rate limits must bound it.
 - **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts.
 - **Self-host the fonts and replace the Esri tiles.** We could not confirm that Esri's tile address can be used on a public site without an account. Choose a map provider with terms that clearly allow public use.
 - **Accept the re-identification risk knowingly.** No Sale holds its `id_mutation` any more, so a Visitor cannot join a Sale to the public DVF file by that identifier. Date, price, surface and street together still identify 404,405 of the 404,582 Sales uniquely. We accept this risk, and the DGFiP condition against indirect re-identification is not fully met. [Decision record 6](adr/0006-public-site-limits.md) records it.
-- **Design the map for rounded Sale locations.** Several dots stack on one position. 395,228 of the 404,110 points share a position with at least one other point, and the largest stack holds 407 Sales. A position holds about 22 Sales on average in Paris and about 7 in the Communes.
 
 [Decision record 6](adr/0006-public-site-limits.md) explains the location, search engine and API limits.
 
@@ -151,9 +154,3 @@ These items do not block launch.
 - A warning for a Change over a Period of less than 12 months.
 - A proxy for `/api` in the Vite development server.
 - Removal of the unused template code: `lib/db`, `scripts/src/hello.ts`, the Replit dependencies and the unused UI components.
-
-## Planned work
-
-This document describes the site as it is today. One item of planned work remains.
-
-1. [Make every Selection change draw within 200 ms](https://github.com/palsagar/paris-property-sales/issues/5).

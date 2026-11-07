@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetSalesByQuartier, getGetSalesByQuartierQueryKey, useGetAreaTrend, getGetAreaTrendQueryKey,
   useGetSalesPoints, getGetSalesPointsQueryKey,
-  type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter, type SalePoint,
+  type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter,
 } from "@workspace/api-client-react";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend } from "@/components/ui-bits";
-import { eur, sqm, num, arrLabel, pct, makeDivScale, monthsBefore, monthsBetween, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
-import { DEPARTMENT_NAMES, featureState, keepInSameArea, pointArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
+import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
+import { groupDots, type SaleDot } from "@/lib/dots";
+import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
+import { pointParams, quartierStatParams, quartierTrendParams } from "@/lib/selection-queries";
 import type { MapLevel, MapMode } from "@/lib/view-state";
 
-export function MapPanel(props: {
+export const MapPanel = memo(function MapPanel(props: {
   isDark: boolean; ptype: PropertyTypeParameter; from?: string; to?: string; datasetFrom: string; datasetTo: string;
   area: Area; selArr?: number; areaParams: ReturnType<typeof areaParams>;
   mode: MapMode; setMode: (m: MapMode) => void; level: MapLevel; setLevel: (l: MapLevel) => void;
@@ -28,17 +30,18 @@ export function MapPanel(props: {
   const { isDark, ptype, from, to, datasetFrom, datasetTo, area, selArr, areaParams: areaP, mode, setMode, level, setLevel, arrStats, communeStats, arrTrend, communeTrend, scale, travel, setTravel } = props;
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
 
-  const qp = { propertyType: ptype, from, to };
+  const sel = { ptype, area, from, to };
+  const qp = quartierStatParams(sel);
   const qStats = useGetSalesByQuartier(qp, { query: { queryKey: getGetSalesByQuartierQueryKey(qp), enabled: level === "quartier" && mode !== "dots" } });
-  const tp = { level: "quartier" as const, propertyType: ptype, from, to, granularity: "quarter" as const, window: 4 };
+  const tp = quartierTrendParams(sel);
   const qTrend = useGetAreaTrend(tp, { query: { queryKey: getGetAreaTrendQueryKey(tp), enabled: level === "quartier" && mode === "level" } });
 
-  // Points: default to the latest 12 months of the range.
-  const [dotsFull, setDotsFull] = useState(false);
-  const long = monthsBetween(ef, et) > 12;
-  const dotsFrom = long && !dotsFull ? monthsBefore(et, 11) : from;
-  const pp = { propertyType: ptype, ...areaP, from: dotsFrom, to };
+  // Points: the server returns the newest 5,000 Sales of the Selection at most, and the total.
+  const pp = pointParams(sel);
   const points = useGetSalesPoints(pp, { query: { queryKey: getGetSalesPointsQueryKey(pp), enabled: mode === "dots", placeholderData: keepInSameArea(areaP) } });
+  const items = points.data?.items;
+  const total = points.data?.total ?? 0;
+  const dots = useMemo(() => (items ? groupDots(items, level) : undefined), [items, level]);
 
   // Paris at the chosen level, with the Communes always around it.
   const stats = useMemo(() => [...(level === "quartier" ? qStats.data ?? [] : arrStats), ...communeStats], [level, qStats.data, arrStats, communeStats]);
@@ -110,12 +113,12 @@ export function MapPanel(props: {
     const q = (f as { properties: MapFeature }).properties;
     return [q.id, q.name];
   })), [props.qBounds]);
-  const pointName = (p: SalePoint) => (level === "quartier" && p.quartier != null && quartierNames.get(p.quartier)) || p.areaName;
-  // A dot only selects: a click on a dot in the selected Area must not click the Area off.
-  const selectPoint = (p: SalePoint) => {
-    const a = pointArea(p, level);
-    if (JSON.stringify(a) !== JSON.stringify(area)) props.onSelectArea(a);
+  const dotName = (d: SaleDot) => {
+    const p = d.sales[0]!;
+    return (level === "quartier" && p.quartier != null && quartierNames.get(p.quartier)) || p.areaName;
   };
+  // A dot only selects: `onSelectArea` never clicks the Area off, even on a double-click while the page updates.
+  const selectDot = (d: SaleDot) => props.onSelectArea(d.area);
 
   const parisBounds = level === "quartier" && mode !== "dots" ? props.qBounds : props.arrBounds;
   const bounds = useMemo(() => (parisBounds && props.communeBounds ? { ...parisBounds, features: [...props.communeBounds.features, ...parisBounds.features] } : undefined), [parisBounds, props.communeBounds]);
@@ -134,13 +137,13 @@ export function MapPanel(props: {
   const styleKey = `${mode}-${level}-${travelOn ? travel : "avg"}-${stats.length}-${stats.reduce((a, s) => a + s.count, 0)}-${periods.length}-${scale.thresholds.join()}-${JSON.stringify(area)}`;
   const loading = props.statsLoading || (level === "quartier" && mode !== "dots" && qStats.isLoading) || (mode === "dots" && points.isLoading);
   const fetching = qStats.isFetching || qTrend.isFetching || props.trendFetching || points.isFetching;
-  const csv = mode === "dots" ? points.data ?? [] : travelOn ? trendRows.filter((r) => r.period === travel) : stats;
+  const csv = mode === "dots" ? items ?? [] : travelOn ? trendRows.filter((r) => r.period === travel) : stats;
 
   return (
     <ChartCard testId="map" title={mode === "change" ? "Change in price per m², by area" : mode === "dots" ? "Individual sales on the map" : "Median price per m², by area"}
       isDark={isDark} loading={loading} fetching={fetching} csv={csv as object[]} csvName={`map-${mode}-${level}.csv`}
       desc={mode === "change" ? "Median price per m² at the end of the period compared with the start. Communes appear around Paris at each level. Click an area to select it for the whole page." :
-        mode === "dots" ? "Each dot is one sale in the selected area, coloured by its price per m². Click an area to select it for the whole page." : "Communes appear around Paris at each level. Click an area to select it for the whole page. Use the slider under the map to step through quarters."}
+        mode === "dots" ? "Each dot holds the sales at one position, rounded to about 100 m and moved slightly so that the dots do not form a grid. A larger dot holds more sales. Its colour is their median price per m². Click a dot or an area to select it for the whole page." : "Communes appear around Paris at each level. Click an area to select it for the whole page. Use the slider under the map to step through quarters."}
       right={<>
         <Segmented label="Map mode" testId="map-mode" value={mode} onChange={setMode} options={[["level", "Price level"], ["change", "Price change"], ["dots", "Sales"]]} />
         {mode !== "dots" && <Segmented label="Map areas" testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
@@ -150,22 +153,21 @@ export function MapPanel(props: {
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
             stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}
             onSelect={props.onSelect} outlineOnly={mode === "dots"}
-            points={mode === "dots" ? points.data ?? [] : undefined} pointScale={scale.color} pointName={pointName} onSelectPoint={selectPoint} focusFeature={focusFeature} />
+            dots={mode === "dots" ? dots ?? [] : undefined} pointScale={scale.color} dotName={dotName} onSelectDot={selectDot} focusFeature={focusFeature} />
         )}
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
         <div className="absolute left-3 bottom-3 z-[400] rounded-md bg-card border px-3 py-2">
           {mode === "change" ? (
             <GradientLegend title={<>Change in price per m², {rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} />
           ) : (
-            <StepLegend title={<>Median price per m², <span className="font-semibold text-primary">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per sale" : rangeLabel(ef, et)}</span></>}
+            <StepLegend title={<>Median price per m², <span className="font-semibold text-primary">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per dot" : rangeLabel(ef, et)}</span></>}
               scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
           )}
-          {mode === "dots" && points.data && <div className="text-[12px] mt-1 text-muted-foreground font-num">{num(points.data.length)} sales plotted</div>}
+          {mode === "dots" && items && total <= items.length && <div className="text-[12px] mt-1 text-muted-foreground font-num">{num(total)} sales plotted</div>}
         </div>
-        {mode === "dots" && long && (
-          <div className="absolute right-3 top-3 z-[400] rounded-md bg-card border px-3 py-2 text-[12.5px] max-w-[260px]">
-            {dotsFull ? <>Showing every sale from {rangeLabel(ef, et)}. </> : <>Showing the latest 12 months, {rangeLabel(dotsFrom!, et)}, so the map stays fast. </>}
-            <button className="text-primary underline" onClick={() => setDotsFull((v) => !v)} data-testid="button-dots-range">{dotsFull ? "Back to 12 months" : "Show whole range"}</button>
+        {mode === "dots" && items && total > items.length && (
+          <div className="absolute right-3 top-3 z-[400] rounded-md bg-card border px-3 py-2 text-[12.5px] max-w-[260px]" data-testid="text-dots-cap">
+            Showing the newest {num(items.length)} of {num(total)} sales with a known position. Choose a shorter period or a smaller area to see more.
           </div>
         )}
       </div>
@@ -191,4 +193,4 @@ export function MapPanel(props: {
       )}
     </ChartCard>
   );
-}
+});

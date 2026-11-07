@@ -8,6 +8,7 @@ import {
   areaStats,
   areaTrendPoints,
   distribution,
+  POINT_CAP,
   salePoints,
   saleAreaName,
   salesByRooms,
@@ -21,6 +22,14 @@ let db: SalesDb;
 let changeDb: SalesDb;
 let fewEndDb: SalesDb;
 let numericDb: SalesDb;
+let capDb: SalesDb;
+
+/** 5,001 located Sales, one per day from 2010-01-01, so "c5000" is the newest and "c0000" the oldest. */
+const capSales: FixtureSale[] = Array.from({ length: 5001 }, (_, i) => ({
+  id: `c${String(i).padStart(4, "0")}`, date: new Date(Date.UTC(2010, 0, 1 + i)).toISOString().slice(0, 10),
+  type: "Appartement", price: 100000, surface: 10, pricePerSqm: 10000, rooms: 1, arr: 1, quartier: "7510101",
+  lon: 2.341, lat: 48.861, street: "Rue X",
+}));
 
 function changeSales(endCount: number): FixtureSale[] {
   const make = (id: string, date: string, price: number): FixtureSale => ({
@@ -43,6 +52,7 @@ before(async () => {
     rooms: 1, arr, quartier: null, lon: null, lat: null, street: "Rue X",
   });
   numericDb = await createSalesFixture([inArr("n1", 10), inArr("n2", 2)]);
+  capDb = await createSalesFixture(capSales);
 });
 
 test("summary of the fixture", async () => {
@@ -199,8 +209,29 @@ test("Arrondissements sort as numbers within a period", async () => {
 });
 
 test("points leave out Sales with no position and have a fixed order", async () => {
-  assert.deepEqual((await salePoints(db, {})).map((p) => p.id), ["s4", "s3", "s2", "s1"]);
-  assert.deepEqual(await salePoints(db, { from: "2030-01-01" }), []);
+  assert.deepEqual((await salePoints(db, {})).items.map((p) => p.id), ["s4", "s3", "s2", "s1"]);
+});
+
+test("points are capped at 5,000, newest first, and return the total", async () => {
+  const page = await salePoints(capDb, {});
+  assert.equal(POINT_CAP, 5000);
+  assert.equal(page.total, 5001);
+  assert.equal(page.items.length, 5000);
+  assert.equal(page.items[0]!.id, "c5000");
+  assert.ok(!page.items.some((p) => p.id === "c0000"));
+});
+
+test("exactly 5,000 points have total equal to the items", async () => {
+  const page = await salePoints(capDb, { from: capSales[1]!.date });
+  assert.deepEqual([page.total, page.items.length], [5000, 5000]);
+});
+
+test("the total of points leaves out Sales with no position", async () => {
+  assert.equal((await salePoints(db, {})).total, 4);
+});
+
+test("no matching Sale gives a points total of 0 and no items", async () => {
+  assert.deepEqual(await salePoints(db, { from: "2030-01-01" }), { total: 0, items: [] });
 });
 
 test("points carry the recorded Area of each Sale, and the response keeps it", async () => {
@@ -208,12 +239,12 @@ test("points carry the recorded Area of each Sale, and the response keeps it", a
     { id: "p1", date: "2024-01-10", type: "Appartement", price: 100000, surface: 10, pricePerSqm: 10000, rooms: 1, arr: 5, quartier: "7510501", lon: 2.3, lat: 48.8, street: "Rue X" },
     { id: "p2", date: "2024-01-10", type: "Maison", price: 100000, surface: 10, pricePerSqm: 10000, rooms: 1, department: "99", commune: "99001", arr: null, quartier: null, lon: 2.4, lat: 48.9, street: "Rue Y" },
   ]);
-  const [paris] = await salePoints(fixture, {});
-  const [commune] = await salePoints(fixture, { commune: "99001" });
+  const [paris] = (await salePoints(fixture, {})).items;
+  const [commune] = (await salePoints(fixture, { commune: "99001" })).items;
   assert.deepEqual([paris.arr, paris.commune, paris.quartier], [5, null, "7510501"]);
   assert.deepEqual([commune.arr, commune.commune, commune.quartier], [null, "99001", null]);
   const { arr, ...point } = paris;
-  const [parsed] = GetSalesPointsResponse.parse([{ ...point, arrondissement: arr, areaName: "5e arrondissement" }]);
+  const [parsed] = GetSalesPointsResponse.parse({ total: 1, items: [{ ...point, arrondissement: arr, areaName: "5e arrondissement" }] }).items;
   assert.deepEqual([parsed.arrondissement, parsed.commune, parsed.quartier], [5, null, "7510501"]);
 });
 
@@ -383,7 +414,7 @@ before(async () => {
 });
 
 async function salePointsIds(database: SalesDb, f: SaleFilter): Promise<string[]> {
-  return (await salePoints(database, f)).map((p) => p.id).sort();
+  return (await salePoints(database, f)).items.map((p) => p.id).sort();
 }
 
 test("a filter with no Area means Paris, never the whole file", async () => {

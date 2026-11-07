@@ -337,18 +337,31 @@ export async function areaTrendPoints(
     );
 }
 
-export async function salePoints(db: SalesDb, f: SaleFilter) {
+/** The most points one response holds. */
+export const POINT_CAP = 5000;
+
+type PointRow = {
+  id: string; lon: number; lat: number; price: number; surface: number; pricePerSqm: number;
+  arr: number | null; commune: string | null; quartier: string | null; date: string; type: string; address: string;
+};
+
+/** The newest located Sales of the Selection, at most `limit`, and the count of all of them. */
+export async function salePoints(db: SalesDb, f: SaleFilter, limit = POINT_CAP): Promise<{ total: number; items: PointRow[] }> {
   const where = saleWhere(f);
-  return db.query<{
-    id: string; lon: number; lat: number; price: number; surface: number; pricePerSqm: number;
-    arr: number | null; commune: string | null; quartier: string | null; date: string; type: string; address: string;
-  }>(
-    `SELECT id, lon, lat, price, surface, price_per_sqm AS "pricePerSqm", arr, commune, quartier,
-      sale_date AS "date", property_type AS "type", street AS "address"
-    FROM sales WHERE lon IS NOT NULL AND lat IS NOT NULL AND ${where.sql}
-    ORDER BY sale_date DESC, id`,
+  const located = `lon IS NOT NULL AND lat IS NOT NULL AND ${where.sql}`;
+  const [count] = await db.query<{ total: number }>(
+    `SELECT count(*)::INTEGER AS total FROM sales WHERE ${located}`,
     where.params,
   );
+  if (count!.total === 0) return { total: 0, items: [] };
+  const items = await db.query<PointRow>(
+    `SELECT id, lon, lat, price, surface, price_per_sqm AS "pricePerSqm", arr, commune, quartier,
+      sale_date AS "date", property_type AS "type", street AS "address"
+    FROM sales WHERE ${located}
+    ORDER BY sale_date DESC, id LIMIT $pLimit::INTEGER`,
+    { ...where.params, pLimit: limit },
+  );
+  return { total: count!.total, items };
 }
 
 const SORT_COLUMNS = {

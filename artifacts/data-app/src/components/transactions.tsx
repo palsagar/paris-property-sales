@@ -1,29 +1,35 @@
-import { useEffect, useState } from "react";
-import { useListTransactions, getListTransactionsQueryKey, type ListTransactionsSortBy, type ListTransactionsSortDir } from "@workspace/api-client-react";
+import { memo, useState } from "react";
+import { useListTransactions, getListTransactionsQueryKey, type ListTransactionsSortBy } from "@workspace/api-client-react";
 import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState } from "@/components/ui-bits";
 import { eur, sqm, num, dateLabel } from "@/lib/fmt";
 import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
-import type { Filters } from "@/components/hero-trend";
+import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE, type Selection } from "@/lib/selection-queries";
+import { usePanelChoices } from "@/lib/shown-view";
 
 const COLS: { key: string; label: string; sort?: ListTransactionsSortBy; right?: boolean }[] = [
   { key: "date", label: "Date", sort: "date" }, { key: "address", label: "Street" }, { key: "area", label: "Area" }, { key: "quartier", label: "Quartier" },
   { key: "type", label: "Type" }, { key: "rooms", label: "Rooms", right: true }, { key: "surface", label: "Surface", sort: "surface", right: true },
   { key: "price", label: "Price", sort: "price", right: true }, { key: "ppsqm", label: "Price / m²", sort: "pricePerSqm", right: true },
 ];
-const PAGE = 15;
 
-export function Transactions({ filters, scopeLabel, scale, areaColor, onSelectArea, onSelectQuartierName, isDark }: {
-  filters: Filters; scopeLabel: string; scale: (v: number) => string; areaColor: (id: string) => string;
+export const Transactions = memo(function Transactions({ selection: view, scopeLabel, scale, areaColor, onSelectArea, onSelectQuartierName, isDark }: {
+  selection: Selection; scopeLabel: string; scale: (v: number) => string; areaColor: (id: string) => string;
   onSelectArea: (a: Area) => void; onSelectQuartierName: (name: string) => void; isDark: boolean;
 }) {
-  const [sortBy, setSortBy] = useState<ListTransactionsSortBy>("date");
-  const [sortDir, setSortDir] = useState<ListTransactionsSortDir>("desc");
-  const [page, setPage] = useState(0);
-  const fk = JSON.stringify(filters);
-  useEffect(() => setPage(0), [fk, sortBy, sortDir]);
-  const p = { ...filters, sortBy, sortDir, limit: PAGE, offset: page * PAGE };
+  const { choices, setChoices } = usePanelChoices();
+  const { sortBy, sortDir } = choices;
+  const filters = summaryParams(view);
+  // The page belongs to one Selection and sort. A new one reads as the first page, so no request goes out for an old page.
+  const key = JSON.stringify([filters, sortBy, sortDir]);
+  const [held, setHeld] = useState({ key, page: 0 });
+  // Forget the page of an earlier Selection, so coming back to it starts on the first page too.
+  if (held.key !== key) setHeld({ key, page: 0 });
+  const page = held.key === key ? held.page : 0;
+  const setPage = (f: (x: number) => number) => setHeld({ key, page: f(page) });
+  const sortOn = (by: ListTransactionsSortBy) => setChoices((c) => ({ ...c, sortBy: by, sortDir: c.sortBy === by && c.sortDir === "desc" ? "asc" : "desc" }));
+  const p = transactionParams(view, choices, page * PAGE);
   const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameArea(filters) } });
   const totalPages = tx.data ? Math.max(1, Math.ceil(tx.data.total / PAGE)) : 1;
 
@@ -40,7 +46,7 @@ export function Transactions({ filters, scopeLabel, scale, areaColor, onSelectAr
                     <th key={col.key} className={`px-3 py-2 text-[12.5px] font-medium text-muted-foreground whitespace-nowrap ${col.right ? "text-right" : "text-left"}`}>
                       {col.sort ? (
                         <button data-testid={`sort-${col.key}`} className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${sortBy === col.sort ? "text-foreground" : ""}`}
-                          onClick={() => { if (sortBy === col.sort) setSortDir(sortDir === "asc" ? "desc" : "asc"); else { setSortBy(col.sort!); setSortDir("desc"); } }}>
+                          onClick={() => sortOn(col.sort!)}>
                           {col.label}{sortBy === col.sort && (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
                         </button>
                       ) : col.label}
@@ -89,4 +95,4 @@ export function Transactions({ filters, scopeLabel, scale, areaColor, onSelectAr
       )}
     </ChartCard>
   );
-}
+});

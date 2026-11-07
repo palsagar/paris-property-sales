@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   useGetPriceDistribution, getGetPriceDistributionQueryKey, useGetPricePerSqmDistribution, getGetPricePerSqmDistributionQueryKey,
   useGetSalesByRooms, getGetSalesByRoomsQueryKey, type Distribution,
@@ -10,7 +11,7 @@ import { binStart, binTick } from "@/lib/histogram";
 import { keepInSameArea } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 
-function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; color: string }) {
+const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; color: string }) {
   const c = useChartColors(isDark);
   const { median, mean, p10, p25, p75, p90 } = dist;
   if (median == null || mean == null || p10 == null || p25 == null || p75 == null || p90 == null) {
@@ -54,9 +55,9 @@ function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribu
       <p className="text-[12.5px] text-muted-foreground mt-2">The mean is {fmtVal(mean)}. Darker bars hold the middle half of sales, between P25 and P75.{share && ` This selection is ${share}.`}</p>
     </>
   );
-}
+});
 
-export function Distributions({ filters, houseShare, isDark }: { filters: Filters; houseShare?: number | null; isDark: boolean }) {
+export const Distributions = memo(function Distributions({ filters, houseShare, isDark }: { filters: Filters; houseShare?: number | null; isDark: boolean }) {
   const c = useChartColors(isDark);
   const pd = useGetPriceDistribution(filters, { query: { queryKey: getGetPriceDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
   const sd = useGetPricePerSqmDistribution(filters, { query: { queryKey: getGetPricePerSqmDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
@@ -70,9 +71,9 @@ export function Distributions({ filters, houseShare, isDark }: { filters: Filter
       </ChartCard>
     </div>
   );
-}
+});
 
-export function RoomsChart({ filters, isDark }: { filters: Filters; isDark: boolean }) {
+export const RoomsChart = memo(function RoomsChart({ filters, isDark }: { filters: Filters; isDark: boolean }) {
   const c = useChartColors(isDark);
   const rooms = useGetSalesByRooms(filters, { query: { queryKey: getGetSalesByRoomsQueryKey(filters), placeholderData: keepInSameArea(filters) } });
   return (
@@ -97,4 +98,4 @@ export function RoomsChart({ filters, isDark }: { filters: Filters; isDark: bool
       )}
     </ChartCard>
   );
-}
+});
