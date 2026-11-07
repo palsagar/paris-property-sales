@@ -117,10 +117,8 @@ export const MapPanel = memo(function MapPanel(props: {
     const p = d.sales[0]!;
     return (level === "quartier" && p.quartier != null && quartierNames.get(p.quartier)) || p.areaName;
   };
-  // A dot only selects: a click on a dot in the selected Area must not click the Area off.
-  const selectDot = (d: SaleDot) => {
-    if (JSON.stringify(d.area) !== JSON.stringify(area)) props.onSelectArea(d.area);
-  };
+  // A dot only selects: `onSelectArea` never clicks the Area off, even on a double-click while the page updates.
+  const selectDot = (d: SaleDot) => props.onSelectArea(d.area);
 
   const parisBounds = level === "quartier" && mode !== "dots" ? props.qBounds : props.arrBounds;
   const bounds = useMemo(() => (parisBounds && props.communeBounds ? { ...parisBounds, features: [...props.communeBounds.features, ...parisBounds.features] } : undefined), [parisBounds, props.communeBounds]);

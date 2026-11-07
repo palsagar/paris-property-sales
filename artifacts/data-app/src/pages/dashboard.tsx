@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { Sun, Moon, Printer, X, Info, MapPin } from "lucide-react";
 import { useViewState, type MapLevel, type MapMode, type ViewState } from "@/lib/view-state";
-import { areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
+import { areaChange, areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
 import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct, houseShareLabel } from "@/lib/fmt";
 import { areaStatParams, areaTrendParams, heatParams, summaryParams, type PanelChoices } from "@/lib/selection-queries";
@@ -53,20 +53,21 @@ function ViewHost(props: DatasetProps) {
   const [choices, setChoices] = useState<PanelChoices>({ smooth: null, sortBy: "date", sortDir: "desc" });
   const { shown, updating } = useShownView(view, choices);
   // A click on the selected Area clicks it off, back to Paris.
-  const selectArea = useCallback((a: Area) => patch((s) => ({ area: JSON.stringify(a) === JSON.stringify(s.area) ? { kind: "paris" } : a, rank: groupOfArea(a) })), [patch]);
+  const selectArea = useCallback((a: Area) => patch((s) => areaChange(s.area, a)), [patch]);
+  const selectAreaOnly = useCallback((a: Area) => patch((s) => areaChange(s.area, a, false)), [patch]);
   const requested = useMemo(() => ({ view, patch, selectArea, updating }), [view, patch, selectArea, updating]);
   const panelChoices = useMemo(() => ({ choices, setChoices }), [choices]);
   return (
     <RequestedView.Provider value={requested}>
       <PanelChoicesContext.Provider value={panelChoices}>
-        <DashboardView {...props} view={shown} patch={patch} selectArea={selectArea} movedTo={movedTo} />
+        <DashboardView {...props} view={shown} patch={patch} selectArea={selectArea} selectAreaOnly={selectAreaOnly} movedTo={movedTo} />
       </PanelChoicesContext.Provider>
     </RequestedView.Provider>
   );
 }
 
-const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, releaseMonth, years, view, patch, selectArea, movedTo }: DatasetProps & {
-  view: ViewState; patch: Patch; selectArea: (a: Area) => void; movedTo: { from?: string; to?: string } | null;
+const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, releaseMonth, years, view, patch, selectArea, selectAreaOnly, movedTo }: DatasetProps & {
+  view: ViewState; patch: Patch; selectArea: (a: Area) => void; selectAreaOnly: (a: Area) => void; movedTo: { from?: string; to?: string } | null;
 }) {
   const { ptype, area, from, to, mapMode, mapLevel, rank } = view;
   const [isDark, setIsDark] = useState(false);
@@ -232,7 +233,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
               statsLoading={byArr.isLoading || byCommune.isLoading} statsError={byArr.isError || byCommune.isError}
               retryStats={retryStats} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
               arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
-              travel={travel} setTravel={setTravel} onSelect={selectFeature} onSelectArea={selectArea} />
+              travel={travel} setTravel={setTravel} onSelect={selectFeature} onSelectArea={selectAreaOnly} />
             <Ranking stats={rankStats} trend={heatData} loading={rankLoading} fetching={byArr.isFetching || byCommune.isFetching || heat.isFetching} error={rankError}
               retry={retryStats} scale={scale} selId={selId} onSelect={selectArea}
               rank={rank} onRank={setRank} ptype={ptype} isDark={isDark} />

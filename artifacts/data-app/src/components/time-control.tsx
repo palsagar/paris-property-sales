@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useGetSalesTrend, getGetSalesTrendQueryKey, type YearRange } from "@workspace/api-client-react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Brush, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +36,21 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
   };
   const commitRef = useRef(commit);
   commitRef.current = commit;
+
+  // A committed change redraws the Brush, which loses the keyboard focus. Give it back to the same handle.
+  const wrapper = useRef<HTMLDivElement>(null);
+  const refocus = useRef(-1);
+  const travellers = () => Array.from(wrapper.current?.querySelectorAll<SVGGElement>(".recharts-brush-traveller") ?? []);
+  const commitKey = () => {
+    if (!pending.current) return;
+    refocus.current = travellers().indexOf(document.activeElement as SVGGElement);
+    commit();
+  };
+  useEffect(() => {
+    if (refocus.current < 0) return;
+    travellers()[refocus.current]?.focus();
+    refocus.current = -1;
+  }, [startIdx, endIdx]);
 
   const presets: [string, string | undefined, string | undefined][] = [
     ["All dates", undefined, undefined],
@@ -84,7 +99,7 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
         </div>
       </div>
       <div className="flex-1 min-w-[260px] flex items-center gap-3">
-        <div className="flex-1 h-[40px] relative" onKeyUp={() => commit()}>
+        <div ref={wrapper} className="flex-1 h-[40px] relative" onKeyUp={commitKey}>
           {q.isLoading ? <Skeleton className="w-full h-full" /> : data.length > 1 && chart}
         </div>
         <div className="shrink-0 text-right leading-tight">

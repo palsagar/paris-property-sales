@@ -89,7 +89,7 @@ The dashboard is a React application with one page.
 - `lib/shown-view.tsx` keeps two views. The requested view drives the filter buttons and the URL at once. The shown view drives every panel and heading. It changes only when all the data of the requested view has loaded, so the page changes in one redraw and never shows one Area's figures under another Area's name. An "Updating" label shows meanwhile.
 - `lib/selection-queries.ts` builds the params of every request. The page loads `selectionQueries()` before it shows a new view, and the panels build their params with the same functions, so the two always agree.
 - The dot map shows the newest 5,000 located Sales of the Selection at most. It draws one dot per rounded position and Area, moved by a fixed amount inside its 100 m cell so that the dots do not form a grid.
-- `e2e/latency.mjs` measures each Selection change at a 2x CPU slowdown and checks the behaviour above. A change takes at most 200 ms of main-thread work, not counting the map's fly-to, which reduced motion turns off.
+- `e2e/latency.mjs` measures each Selection change at a 2x CPU slowdown and checks the behaviour above. A change takes at most 200 ms of main-thread work from the moment it is asked for, which for the time slider is the release of the handle. The drag's own frames, about 50 to 60 ms, and the map's fly-to on an Area change, about 60 to 110 ms, come on top, and the test reports them apart. Reduced motion turns the fly-to off.
 - Each panel in `components/` loads its own data through the generated hooks. React Query keeps responses for 5 minutes without fetching them again.
 - Charts use Recharts, and the map uses Leaflet.
 - The browser currently loads fonts from Google Fonts and map tiles from Esri.

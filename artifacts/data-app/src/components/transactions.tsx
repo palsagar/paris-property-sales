@@ -24,6 +24,8 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
   // The page belongs to one Selection and sort. A new one reads as the first page, so no request goes out for an old page.
   const key = JSON.stringify([filters, sortBy, sortDir]);
   const [held, setHeld] = useState({ key, page: 0 });
+  // Forget the page of an earlier Selection, so coming back to it starts on the first page too.
+  if (held.key !== key) setHeld({ key, page: 0 });
   const page = held.key === key ? held.page : 0;
   const setPage = (f: (x: number) => number) => setHeld({ key, page: f(page) });
   const sortOn = (by: ListTransactionsSortBy) => setChoices((c) => ({ ...c, sortBy: by, sortDir: c.sortBy === by && c.sortDir === "desc" ? "asc" : "desc" }));

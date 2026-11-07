@@ -1,5 +1,6 @@
 // Latency test for issue #5: every Selection change is drawn within 200 ms of main-thread work,
-// on Chrome at a 2x CPU slowdown, with reduced motion. It needs the full data and a running server.
+// on Chrome at a 2x CPU slowdown, with reduced motion. A change counts from the moment it is asked for: the click, the
+// key, or the release of the time slider's handle. It needs the full data and a running server.
 // Run: pnpm --filter @workspace/data-app run latency [section ...]   (BASE_URL defaults to http://localhost:3000)
 // MOTION=1 runs without reduced motion, to measure the map's fly-to, which is outside the 200 ms.
 // DIST=<folder of a dashboard build> serves that build in place of the server's, with the API still from BASE_URL.
@@ -164,12 +165,14 @@ const sections = {
       const box = await handle.boundingBox();
       const brush = await p.page.locator('[data-testid="time-control"] .recharts-brush').first().boundingBox();
       const y = box.y + box.height / 2;
-      await measure(p, `time slider drag to ${frac}`, async () => {
+      // The Selection changes when the mouse is released, so the 200 ms counts from the release.
+      // The drag's own frames are recorded apart, outside the check, like the map's fly-to.
+      await measure(p, `time slider drag frames to ${frac}`, async () => {
         await p.page.mouse.move(box.x + box.width / 2, y);
         await p.page.mouse.down();
         await p.page.mouse.move(brush.x + brush.width * frac, y, { steps: 8 });
-        await p.page.mouse.up();
-      });
+      }, { check: false });
+      await measure(p, `time slider release at ${frac}`, () => p.page.mouse.up());
     }
     await p.ctx.close();
   },
@@ -236,6 +239,11 @@ const sections = {
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(500);
     check("slider: an arrow key applies the change", from() !== from1, { before: from1, after: from() });
+    await settle(net);
+    const from1b = from();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(500);
+    check("slider: a second arrow key, with no new click, applies again", from() !== from1b, { before: from1b, after: from() });
     await settle(net);
 
     [x, y] = await centre();
@@ -361,6 +369,12 @@ const sections = {
     let st = await page.evaluate(() => ({ blanks: window.__blanks, nameAt: window.__nameAt }));
     check("panel state: no panel blanks at an Area change", st.blanks === 0, { blanks: st.blanks });
     check("panel state: the Sales list goes to its first page and keeps its sort", pageText.trim().startsWith("1 /") && sortKept, { pageText, sortKept });
+    await click(page, "filter-arr-all");
+    await settle(net);
+    const backText = await page.textContent('[data-testid="card-transactions"] span.font-num.px-2');
+    check("panel state: back on the first Area, the Sales list is on its first page", backText.trim().startsWith("1 /"), { backText });
+    await click(page, "filter-arr-6");
+    await settle(net);
     const lateRequests = startedAt.filter((t) => st.nameAt.length && t > st.nameAt.at(-1) + 5).length;
     check("no late requests: no panel asks for data after the heading changed", st.nameAt.length > 0 && lateRequests === 0, { lateRequests });
     await click(page, "toggle-smooth");

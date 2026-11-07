@@ -48,6 +48,16 @@ export function groupOfArea(a: Area): RankGroup {
   return "paris";
 }
 
+/**
+ * The view change of a click on an Area. A click on the selected Area clicks it off, back to Paris. A dot passes
+ * `clickOff` false: it only selects, so a double-click on a dot does not undo the selection.
+ */
+export function areaChange(current: Area, a: Area, clickOff = true): { area?: Area; rank?: RankGroup } {
+  const same = JSON.stringify(a) === JSON.stringify(current);
+  if (same && !clickOff) return {};
+  return { area: same ? { kind: "paris" } : a, rank: groupOfArea(a) };
+}
+
 /** The Area of one Sale: its Arrondissement in Paris, its Commune elsewhere. */
 export function saleArea(t: { arrondissement: number | null; commune: string | null; communeName: string | null }): { id: string; label: string; area: Area } {
   if (t.arrondissement != null) return { id: String(t.arrondissement), label: arrLabel(t.arrondissement), area: { kind: "arr", arr: t.arrondissement } };
