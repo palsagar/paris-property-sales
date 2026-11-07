@@ -4,10 +4,13 @@ import type { Area } from "./areas";
 import { selectionQueries, type PanelChoices } from "./selection-queries";
 import { viewQuery, type ViewState } from "./view-state";
 
+// A request that never answers must not freeze the page: after this wait it swaps, and that panel shows its loading state.
+const MAX_WAIT_MS = 3000;
+
 /**
  * The page keeps two views. The requested view drives the filter buttons and the URL at once. The shown view drives
- * every panel and heading. It changes only when all the data of the requested view is loaded, so the page swaps in
- * one redraw and never shows one Area's figures under another Area's name.
+ * every panel and heading. It changes when all the data of the requested view is loaded, so the page swaps in
+ * one redraw and never shows one Area's figures under another Area's name. It changes after MAX_WAIT_MS at the latest.
  */
 export function useShownView(view: ViewState, choices: PanelChoices): { shown: ViewState; updating: boolean } {
   const qc = useQueryClient();
@@ -22,10 +25,12 @@ export function useShownView(view: ViewState, choices: PanelChoices): { shown: V
     const next = viewRef.current;
     // prefetchQuery never rejects, so a failed request still lets the page switch, and that panel shows its error.
     // Older requests are not cancelled: they fill the cache for a Visitor who comes back.
-    Promise.all(selectionQueries(next, choicesRef.current).map((o) => qc.prefetchQuery(o))).then(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waited = new Promise<void>((done) => { timer = setTimeout(done, MAX_WAIT_MS); });
+    Promise.race([Promise.all(selectionQueries(next, choicesRef.current).map((o) => qc.prefetchQuery(o))), waited]).then(() => {
       if (live) setShown((s) => (viewQuery(s) === key ? s : next));
     });
-    return () => { live = false; };
+    return () => { live = false; clearTimeout(timer); };
   }, [key, qc]);
   return { shown, updating: viewQuery(shown) !== key };
 }

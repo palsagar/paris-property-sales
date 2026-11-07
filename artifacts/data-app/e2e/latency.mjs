@@ -348,6 +348,23 @@ const sections = {
     check("failure: only the failed panel shows its error", roomsError && kpiOk, { roomsError, kpiOk });
     await p.ctx.close();
 
+    // A request that never answers
+    p = await openPage("/");
+    ({ page, net } = p);
+    await settle(net);
+    await page.route(/\/api\/sales\/by-rooms\?.*arrondissement=7/, () => {});
+    const nameHung = await page.textContent('[data-testid="text-area-name"]');
+    await click(page, "filter-arr-7");
+    const swapped = await page.waitForFunction((n) => document.querySelector('[data-testid="text-area-name"]').textContent !== n
+      && !document.querySelector('[data-testid="text-updating"]'), nameHung, { timeout: 6000 }).then(() => true, () => false);
+    const rooms = await page.evaluate(() => {
+      const card = document.querySelector('[data-testid="card-rooms"]');
+      return { skeleton: !!card.querySelector(".animate-pulse"), chart: !!card.querySelector(".recharts-wrapper") };
+    });
+    check("hung request: the page switches within 6 s", swapped);
+    check("hung request: the waiting panel shows no other Area's figures", swapped && !rooms.chart, rooms);
+    await p.ctx.close();
+
     // Panel state at an Area change, and no late requests
     p = await openPage("/");
     ({ page, net } = p);
