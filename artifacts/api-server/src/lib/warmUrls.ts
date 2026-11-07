@@ -10,7 +10,8 @@ function qs(params: Record<string, string | number>): string {
 /**
  * The requests of the default view of every Area: all dates, all property types, the map in Price level mode by
  * Arrondissement, the trend by quarter. They copy `selectionQueries` in the dashboard's `lib/selection-queries.ts`,
- * so a change to the params a panel sends needs a change here too. The shared requests come first.
+ * so a change to the params a panel sends needs a change here too, and the dashboard's `selection-queries.test.ts`
+ * fails until it is made. The shared requests come first.
  */
 export function warmUrls(quartierIds: string[], communeIds: string[]): string[] {
   const all = { propertyType: "all" };

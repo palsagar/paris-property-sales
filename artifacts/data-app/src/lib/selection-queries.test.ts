@@ -4,6 +4,8 @@ import { hashKey } from "@tanstack/react-query";
 import { getGetSalesTrendQueryKey, getListTransactionsQueryKey, getGetSalesSummaryQueryKey } from "@workspace/api-client-react";
 import { parseView } from "./view-state";
 import { selectionQueries, smoothOn, summaryParams, transactionParams, trendParams, trendWindow, type PanelChoices } from "./selection-queries";
+// The server's warm-up list copies these requests by hand, so this test compares the two.
+import { warmUrls } from "../../../api-server/src/lib/warmUrls";
 
 const DEFAULT: PanelChoices = { smooth: null, sortBy: "date", sortDir: "desc" };
 const keys = (search: string, choices = DEFAULT) => selectionQueries(parseView(search), choices).map((o) => hashKey(o.queryKey)).sort();
@@ -81,6 +83,18 @@ test("the smoothing choice applies only to its granularity and level", () => {
   assert.equal(trendWindow("month", false, off("quarter", false)), 3, "a choice for another granularity does not apply");
   assert.equal(smoothOn("quarter", false, on("quarter", false)), true);
   assert.equal(smoothOn("year", false, null), false);
+});
+
+test("the server warms every request of each Area's default view", () => {
+  const NUMBERS = new Set(["arrondissement", "window", "limit", "offset"]);
+  const warmed = new Set(warmUrls(["7510501"], ["78646"]).map((u) => {
+    const [path, query] = u.split("?");
+    const params = Object.fromEntries([...new URLSearchParams(query ?? "")].map(([name, v]) => [name, NUMBERS.has(name) ? Number(v) : v]));
+    return k(path!, params);
+  }));
+  for (const search of ["", "arr=7", "q=7510501", "commune=78646", "dept=93"]) {
+    for (const key of keys(search)) assert.ok(warmed.has(key), `${search || "Paris"}: ${key}`);
+  }
 });
 
 test("every query key equals the key of the panel's hook", () => {
