@@ -334,6 +334,12 @@ export interface Transaction {
   rooms: number;
 }
 
+export interface SalePointsPage {
+  /** Count of the Sales with a position in the Selection */
+  total: number;
+  items: SalePoint[];
+}
+
 export interface TransactionPage {
   total: number;
   items: Transaction[];

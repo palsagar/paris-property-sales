@@ -20,6 +20,8 @@ async function openPage(path = "/") {
     window.__commits = 0;
     window.__blanks = 0;
     window.__countBlanks = false;
+    window.__longTasks = [];
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__longTasks.push(e.duration); }).observe({ type: "longtask", buffered: false });
     window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
       supportsFiber: true, isDisabled: false, renderers: new Map(), inject: () => 1, checkDCE() {},
       onCommitFiberUnmount() {}, onPostCommitFiberRoot() {}, onScheduleFiberRoot() {},
@@ -53,7 +55,7 @@ async function measure(p, name, act, { limit = LIMIT_MS, check = true } = {}) {
   const { page, net } = p;
   await settle(net);
   Object.assign(net, { requests: 0, misses: 0, urls: [] });
-  await page.evaluate(() => { window.__commits = 0; window.__blanks = 0; });
+  await page.evaluate(() => { window.__commits = 0; window.__blanks = 0; window.__longTasks = []; });
   await browser.startTracing(page, { categories: ["devtools.timeline", "disabled-by-default-devtools.timeline", "toplevel"] });
   await act();
   net.last = Date.now();
@@ -65,10 +67,12 @@ async function measure(p, name, act, { limit = LIMIT_MS, check = true } = {}) {
     const work = tasks.reduce((a, e) => a + e.dur, 0) / 1000;
     if (work >= best.work) best = { work, tasks };
   }
-  const { commits, blanks } = await page.evaluate(() => ({ commits: window.__commits, blanks: window.__blanks }));
+  const { commits, blanks, longTasks } = await page.evaluate(() => ({ commits: window.__commits, blanks: window.__blanks, longTasks: window.__longTasks }));
   const r = {
     name, workMs: Math.round(best.work), longestTaskMs: Math.round(Math.max(0, ...best.tasks.map((e) => e.dur)) / 1000),
     requests: net.requests, misses: net.misses, commits, blanks,
+    // A second view of the same work from the page itself, to cross-check the trace on very long tasks.
+    longTaskSumMs: Math.round(longTasks.reduce((a, d) => a + d, 0)),
   };
   r.pass = !check || (r.workMs <= limit && r.blanks === 0);
   if (!r.pass) failed = true;
@@ -155,6 +159,34 @@ const sections = {
       });
     }
     await p.ctx.close();
+  },
+
+  /** The dot map: at most 5,000 Sales and the cap message. Measured, but outside the 200 ms check. */
+  async dots() {
+    for (const [label, path] of [["Paris, all dates", "/"], ["16th, all dates", "/?arr=16"], ["Versailles, all dates", "/?commune=78646"]]) {
+      const p = await openPage(path);
+      const cdp = await p.ctx.newCDPSession(p.page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 2 });
+      await settle(p.net);
+      let body = null, timing = null;
+      p.page.on("response", async (r) => {
+        if (!r.url().includes("/api/sales/points")) return;
+        const buf = await r.body();
+        body = { bytes: buf.length, json: JSON.parse(buf.toString()), cache: r.headers()["x-cache"] };
+        timing = r.request().timing();
+      });
+      const m = await measure(p, `dots ${label}`, () => click(p.page, "map-mode-dots"), { check: false });
+      const { total, items } = body.json;
+      const cap = p.page.locator('[data-testid="text-dots-cap"]');
+      const capShown = await cap.isVisible();
+      const capText = capShown ? await cap.textContent() : "";
+      const capTotal = Number((capText.match(/of ([\d\s,.\u202f\u00a0]+) sales/)?.[1] ?? "").replace(/\D/g, ""));
+      const ok = items.length <= 5000 && (total > items.length ? capShown && capTotal === total : !capShown);
+      if (!ok) failed = true;
+      console.log(JSON.stringify({ name: `dots ${label} response`, bytes: body.bytes, cache: body.cache, serverMs: Math.round(timing.responseEnd - timing.requestStart), total, items: items.length, capShown, capTotal, pass: ok }));
+      m.pass = ok;
+      await p.ctx.close();
+    }
   },
 };
 

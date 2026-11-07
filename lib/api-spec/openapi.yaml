@@ -229,7 +229,7 @@ paths:
     get:
       operationId: getSalesPoints
       tags: [sales]
-      summary: Geolocated sales for the point map
+      summary: Geolocated sales for the point map, newest first, at most 5,000
       parameters:
         - $ref: "#/components/parameters/PropertyType"
         - $ref: "#/components/parameters/Arrondissement"
@@ -240,13 +240,11 @@ paths:
         - $ref: "#/components/parameters/To"
       responses:
         "200":
-          description: Points
+          description: The newest 5,000 points at most, and the count of all located Sales in the Selection
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/SalePoint"
+                $ref: "#/components/schemas/SalePointsPage"
   /sales/transactions:
     get:
       operationId: listTransactions
@@ -757,6 +755,17 @@ components:
           type: number
         rooms:
           type: integer
+    SalePointsPage:
+      type: object
+      required: [total, items]
+      properties:
+        total:
+          type: integer
+          description: Count of the Sales with a position in the Selection
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalePoint"
     TransactionPage:
       type: object
       required: [total, items]

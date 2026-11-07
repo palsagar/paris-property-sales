@@ -355,7 +355,7 @@ export const GetSalesByCommuneResponse = zod.array(GetSalesByCommuneResponseItem
 
 
 /**
- * @summary Geolocated sales for the point map
+ * @summary Geolocated sales for the point map, newest first, at most 5,000
  */
 export const getSalesPointsQueryPropertyTypeDefault = `all`;
 export const getSalesPointsQueryArrondissementMax = 20;
@@ -376,7 +376,9 @@ export const GetSalesPointsQueryParams = zod.object({
   "to": zod.coerce.string().regex(getSalesPointsQueryToRegExp).optional().describe('Last day to include (YYYY-MM-DD). Defaults to the end of the data.')
 })
 
-export const GetSalesPointsResponseItem = zod.object({
+export const GetSalesPointsResponse = zod.object({
+  "total": zod.number().int().describe('Count of the Sales with a position in the Selection'),
+  "items": zod.array(zod.object({
   "id": zod.string(),
   "lon": zod.number(),
   "lat": zod.number(),
@@ -390,8 +392,8 @@ export const GetSalesPointsResponseItem = zod.object({
   "date": zod.string(),
   "type": zod.string(),
   "address": zod.string()
+}))
 })
-export const GetSalesPointsResponse = zod.array(GetSalesPointsResponseItem)
 
 
 /**

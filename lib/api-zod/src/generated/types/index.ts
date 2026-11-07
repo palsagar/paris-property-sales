@@ -37,6 +37,7 @@ export * from './propertyTypeParameter';
 export * from './quartierParameter';
 export * from './roomsStat';
 export * from './salePoint';
+export * from './salePointsPage';
 export * from './salesSummary';
 export * from './toParameter';
 export * from './transaction';

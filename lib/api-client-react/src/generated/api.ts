@@ -33,7 +33,7 @@ import type {
   HealthStatus,
   ListTransactionsParams,
   RoomsStat,
-  SalePoint,
+  SalePointsPage,
   SalesSummary,
   TransactionPage,
   TrendPoint
@@ -918,11 +918,11 @@ export const getGetSalesPointsUrl = (params?: GetSalesPointsParams,) => {
 }
 
 /**
- * @summary Geolocated sales for the point map
+ * @summary Geolocated sales for the point map, newest first, at most 5,000
  */
-export const getSalesPoints = async (params?: GetSalesPointsParams, options?: Parameters<typeof customFetch>[1]): Promise<SalePoint[]> => {
+export const getSalesPoints = async (params?: GetSalesPointsParams, options?: Parameters<typeof customFetch>[1]): Promise<SalePointsPage> => {
 
-  return customFetch<SalePoint[]>(getGetSalesPointsUrl(params),
+  return customFetch<SalePointsPage>(getGetSalesPointsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -965,7 +965,7 @@ export type GetSalesPointsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Geolocated sales for the point map
+ * @summary Geolocated sales for the point map, newest first, at most 5,000
  */
 
 export function useGetSalesPoints<TData = Awaited<ReturnType<typeof getSalesPoints>>, TError = ErrorType<unknown>>(
