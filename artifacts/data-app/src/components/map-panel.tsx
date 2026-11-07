@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetSalesByQuartier, getGetSalesByQuartierQueryKey, useGetAreaTrend, getGetAreaTrendQueryKey,
   useGetSalesPoints, getGetSalesPointsQueryKey,
-  type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter, type SalePoint,
+  type AreaStat, type AreaTrendPoint, type GeoFeatureCollection, type PropertyTypeParameter,
 } from "@workspace/api-client-react";
 import { Play, Pause, RotateCcw } from "lucide-react";
 import { escapeHtml } from "@/lib/escape";
@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend } from "@/components/ui-bits";
 import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
-import { DEPARTMENT_NAMES, featureState, keepInSameArea, pointArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
+import { groupDots, type SaleDot } from "@/lib/dots";
+import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
 import type { MapLevel, MapMode } from "@/lib/view-state";
 
@@ -38,6 +39,7 @@ export function MapPanel(props: {
   const points = useGetSalesPoints(pp, { query: { queryKey: getGetSalesPointsQueryKey(pp), enabled: mode === "dots", placeholderData: keepInSameArea(areaP) } });
   const items = points.data?.items;
   const total = points.data?.total ?? 0;
+  const dots = useMemo(() => (items ? groupDots(items, level) : undefined), [items, level]);
 
   // Paris at the chosen level, with the Communes always around it.
   const stats = useMemo(() => [...(level === "quartier" ? qStats.data ?? [] : arrStats), ...communeStats], [level, qStats.data, arrStats, communeStats]);
@@ -109,11 +111,13 @@ export function MapPanel(props: {
     const q = (f as { properties: MapFeature }).properties;
     return [q.id, q.name];
   })), [props.qBounds]);
-  const pointName = (p: SalePoint) => (level === "quartier" && p.quartier != null && quartierNames.get(p.quartier)) || p.areaName;
+  const dotName = (d: SaleDot) => {
+    const p = d.sales[0]!;
+    return (level === "quartier" && p.quartier != null && quartierNames.get(p.quartier)) || p.areaName;
+  };
   // A dot only selects: a click on a dot in the selected Area must not click the Area off.
-  const selectPoint = (p: SalePoint) => {
-    const a = pointArea(p, level);
-    if (JSON.stringify(a) !== JSON.stringify(area)) props.onSelectArea(a);
+  const selectDot = (d: SaleDot) => {
+    if (JSON.stringify(d.area) !== JSON.stringify(area)) props.onSelectArea(d.area);
   };
 
   const parisBounds = level === "quartier" && mode !== "dots" ? props.qBounds : props.arrBounds;
@@ -139,7 +143,7 @@ export function MapPanel(props: {
     <ChartCard testId="map" title={mode === "change" ? "Change in price per m², by area" : mode === "dots" ? "Individual sales on the map" : "Median price per m², by area"}
       isDark={isDark} loading={loading} fetching={fetching} csv={csv as object[]} csvName={`map-${mode}-${level}.csv`}
       desc={mode === "change" ? "Median price per m² at the end of the period compared with the start. Communes appear around Paris at each level. Click an area to select it for the whole page." :
-        mode === "dots" ? "Each dot is one sale in the selected area, coloured by its price per m². Click an area to select it for the whole page." : "Communes appear around Paris at each level. Click an area to select it for the whole page. Use the slider under the map to step through quarters."}
+        mode === "dots" ? "Each dot holds the sales at one position, rounded to about 100 m and moved slightly so that the dots do not form a grid. A larger dot holds more sales. Its colour is their median price per m². Click a dot or an area to select it for the whole page." : "Communes appear around Paris at each level. Click an area to select it for the whole page. Use the slider under the map to step through quarters."}
       right={<>
         <Segmented label="Map mode" testId="map-mode" value={mode} onChange={setMode} options={[["level", "Price level"], ["change", "Price change"], ["dots", "Sales"]]} />
         {mode !== "dots" && <Segmented label="Map areas" testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
@@ -149,14 +153,14 @@ export function MapPanel(props: {
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
             stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}
             onSelect={props.onSelect} outlineOnly={mode === "dots"}
-            points={mode === "dots" ? items ?? [] : undefined} pointScale={scale.color} pointName={pointName} onSelectPoint={selectPoint} focusFeature={focusFeature} />
+            dots={mode === "dots" ? dots ?? [] : undefined} pointScale={scale.color} dotName={dotName} onSelectDot={selectDot} focusFeature={focusFeature} />
         )}
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
         <div className="absolute left-3 bottom-3 z-[400] rounded-md bg-card border px-3 py-2">
           {mode === "change" ? (
             <GradientLegend title={<>Change in price per m², {rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} />
           ) : (
-            <StepLegend title={<>Median price per m², <span className="font-semibold text-primary">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per sale" : rangeLabel(ef, et)}</span></>}
+            <StepLegend title={<>Median price per m², <span className="font-semibold text-primary">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per dot" : rangeLabel(ef, et)}</span></>}
               scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
           )}
           {mode === "dots" && items && total <= items.length && <div className="text-[12px] mt-1 text-muted-foreground font-num">{num(total)} sales plotted</div>}

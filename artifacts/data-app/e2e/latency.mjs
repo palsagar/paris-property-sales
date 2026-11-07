@@ -1,9 +1,14 @@
 // Latency test for issue #5: every Selection change is drawn within 200 ms of main-thread work,
 // on Chrome at a 2x CPU slowdown, with reduced motion. It needs the full data and a running server.
 // Run: pnpm --filter @workspace/data-app run latency [section ...]   (BASE_URL defaults to http://localhost:3000)
+// DIST=<folder of a dashboard build> serves that build in place of the server's, with the API still from BASE_URL.
 import { chromium } from "playwright-core";
+import { readFile } from "node:fs/promises";
+import { extname, join } from "node:path";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
+const DIST = process.env.DIST;
+const MIME = { ".js": "text/javascript", ".css": "text/css", ".html": "text/html", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json" };
 const LIMIT_MS = 200;
 const only = process.argv.slice(2);
 const results = [];
@@ -16,6 +21,13 @@ async function openPage(path = "/") {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
   const page = await ctx.newPage();
   await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
+  if (DIST) {
+    await page.route((u) => u.origin === new URL(BASE).origin && !u.pathname.startsWith("/api"), async (r) => {
+      const u = new URL(r.request().url());
+      const f = extname(u.pathname) ? u.pathname.slice(1) : "index.html";
+      try { await r.fulfill({ body: await readFile(join(DIST, f)), contentType: MIME[extname(f)] ?? "application/octet-stream" }); } catch { await r.abort(); }
+    });
+  }
   await page.addInitScript(() => {
     window.__commits = 0;
     window.__blanks = 0;
