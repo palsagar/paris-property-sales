@@ -152,10 +152,12 @@ describe("rate limit", () => {
     assert.ok(responses.every((r) => r.status === 200));
   });
 
-  test("requests from a private network are never limited", async () => {
+  test("a request through a proxy is limited even when the address it names is private", async () => {
     const base = await start();
-    const responses = await burst(base, { "X-Forwarded-For": "192.168.65.1" }, API_RATE_LIMIT.limit + 1);
-    assert.ok(responses.every((r) => r.status === 200));
+    for (const headers of [{ "X-Forwarded-For": "192.168.65.1" }, { "CF-Connecting-IP": "127.0.0.1" }]) {
+      const responses = await burst(base, headers, API_RATE_LIMIT.limit + 1);
+      assert.equal(responses[responses.length - 1]?.status, 429);
+    }
   });
 });
 

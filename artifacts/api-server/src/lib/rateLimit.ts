@@ -26,7 +26,13 @@ export function createApiRateLimit() {
     ...API_RATE_LIMIT,
     standardHeaders: "draft-8",
     legacyHeaders: false,
-    skip: (req) => inList(local, req.ip),
+    // Only a caller that came straight to the server. A request through Traefik always has X-Forwarded-For, and one
+    // through Cloudflare has CF-Connecting-IP, so an outside Visitor whose address looks private, such as Docker's
+    // gateway address, is still limited, and writing a private address in a header gains nothing.
+    skip: (req) =>
+      req.headers["x-forwarded-for"] === undefined &&
+      req.headers["cf-connecting-ip"] === undefined &&
+      inList(local, req.socket.remoteAddress),
     message: { error: "Too many requests. Please wait a minute and try again." },
   });
 }
