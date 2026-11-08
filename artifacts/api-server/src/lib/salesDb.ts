@@ -18,20 +18,25 @@ export async function openSalesDb(file: string, timeoutMs = QUERY_TIMEOUT_MS): P
   return {
     async query<T>(sql: string, params?: SqlParams): Promise<T[]> {
       const connection = await instance.connect();
-      let timedOut = false;
-      const timer = setTimeout(() => {
-        timedOut = true;
-        connection.interrupt();
-      }, timeoutMs);
-      try {
-        const result = await connection.runAndReadAll(sql, params);
-        return result.getRowObjects() as T[];
-      } catch (e) {
-        throw timedOut ? new QueryTimeoutError(timeoutMs) : e;
-      } finally {
+      const run = connection.runAndReadAll(sql, params).then((result) => result.getRowObjects() as T[]);
+      let timer: NodeJS.Timeout | undefined;
+      let interrupter: NodeJS.Timeout | undefined;
+      const expired = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new QueryTimeoutError(timeoutMs));
+          // A query that waits for a DuckDB thread has not started, and an interrupt before the start does nothing,
+          // so the interrupt is repeated until the query ends.
+          connection.interrupt();
+          interrupter = setInterval(() => connection.interrupt(), 25);
+        }, timeoutMs);
+      });
+      // The connection closes only after the query has ended, because closing it under a running query is unsafe.
+      void run.then(undefined, () => undefined).then(() => {
         clearTimeout(timer);
+        clearInterval(interrupter);
         connection.disconnectSync();
-      }
+      });
+      return Promise.race([run, expired]);
     },
   };
 }

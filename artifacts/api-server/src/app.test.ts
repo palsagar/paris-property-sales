@@ -154,7 +154,7 @@ describe("rate limit", () => {
 
   test("a request through a proxy is limited even when the address it names is private", async () => {
     const base = await start();
-    for (const headers of [{ "X-Forwarded-For": "192.168.65.1" }, { "CF-Connecting-IP": "127.0.0.1" }]) {
+    for (const headers of [{ "X-Forwarded-For": "192.168.65.1" }, { "CF-Connecting-IP": "127.0.0.1" }] as Record<string, string>[]) {
       const responses = await burst(base, headers, API_RATE_LIMIT.limit + 1);
       assert.equal(responses[responses.length - 1]?.status, 429);
     }

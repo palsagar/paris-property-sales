@@ -31,6 +31,9 @@ interface Shared {
 // about 24 MB, so this holds several of those on top of the warm-up.
 const MAX_CACHE_BYTES = 256 * 1024 * 1024;
 
+// How long a run may go on after its own Visitor has left. Longer than the query time limit in salesDb.ts.
+const ABANDONED_RUN_MS = 10_000;
+
 const NO_QUERY = z.object({});
 
 // The paths that can be cached, each with the validator its route applies to
@@ -146,7 +149,13 @@ export function createResponseCache(maxBytes = MAX_CACHE_BYTES): RequestHandler 
       if (running.get(key) === result) running.delete(key);
       settle(shared);
     };
-    res.on("close", () => finish(null));
+    // A Visitor who leaves does not stop the route, which still answers through res.json below and then ends the wait.
+    // Ending it at once would send every waiting request to run the route itself. The timer is for a route that never
+    // answers.
+    res.on("close", () => {
+      if (res.writableFinished) finish(null);
+      else setTimeout(() => finish(null), ABANDONED_RUN_MS).unref();
+    });
 
     const originalJson = res.json.bind(res);
     res.json = (payload: unknown) => {

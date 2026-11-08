@@ -237,6 +237,24 @@ describe("requests that arrive together", () => {
     assert.equal(runs.failing - before, 2);
   });
 
+  test("requests that wait still share the run when the first Visitor leaves", async () => {
+    const base = await startApp();
+    const before = runs.quartier;
+    const url = `${base}/sales/by-quartier?from=2024-03-01`;
+
+    const leaver = new AbortController();
+    const first = fetch(url, { signal: leaver.signal }).catch(() => null);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const waiting = Array.from({ length: 5 }, () => get(url));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    leaver.abort();
+    await first;
+
+    const responses = await Promise.all(waiting);
+    assert.equal(runs.quartier - before, 1);
+    assert.ok(responses.every((r) => r.status === 200));
+  });
+
   test("different requests do not wait for each other", async () => {
     const base = await startApp();
     const before = runs.quartier;

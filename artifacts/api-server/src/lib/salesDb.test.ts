@@ -41,3 +41,21 @@ test("a query past the time limit is stopped, rejects with QueryTimeoutError, an
   const rows = await db.query<{ n: number }>("SELECT 1::INTEGER AS n");
   assert.equal(rows[0]!.n, 1);
 });
+
+test("many slow queries at once all stop near the time limit, including those still waiting for a thread", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "sales-timeout-")), "empty.duckdb");
+  (await DuckDBInstance.create(file)).closeSync();
+  const db = await openSalesDb(file, 200);
+
+  const started = Date.now();
+  const results = await Promise.allSettled(
+    Array.from({ length: 24 }, (_, i) =>
+      db.query("SELECT sum(range % 7) + $i::INTEGER FROM range(10000000000)", { i }),
+    ),
+  );
+  assert.ok(results.every((r) => r.status === "rejected" && r.reason instanceof QueryTimeoutError));
+  assert.ok(Date.now() - started < 3000, `stopped after ${Date.now() - started} ms`);
+
+  const rows = await db.query<{ n: number }>("SELECT 1::INTEGER AS n");
+  assert.equal(rows[0]!.n, 1);
+});
