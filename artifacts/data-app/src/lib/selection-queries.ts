@@ -13,7 +13,8 @@ import type { ViewState } from "./view-state";
  * `selectionQueries` before it shows a new view, so the params of the two always agree. The rule that decides whether
  * a panel makes a request at all is not shared: each panel has its own `enabled` rule, and `selectionQueries` writes
  * it again. Keep these in step by hand: the map's Quartier stats, Quartier trend and points (map level and mode, in
- * `map-panel.tsx`) and the All Paris line beside an Area's trend (in `hero-trend.tsx`).
+ * `map-panel.tsx`), the All Paris line beside an Area's trend (in `hero-trend.tsx`) and the All Paris figures beside
+ * an Area's key figures (in `pages/dashboard.tsx`).
  */
 
 /** A Visitor's Smoothing switch. It applies only to the granularity and Area level it was set on. */
@@ -50,6 +51,8 @@ export const pointParams = summaryParams;
 export const timeTrendParams = (v: Pick<ViewState, "ptype" | "area">) => ({ propertyType: v.ptype, ...areaParams(v.area), granularity: "month" as const, window: 1 });
 export const trendParams = (v: Selection & Pick<ViewState, "gran">, c: PanelChoices) =>
   ({ ...summaryParams(v), granularity: v.gran, window: trendWindow(v.gran, isQuartier(v), c.smooth) });
+/** The All Paris figures beside an Area's key figures: the Selection's type and Period, with no Area. */
+export const parisSummaryParams = (v: Selection) => summaryParams({ ...v, area: { kind: "paris" } });
 /** The All Paris line beside an Area's trend. */
 export const parisTrendParams = (v: Selection & Pick<ViewState, "gran">, c: PanelChoices) =>
   ({ ...areaStatParams(v), granularity: v.gran, window: trendWindow(v.gran, isQuartier(v), c.smooth) });
@@ -73,7 +76,10 @@ export function selectionQueries(v: ViewState, c: PanelChoices) {
     getGetSalesByRoomsQueryOptions(s),
     getListTransactionsQueryOptions(transactionParams(v, c, 0)),
   ];
-  if (v.area.kind !== "paris") out.push(getGetSalesTrendQueryOptions(parisTrendParams(v, c)));
+  if (v.area.kind !== "paris") {
+    out.push(getGetSalesTrendQueryOptions(parisTrendParams(v, c)));
+    out.push(getGetSalesSummaryQueryOptions(parisSummaryParams(v)));
+  }
   if (v.mapLevel === "quartier" && v.mapMode !== "dots") out.push(getGetSalesByQuartierQueryOptions(quartierStatParams(v)));
   if (v.mapLevel === "quartier" && v.mapMode === "level") out.push(getGetAreaTrendQueryOptions(quartierTrendParams(v)));
   if (v.mapMode === "dots") out.push(getGetSalesPointsQueryOptions(pointParams(v)));

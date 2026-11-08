@@ -36,7 +36,8 @@ test("an Area adds the Paris line and the Area's filters", () => {
   assert.ok(got.includes(k("/sales/trend", { ...dated, arrondissement: 5, granularity: "quarter", window: 1 })), "Area trend");
   assert.ok(got.includes(k("/sales/summary", { ...dated, arrondissement: 5 })));
   assert.ok(got.includes(k("/sales/trend", { propertyType: "all", arrondissement: 5, granularity: "month", window: 1 })), "slider chart has no dates");
-  assert.equal(got.length, 13);
+  assert.ok(got.includes(k("/sales/summary", dated)), "All Paris figures beside the Area's key figures");
+  assert.equal(got.length, 14);
 });
 
 test("a Quartier uses a window of 3 for its trend and the Paris line", () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { nearestValidPeriod } from "./period";
 import { groupOfArea, type Area, type DepartmentId, type RankGroup } from "./areas";
 import type { PropertyTypeParameter, GranularityParameter } from "@workspace/api-client-react";
@@ -70,6 +70,15 @@ export function viewQuery(s: ViewState): string {
   return sp.toString();
 }
 
+/**
+ * How a change of view reaches the browser history. A new Area adds an entry, so the Back button (and the back
+ * gesture on a phone) returns to the Area before. Every other change replaces the entry, so dragging the dates or
+ * flipping a panel setting does not fill the history.
+ */
+export function historyMode(prev: Pick<ViewState, "area">, next: Pick<ViewState, "area">): "push" | "replace" {
+  return JSON.stringify(prev.area) === JSON.stringify(next.area) ? "replace" : "push";
+}
+
 /** View state mirrored into the query string so a link reproduces the view. */
 export function useViewState(datasetFrom: string, datasetTo: string) {
   // The first state holds the moved dates, so no request uses the expired ones.
@@ -79,10 +88,27 @@ export function useViewState(datasetFrom: string, datasetTo: string) {
     return { state: { ...s, from: p.from, to: p.to }, movedTo: p.moved ? { from: p.from, to: p.to } : null };
   });
   const [state, setState] = useState<ViewState>(first.state);
+  const written = useRef<ViewState>(first.state);
+  const fromHistory = useRef(false);
   useEffect(() => {
     const qs = viewQuery(state);
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    const url = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+    // A view restored by Back or Forward is already the current entry.
+    if (fromHistory.current) fromHistory.current = false;
+    else if (historyMode(written.current, state) === "push") window.history.pushState(window.history.state, "", url);
+    else window.history.replaceState(window.history.state, "", url);
+    written.current = state;
   }, [state]);
+  useEffect(() => {
+    const onPop = () => {
+      const s = parseView(window.location.search);
+      const p = nearestValidPeriod(s.from, s.to, datasetFrom, datasetTo);
+      fromHistory.current = true;
+      setState({ ...s, from: p.from, to: p.to });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [datasetFrom, datasetTo]);
   const patch = useCallback(
     (p: Partial<ViewState> | ((s: ViewState) => Partial<ViewState>)) => setState((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) })),
     [],

@@ -32,7 +32,7 @@ test("an event without properties is sent by name alone", async () => {
 test("without Umami and without its script, track does nothing and throws nothing", async () => {
   assert.doesNotThrow(() => track("print"));
   g.document = { querySelector: () => null };
-  assert.doesNotThrow(() => track("refresh"));
+  assert.doesNotThrow(() => track("copy-link", { via: "clipboard" }));
   await tick();
 });
 
