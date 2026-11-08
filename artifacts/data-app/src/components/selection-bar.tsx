@@ -66,7 +66,7 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
           <PopoverTrigger asChild>
             <FieldButton icon={<MapPin className="w-[18px] h-[18px]" />} label="Area" value={name} className="w-[min(300px,32vw)]" data-testid="button-area" aria-haspopup="dialog" />
           </PopoverTrigger>
-          <PopoverContent align="start" sideOffset={8} className="w-[440px] p-4 rounded-xl" aria-label="Choose an area">
+          <PopoverContent align="start" sideOffset={8} className="w-[440px] p-4 rounded-xl data-[state=closed]:animate-none" aria-label="Choose an area">
             <AreaPicker quartiers={quartiers} communes={communes} area={area} selArr={selArr} autoFocus
               onSelect={(a, via) => { selectArea(a, via); setAreaOpen(false); }} />
           </PopoverContent>
