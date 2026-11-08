@@ -120,7 +120,7 @@ The site counts visits and the use of its controls with [Umami](https://umami.is
 | `change-language` | `to`: en or fr |
 | `author-link` | `target`: site or github |
 
-An event carries the same values in both languages. For example, `select-area` sends `area: "Paris 11e"` and `open` sends `type: "apartment"` in French too, so the statistics do not split by language.
+An event carries the same values in both languages. For example, `select-area` sends `area: "Paris 11e"` and `open` sends `type: "apartment"` in French too, so the statistics do not split by language. Umami also records the page title. The title follows the language ("Paris & Suburbs Property Sales" or "Ventes immobilières à Paris et alentours"), so the page title report shows both titles.
 
 These are never sent:
 - anything about a single Sale, such as its id, street, price or position, because data sent to Umami cannot be taken back (see [decision record 6](adr/0006-public-site-limits.md))

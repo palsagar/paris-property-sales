@@ -32,7 +32,7 @@ const endLabel = (name: string, color: string, last: number, dy: number) =>
   };
 
 /** The Change of the Selection in one sentence, so a Visitor reads the answer before the chart. */
-function takeaway(s: SalesSummary | undefined, paris: SalesSummary | undefined, areaName: string, kind: string): string | null {
+function takeaway(s: SalesSummary | undefined, paris: SalesSummary | undefined, areaName: string, kind: Selection["area"]["kind"]): string | null {
   if (!s || s.startMedianPricePerSqm == null || s.endMedianPricePerSqm == null || s.changePct == null) return null;
   const n = s.changeWindowMonths;
   const tr = t().trend;

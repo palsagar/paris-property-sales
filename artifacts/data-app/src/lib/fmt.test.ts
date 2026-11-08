@@ -97,3 +97,23 @@ test("in French, a Quartier reads 'dans le quartier', a Commune 'à'", async () 
   }
   assert.equal(inArea("Halles", "q"), "Halles");
 });
+
+test("in French, a Commune whose name starts with Le or Les reads 'au' or 'aux'", async () => {
+  const { inArea } = await import("./fmt");
+  const { setLang } = await import("./i18n/language");
+  const { t } = await import("./i18n/messages");
+  setLang("fr");
+  try {
+    assert.equal(inArea("Le Pré-Saint-Gervais", "commune"), "au Pré-Saint-Gervais");
+    assert.equal(inArea("Le Kremlin-Bicêtre", "commune"), "au Kremlin-Bicêtre");
+    assert.equal(inArea("Les Lilas", "commune"), "aux Lilas");
+    assert.equal(inArea("La Garenne-Colombes", "commune"), "à La Garenne-Colombes");
+    assert.equal(inArea("L'Haÿ-les-Roses", "commune"), "à L'Haÿ-les-Roses");
+    assert.equal(
+      t().trend.takeaway(inArea("Le Pré-Saint-Gervais", "commune"), "9 000 €/m²", 6, "8 000 €/m²", "+12 %"),
+      "Au Pré-Saint-Gervais, la médiane était de 9 000 €/m² les 6 derniers mois de la période, contre 8 000 €/m² les 6 premiers : +12 %.",
+    );
+  } finally {
+    setLang("en");
+  }
+});

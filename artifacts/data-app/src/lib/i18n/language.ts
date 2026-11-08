@@ -9,11 +9,16 @@ export function pickLang(saved: string | null, browser: readonly string[]): Lang
   return browser[0]?.toLowerCase().startsWith("fr") ? "fr" : "en";
 }
 
+/** The browser's languages, or its one language when the list is missing or empty, as in some webviews. index.html does the same. */
+export function browserLanguages(languages: readonly string[] | undefined, language: string): readonly string[] {
+  return languages?.length ? languages : [language];
+}
+
 /** The language to start with. index.html applies the same rule before the first paint. */
 export function readLang(): Lang {
   let saved: string | null = null;
   try { saved = localStorage.getItem(KEY); } catch { /* site data blocked: use the browser's language */ }
-  return pickLang(saved, typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language]);
+  return pickLang(saved, typeof navigator === "undefined" ? [] : browserLanguages(navigator.languages, navigator.language));
 }
 
 export function saveLang(l: Lang): void {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickLang, plural, setLang } from "./language";
+import { browserLanguages, pickLang, plural, setLang } from "./language";
 
 test("a saved choice wins over the browser language", () => {
   assert.equal(pickLang("fr", ["en-GB"]), "fr");
@@ -13,6 +13,12 @@ test("without a saved choice, the browser's first language decides", () => {
   assert.equal(pickLang(null, ["en-US", "fr"]), "en");
   assert.equal(pickLang(null, []), "en");
   assert.equal(pickLang("de", ["de-DE"]), "en");
+});
+
+test("an empty languages list falls back to the browser's language", () => {
+  assert.deepEqual(browserLanguages([], "fr-FR"), ["fr-FR"]);
+  assert.deepEqual(browserLanguages(undefined, "fr-FR"), ["fr-FR"]);
+  assert.deepEqual(browserLanguages(["en-GB", "fr"], "fr-FR"), ["en-GB", "fr"]);
 });
 
 test("plural follows the language's rules", () => {

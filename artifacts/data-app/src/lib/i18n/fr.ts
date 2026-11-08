@@ -1,3 +1,4 @@
+import type { Area } from "../areas";
 import type { Messages } from "./en";
 import { plural } from "./language";
 
@@ -15,6 +16,8 @@ const OF_DEPARTMENT: Record<string, string> = {
 };
 
 /** Une majuscule en début de phrase : « dans le 11e » devient « Dans le 11e ». */
+/** « au Pré-Saint-Gervais », « aux Lilas », « à La Garenne-Colombes », « à Montreuil ». */
+const communeIn = (name: string) => (name.startsWith("Le ") ? `au ${name.slice(3)}` : name.startsWith("Les ") ? `aux ${name.slice(4)}` : `à ${name}`);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Les textes en français. Les termes viennent de CONTEXT.md (_French_). */
@@ -317,8 +320,8 @@ export const fr: Messages = {
     tooFew: "Trop peu de ventes",
     allParis: "Tout Paris",
     /** Le nom d'un Secteur avec sa préposition : « dans le 11e arrondissement », « à Montreuil ». */
-    inArea: (name: string, kind?: string) =>
-      name === "Tout Paris" ? "dans tout Paris" : /arrondissement$/.test(name) ? `dans le ${name}` : kind === "q" ? `dans le quartier ${name}` : DEPARTMENTS[name] ?? `à ${name}`,
+    inArea: (name: string, kind?: Area["kind"]) =>
+      name === "Tout Paris" ? "dans tout Paris" : /arrondissement$/.test(name) ? `dans le ${name}` : kind === "q" ? `dans le quartier ${name}` : DEPARTMENTS[name] ?? communeIn(name),
     quarter: (y: number, q: number) => `T${q} ${y}`,
     houseShare: (pct: number) => `${pct}% de maisons`,
     houseShareWarning: (pct: number) => `Les maisons font ${pct}% de ces ventes. Le prix d'une maison comprend son terrain, donc cette médiane se compare moins bien.`,

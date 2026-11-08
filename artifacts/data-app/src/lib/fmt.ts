@@ -1,6 +1,7 @@
 import { interpolateRdBu } from "d3-scale-chromatic";
 import type { GranularityParameter } from "@workspace/api-client-react";
 import { t } from "./i18n/messages";
+import type { Area } from "./areas";
 
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 export const num = (n: number) => nf.format(Math.round(n)).replace(/[\u202f\u00a0]/g, " ");
@@ -33,7 +34,7 @@ export const keep = (s: string) => s.replace(/(\d) (?=\d)/g, "$1\u00a0").replace
  * An Area's name as it reads in a sentence: "the 11e arrondissement" in English, "dans le 11e arrondissement" in French.
  * French needs the Area's kind, because a Quartier reads "dans le quartier Halles" and a Commune "à Montreuil".
  */
-export const inArea = (name: string, kind?: string) => t().fmt.inArea(name, kind);
+export const inArea = (name: string, kind?: Area["kind"]) => t().fmt.inArea(name, kind);
 
 const short = (m: number) => t().months.short[m - 1];
 export const monthLabel = (ym: string) => {
