@@ -54,9 +54,12 @@ overrides:
   '@expo/ngrok-bin>@expo/ngrok-bin-sunos-x64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-win32-ia32': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-win32-x64': '-'
+  body-parser@^2: ^2.4.0
   brace-expansion@^5: ^5.0.12
   esbuild: 0.28.2
   fast-uri@^3: ^3.1.8
   js-yaml: 4.3.2
+  orval>zod: ^4.6.6
   proxy-addr@^2: ^2.0.8
   source-map-js@^1: ^1.2.2
+  undici@^7: ^7.30.1
