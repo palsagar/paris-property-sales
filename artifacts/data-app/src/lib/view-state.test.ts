@@ -52,3 +52,11 @@ test("a link with a fractional Arrondissement shows All Paris", () => {
   assert.deepEqual(parseView("?arr=1.5").area, { kind: "paris" });
   assert.deepEqual(parseView("?arr=7").area, { kind: "arr", arr: 7 });
 });
+
+test("a new Area adds a history entry; any other change replaces it", async () => {
+  const { historyMode } = await import("./view-state");
+  assert.equal(historyMode(base, { ...base, area: { kind: "arr", arr: 11 } }), "push");
+  assert.equal(historyMode({ ...base, area: { kind: "arr", arr: 11 } }, { ...base, area: { kind: "q", id: "7511101" } }), "push");
+  assert.equal(historyMode(base, { ...base, from: "2024-01-01", to: "2024-12-31" }), "replace");
+  assert.equal(historyMode(base, { ...base, ptype: "Maison", mapMode: "dots" }), "replace");
+});

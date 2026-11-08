@@ -8,7 +8,7 @@ import { Play, Pause, RotateCcw } from "lucide-react";
 import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
-import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend } from "@/components/ui-bits";
+import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend, outlineBtnCls } from "@/components/ui-bits";
 import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
 import { groupDots, type SaleDot } from "@/lib/dots";
 import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
@@ -143,56 +143,58 @@ export const MapPanel = memo(function MapPanel(props: {
   const csv = mode === "dots" ? items ?? [] : travelOn ? trendRows.filter((r) => r.period === travel) : stats;
 
   return (
-    <ChartCard testId="map" title={mode === "change" ? "Change in price per m², by area" : mode === "dots" ? "Individual sales on the map" : "Median price per m², by area"}
+    <ChartCard testId="map" level={3} title={mode === "change" ? "Change in price per m², by area" : mode === "dots" ? "Individual sales on the map" : "Median price per m², by area"}
       isDark={isDark} loading={loading} fetching={fetching} csv={csv as object[]} csvName={`map-${mode}-${level}.csv`}
-      desc={mode === "change" ? "Median price per m² at the end of the period compared with the start. Communes appear around Paris at each level. Click an area to select it for the whole page." :
-        mode === "dots" ? "Each dot holds the sales at one position, rounded to about 100 m and moved slightly so that the dots do not form a grid. A larger dot holds more sales. Its colour is their median price per m². Click a dot or an area to select it for the whole page." : "Communes appear around Paris at each level. Click an area to select it for the whole page. Use the slider under the map to step through quarters."}
-      right={<>
-        <Segmented label="Map mode" testId="map-mode" value={mode} onChange={setMode} options={[["level", "Price level"], ["change", "Price change"], ["dots", "Sales"]]} />
-        {mode !== "dots" && <Segmented label="Map areas" testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
+      desc={mode === "change" ? "The median of the last months of the Period against the first. Select an area to focus the page on it." :
+        mode === "dots" ? "Each dot holds the sales at one position, rounded to about 100 m. A larger dot holds more sales; its colour is their median price per m²." : "Paris and the communes around it. Select an area to focus the page on it."}
+      controls={<>
+        <Segmented label="Map shows" testId="map-mode" value={mode} onChange={setMode} options={[["level", "Price level"], ["change", "Price change"], ["dots", "Sales"]]} />
+        {mode !== "dots" && <Segmented label="Map detail" testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
       </>}>
-      <div className="relative h-[400px] md:h-[clamp(380px,calc(100dvh-300px),620px)] rounded-md overflow-hidden border">
+      {/* isolate: Leaflet's z-indexes (400 to 1000) stay inside the map, so the sticky Selection bar stays on top of it. */}
+      <div className="relative isolate h-[360px] md:h-[clamp(380px,calc(100dvh-320px),560px)] rounded-lg overflow-hidden border">
         {props.statsError ? <ErrorState onRetry={props.retryStats} /> : (
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
             stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}
-            onSelect={props.onSelect} outlineOnly={mode === "dots"}
+            onSelect={props.onSelect} outlineOnly={mode === "dots"} labels={mode !== "dots" && level === "arr"}
             dots={mode === "dots" ? dots ?? [] : undefined} pointScale={scale.color} dotName={dotName} onSelectDot={selectDot} focusFeature={focusFeature} />
         )}
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
-        <div className="absolute left-3 bottom-3 z-[400] rounded-md bg-card border px-3 py-2">
-          {mode === "change" ? (
-            <GradientLegend title={<>Change in price per m², {rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} />
-          ) : (
-            <StepLegend title={<>Median price per m², <span className="font-semibold text-primary">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per dot" : rangeLabel(ef, et)}</span></>}
-              scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
-          )}
-          {mode === "dots" && items && total <= items.length && <div className="text-[12px] mt-1 text-muted-foreground font-num">{num(total)} sales plotted</div>}
-        </div>
         {mode === "dots" && items && total > items.length && (
-          <div className="absolute right-3 top-3 z-[400] rounded-md bg-card border px-3 py-2 text-[12.5px] max-w-[260px]" data-testid="text-dots-cap">
+          <div className="absolute left-3 top-3 z-[400] rounded-lg bg-card border px-3 py-2 text-[13px] max-w-[260px] shadow-md" data-testid="text-dots-cap">
             Showing the newest {num(items.length)} of {num(total)} sales with a known position. Choose a shorter period or a smaller area to see more.
           </div>
         )}
       </div>
+      {/* The legend sits under the map, not on it: the map keeps its area and the thresholds can be read at 12 px. */}
+      <div className="mt-3">
+        {mode === "change" ? (
+          <GradientLegend title={<>Change in price per m², {rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} className="w-full sm:max-w-[420px]" />
+        ) : (
+          <StepLegend title={<>Median price per m², EUR, <span className="font-semibold text-foreground">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per dot" : rangeLabel(ef, et)}</span>. Each colour holds about one ninth of the areas.</>}
+            scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
+        )}
+        {mode === "dots" && items && total <= items.length && <div className="text-[13px] mt-1 text-muted-foreground font-num">{num(total)} sales plotted</div>}
+      </div>
       {mode === "level" && (
-        <div className="mt-3 flex flex-wrap sm:flex-nowrap items-center gap-3 print:hidden" data-testid="time-travel">
+        <div className="mt-3 pt-3 border-t flex flex-wrap sm:flex-nowrap items-center gap-3 print:hidden" data-testid="time-travel">
           <button onClick={() => { if (!playing) track("time-travel", { via: "play" }); if (!playing && (!travelOn || travel === periods[periods.length - 1])) setTravel(periods[0]); setPlaying((p) => !p); }}
             disabled={periods.length < 2} data-testid="button-play" aria-label={playing ? "Pause" : "Play through the quarters"}
-            className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center transition-transform active:scale-90 disabled:opacity-40">
-            {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+            className="h-10 w-10 shrink-0 rounded-full bg-foreground text-background flex items-center justify-center transition-transform active:scale-95 disabled:opacity-40">
+            {playing ? <Pause className="w-4 h-4" aria-hidden /> : <Play className="w-4 h-4 ml-0.5" aria-hidden />}
           </button>
-          <div className="flex-1">
+          <div className="flex-1 min-w-[160px]">
             <input type="range" min={0} max={Math.max(0, periods.length - 1)} value={travelOn ? periods.indexOf(travel!) : periods.length - 1}
               onChange={(e) => { travelMoved.current = true; setPlaying(false); setTravel(periods[Number(e.target.value)]); }}
-              onPointerUp={endTravelMove} onKeyUp={endTravelMove} className="w-full accent-[hsl(var(--primary))]" data-testid="slider-travel" aria-label="Quarter shown on the map" />
+              onPointerUp={endTravelMove} onKeyUp={endTravelMove} className="w-full h-6 accent-[hsl(var(--primary))]" data-testid="slider-travel" aria-label="Quarter shown on the map" />
             <div className="flex justify-between text-[12px] text-muted-foreground font-num"><span>{labels.get(periods[0] ?? "")}</span><span>{labels.get(periods[periods.length - 1] ?? "")}</span></div>
           </div>
-          <div className="w-[124px] text-right">
-            <div className="font-display font-bold text-[18px] leading-none flex items-center justify-end gap-1.5">{travelLabel ?? "Whole range"}</div>
-            <div className="text-[12px] text-muted-foreground">{travelLabel ? "4 quarters ending here" : "Median for the period"}</div>
+          <div className="sm:w-[132px] sm:text-right" aria-live="polite">
+            <div className="font-num font-medium text-[15px] leading-tight">{travelLabel ?? "Whole range"}</div>
+            <div className="text-[13px] text-muted-foreground">{travelLabel ? "4 quarters ending here" : "Median for the Period"}</div>
           </div>
           <button onClick={() => { setPlaying(false); setTravel(null); }} disabled={!travelOn} data-testid="button-travel-reset"
-            className="h-8 px-2.5 rounded-md border text-[13px] flex items-center gap-1 hover:bg-muted disabled:opacity-40"><RotateCcw className="w-3 h-3" />Back to range average</button>
+            className={outlineBtnCls}><RotateCcw className="w-4 h-4" aria-hidden />Back to range average</button>
         </div>
       )}
     </ChartCard>

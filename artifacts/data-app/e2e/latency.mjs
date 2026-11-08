@@ -23,8 +23,8 @@ const { datasetFrom, datasetTo, years } = await (await fetch(`${BASE}/api/sales/
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 /** One page with the counters the checks read: API requests in flight, cache misses, React commits, skeletons added. */
-async function openPage(path = "/", { umami = false } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
+async function openPage(path = "/", { umami = false, viewport = { width: 1440, height: 900 } } = {}) {
+  const ctx = await browser.newContext({ viewport, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
   const page = await ctx.newPage();
   await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
   if (DIST) {
@@ -107,11 +107,25 @@ async function measure(p, name, act, { limit = LIMIT_MS, check = true } = {}) {
   return r;
 }
 
-const click = (page, id) => page.click(`[data-testid="${id}"]`);
+/**
+ * The Area tiles and the Period controls live in the Selection bar's pickers (selection-bar.tsx), which open from the
+ * "button-area" and "button-period" field buttons. `reveal` opens the picker that holds a control. Call it before a
+ * measure, so that only the click itself is timed; `click` calls it too, for clicks outside a measure.
+ */
+const IN_PICKER = [[/^filter-(arr|dept)-|^input-area-search$/, "button-area"], [/^preset-|^select-(from|to)$|^time-control$|^text-range$/, "button-period"]];
+async function reveal(page, id) {
+  const el = page.locator(`[data-testid="${id}"]`).first();
+  if (await el.isVisible().catch(() => false)) return;
+  const opener = IN_PICKER.find(([re]) => re.test(id))?.[1];
+  if (!opener) return;
+  await page.click(`[data-testid="${opener}"]`);
+  await el.waitFor({ state: "visible" });
+}
+const click = async (page, id) => { await reveal(page, id); await page.click(`[data-testid="${id}"]`); };
 
-/** Opens the search box and types a name. Only the Enter that follows belongs in a measure. */
+/** Opens the Area picker and types a name. Only the Enter that follows belongs in a measure. */
 async function search(p, text) {
-  await click(p.page, "button-area-search");
+  await reveal(p.page, "input-area-search");
   await p.page.fill('[data-testid="input-area-search"]', text);
   await p.page.waitForTimeout(250);
 }
@@ -154,6 +168,7 @@ const sections = {
     for (const t of ["Appartement", "Maison", "all"]) await measure(p, `property type ${t}`, () => click(p.page, `filter-type-${t}`));
 
     for (const n of [5, 9, 14]) {
+      await reveal(p.page, `filter-arr-${n}`);
       await measure(p, `arrondissement ${n}`, () => click(p.page, `filter-arr-${n}`));
       await backToParis(p);
     }
@@ -172,11 +187,13 @@ const sections = {
     // Up to three full calendar years, with the button's test id built as in time-control.tsx.
     const fullYears = years.filter((y) => y.from.endsWith("-01-01") && y.to.endsWith("-12-31")).slice(0, 3);
     for (const { label } of fullYears) {
+      await reveal(p.page, `preset-${label.replace(/\s/g, "-").toLowerCase()}`);
       await measure(p, `year button ${label}`, () => click(p.page, `preset-${label.replace(/\s/g, "-").toLowerCase()}`));
     }
 
     await click(p.page, "preset-all-dates");
     await settle(p.net);
+    await reveal(p.page, "time-control");
     for (const frac of [0.25, 0.5, 0.15]) {
       const handle = p.page.locator('[data-testid="time-control"] .recharts-brush-traveller').first();
       const box = await handle.boundingBox();
@@ -233,6 +250,7 @@ const sections = {
     const centre = async () => { const b = await handle().boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
 
     await settle(net);
+    await reveal(page, "time-control");
     let [x, y] = await centre();
     let brush = await brushBox();
     const text0 = await range(), from0 = from();
@@ -294,6 +312,7 @@ const sections = {
     await delay(q.page, /\/api\/sales\/by-rooms\?.*arrondissement=8/, 1500);
     const nameBefore = await q.page.textContent('[data-testid="text-area-name"]');
     await click(q.page, "filter-arr-8");
+    await reveal(q.page, "time-control");
     const end = await q.page.locator('[data-testid="time-control"] .recharts-brush-traveller').nth(1).boundingBox();
     const box = await q.page.locator('[data-testid="time-control"] .recharts-brush').first().boundingBox();
     const ey = end.y + end.height / 2;
@@ -357,7 +376,8 @@ const sections = {
     await click(page, "filter-arr-5");
     await page.waitForTimeout(300);
     const at300 = {
-      pressed: await page.getAttribute('[data-testid="filter-arr-5"]', "aria-pressed"),
+      // The Area tile sits in a picker that closes on a choice, so the Selection bar's Area button says what was asked.
+      pressed: (await page.textContent('[data-testid="button-area"]'))?.includes("5e arrondissement") ? "true" : "false",
       updating: await page.locator('[data-testid="text-updating"]').isVisible().catch(() => false),
       heading: await page.textContent('[data-testid="text-area-name"]'),
       kpi: await page.textContent('[data-testid="text-kpi-0"]'),
@@ -436,7 +456,8 @@ const sections = {
       && !document.querySelector('[data-testid="text-updating"]'), nameHung, { timeout: 6000 }).then(() => true, () => false);
     const rooms = await page.evaluate(() => {
       const card = document.querySelector('[data-testid="card-rooms"]');
-      return { skeleton: !!card.querySelector(".animate-pulse"), chart: !!card.querySelector(".recharts-wrapper") };
+      // The rooms panel is a table now: its rows are the figures that must not show another Area's numbers.
+      return { skeleton: !!card.querySelector(".animate-pulse"), chart: !!card.querySelector(".recharts-wrapper, [data-testid=table-rooms]") };
     });
     check("hung request: the page switches within 6 s", swapped);
     check("hung request: the waiting panel shows no other Area's figures", swapped && !rooms.chart, rooms);
@@ -458,15 +479,15 @@ const sections = {
     page.on("request", (r) => { if (r.url().includes("/api/")) startedAt.push(Date.now()); });
     await click(page, "filter-arr-6");
     await settle(net);
-    const pageText = await page.textContent('[data-testid="card-transactions"] span.font-num.px-2');
+    const pageText = await page.textContent('[data-testid="text-page"]');
     const sortKept = await page.locator('[data-testid="sort-price"] svg').count() === 1;
     let st = await page.evaluate(() => ({ blanks: window.__blanks, nameAt: window.__nameAt }));
     check("panel state: no panel blanks at an Area change", st.blanks === 0, { blanks: st.blanks });
-    check("panel state: the Sales list goes to its first page and keeps its sort", pageText.trim().startsWith("1 /") && sortKept, { pageText, sortKept });
+    check("panel state: the Sales list goes to its first page and keeps its sort", pageText.includes("page 1 of") && sortKept, { pageText, sortKept });
     await click(page, "filter-arr-all");
     await settle(net);
-    const backText = await page.textContent('[data-testid="card-transactions"] span.font-num.px-2');
-    check("panel state: back on the first Area, the Sales list is on its first page", backText.trim().startsWith("1 /"), { backText });
+    const backText = await page.textContent('[data-testid="text-page"]');
+    check("panel state: back on the first Area, the Sales list is on its first page", backText.includes("page 1 of"), { backText });
     await click(page, "filter-arr-6");
     await settle(net);
     const lateRequests = startedAt.filter((t) => st.nameAt.length && t > st.nameAt.at(-1) + 5).length;
@@ -478,6 +499,129 @@ const sections = {
     await settle(net);
     st = await page.evaluate(() => ({ blanks: window.__blanks }));
     check("panel state: no blank after Smoothing was switched by hand", st.blanks === 0, { blanks: st.blanks });
+    await p.ctx.close();
+
+    // The sticky Selection bar stays on top of the map when the map scrolls under it, on a desktop and on a phone.
+    for (const [label, viewport] of [["1440 px", { width: 1440, height: 900 }], ["375 px", { width: 375, height: 812 }]]) {
+      p = await openPage("/", { viewport });
+      ({ page, net } = p);
+      await settle(net);
+      if (viewport.width < 768) { await click(page, "compare-tab-map"); await settle(net); }
+      const mapSel = '[data-testid="card-map"] .leaflet-container';
+      // The map's top goes 2 px below the top of the stuck bar, so the bar's middle lies over the map.
+      await page.evaluate((sel) => {
+        const bar = document.querySelector('[data-testid="selection-bar"]');
+        const map = document.querySelector(sel).getBoundingClientRect();
+        window.scrollBy(0, map.top - parseFloat(getComputedStyle(bar).top) - 2);
+      }, mapSel);
+      await page.waitForTimeout(200);
+      const hits = await page.evaluate((sel) => {
+        const bar = document.querySelector('[data-testid="selection-bar"]');
+        const b = bar.getBoundingClientRect(), m = document.querySelector(sel).getBoundingClientRect();
+        const y = b.top + b.height / 2;
+        return [0.1, 0.5, 0.9].map((f) => {
+          const el = document.elementFromPoint(m.left + m.width * f, y);
+          return { onBar: !!el && bar.contains(el), mapUnder: m.top < y && m.bottom > y, cls: el?.className?.toString().slice(0, 40) };
+        });
+      }, mapSel);
+      check(`sticky bar: the map does not cover the Selection bar at ${label}`, hits.every((h) => h.onBar && h.mapUnder), { hits });
+      await p.ctx.close();
+    }
+
+    // Ctrl + wheel zoom: a trackpad pinch sends many small events, which add up; a mouse notch gives one level.
+    p = await openPage("/");
+    ({ page, net } = p);
+    await settle(net);
+    await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    // The zoom level from the DOM: the distance between two Arrondissement labels doubles at each level.
+    const spread = () => page.evaluate(() => {
+      const pts = [...document.querySelectorAll(".map-label")].map((l) => { const r = l.getBoundingClientRect(); return [l.textContent, r.x + r.width / 2, r.y + r.height / 2]; });
+      return Object.fromEntries(pts.map(([t, x, y]) => [t, [x, y]]));
+    });
+    const levels = (a, b) => {
+      const keys = Object.keys(a).filter((k) => b[k]);
+      const d = (s, i, j) => Math.hypot(s[keys[i]][0] - s[keys[j]][0], s[keys[i]][1] - s[keys[j]][1]);
+      return keys.length < 2 ? null : Math.log2(d(b, 0, keys.length - 1) / d(a, 0, keys.length - 1));
+    };
+    // deltaMode 0 is pixels, 1 is lines (a Firefox mouse notch) and 2 is pages.
+    const ctrlWheel = (deltaY, count, gapMs, deltaMode = 0) => page.evaluate(async ([deltaY, count, gapMs, deltaMode]) => {
+      const el = document.querySelector('[data-testid="card-map"] .leaflet-container');
+      const r = el.getBoundingClientRect();
+      for (let i = 0; i < count; i++) {
+        el.dispatchEvent(new WheelEvent("wheel", { deltaY, deltaMode, ctrlKey: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true }));
+        await new Promise((res) => setTimeout(res, gapMs));
+      }
+    }, [deltaY, count, gapMs, deltaMode]);
+    let s0 = await spread();
+    await ctrlWheel(-3, 20, 10);
+    await page.waitForTimeout(400);
+    const pinch = levels(s0, await spread());
+    check("pinch zoom: 20 small Ctrl + wheel events zoom in by at most 1 level", pinch !== null && pinch <= 1.05, { levels: pinch && Math.round(pinch * 100) / 100 });
+    // A fresh map, since the pinch above may have reached the maximum zoom.
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    s0 = await spread();
+    await ctrlWheel(-100, 1, 0);
+    await page.waitForTimeout(400);
+    const notch = levels(s0, await spread());
+    check("pinch zoom: one Ctrl + wheel notch zooms in by 1 level", notch !== null && Math.abs(notch - 1) < 0.05, { levels: notch && Math.round(notch * 100) / 100 });
+    // A notch in lines (Firefox: 3 lines) and in pages (1 page) also gives one level.
+    for (const [label, deltaY, deltaMode] of [["3 lines", -3, 1], ["1 page", -1, 2]]) {
+      await page.reload({ waitUntil: "networkidle" });
+      await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      s0 = await spread();
+      await ctrlWheel(deltaY, 1, 0, deltaMode);
+      await page.waitForTimeout(400);
+      const lv = levels(s0, await spread());
+      check(`pinch zoom: one Ctrl + wheel notch of ${label} zooms in by 1 level`, lv !== null && Math.abs(lv - 1) < 0.05, { levels: lv && Math.round(lv * 100) / 100 });
+    }
+    await p.ctx.close();
+
+    // In print, the ranking shows every row: its scroll box has no height cap, even at a desktop width.
+    p = await openPage("/", { viewport: { width: 1024, height: 900 } });
+    ({ page, net } = p);
+    await settle(net);
+    await page.emulateMedia({ media: "print" });
+    await page.waitForTimeout(200);
+    const printed = await page.evaluate(() => {
+      const box = document.querySelector('[data-testid="list-ranking"] [data-testid^="row-rank-"]').parentElement;
+      const b = box.getBoundingClientRect();
+      const rows = [...box.querySelectorAll('[data-testid^="row-rank-"]')];
+      const clipped = rows.filter((r) => { const q = r.getBoundingClientRect(); return q.top < b.top - 1 || q.bottom > b.bottom + 1; }).length;
+      return { scrollHeight: box.scrollHeight, clientHeight: box.clientHeight, rows: rows.length, clipped };
+    });
+    check("print: the ranking shows every row at 1024 px", printed.rows > 0 && printed.scrollHeight <= printed.clientHeight + 1 && printed.clipped === 0, printed);
+    await p.ctx.close();
+
+    // The heat map's Focus button only selects: it never clicks off the Area already selected.
+    p = await openPage("/?arr=11");
+    ({ page, net } = p);
+    await settle(net);
+    await click(page, "areas-tab-quarters");
+    await settle(net);
+    await page.click('[data-testid="heat-row-11"] + button');
+    await click(page, "button-heat-focus");
+    await settle(net);
+    await page.waitForTimeout(200);
+    const focusArr = new URL(page.url()).searchParams.get("arr");
+    check("heat map: Focus on the selected Area keeps it selected", focusArr === "11", { arr: focusArr });
+    await p.ctx.close();
+
+    // The skip link moves the focus without a new history entry, so Back still goes to the previous Selection.
+    p = await openPage("/?arr=5");
+    ({ page, net } = p);
+    await settle(net);
+    await click(page, "filter-arr-9");
+    await settle(net);
+    const histBefore = await page.evaluate(() => history.length);
+    await page.focus('a[href="#figures"]');
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    const skip = await page.evaluate(() => ({ history: history.length, active: document.activeElement?.id }));
+    check("skip link: it focuses the figures and adds no history entry", skip.history === histBefore && skip.active === "figures", { before: histBefore, ...skip });
     await p.ctx.close();
   },
 
@@ -528,6 +672,7 @@ const sections = {
     await expect("print", () => click(p.page, "button-pdf"), [["print", null]]);
 
     // The slider sends one event, at the release, whatever the number of drag frames.
+    await reveal(p.page, "time-control");
     const handle = p.page.locator('[data-testid="time-control"] .recharts-brush-traveller').first();
     const box = await handle.boundingBox();
     const brush = await p.page.locator('[data-testid="time-control"] .recharts-brush').first().boundingBox();
@@ -607,6 +752,9 @@ const sections = {
  * A boundary's tooltip lingers for its fade, so each point waits before it reads the tooltip. Its text is never printed.
  */
 async function findDot(page) {
+  // The key figures now come before the map, so the map starts below the fold: bring it into view first.
+  await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
   const box = await page.locator('[data-testid="card-map"] .leaflet-container').boundingBox();
   const points = [];
   for (let i = 1; i < 12; i++) for (let j = 1; j < 8; j++) points.push({ x: box.x + (box.width * i) / 12, y: box.y + (box.height * j) / 8 });

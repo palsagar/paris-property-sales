@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
-import { Search, Check } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useId, useMemo, useState } from "react";
+import { Check } from "lucide-react";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { DEPARTMENT_NAMES, searchScore, searchValue, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
 import { arrLabel } from "@/lib/fmt";
@@ -8,21 +7,32 @@ import { arrLabel } from "@/lib/fmt";
 export type QMeta = { id: string; name: string; arr: number };
 export type CommuneMeta = { id: string; name: string; group: RankGroup };
 
-type Option = { id: string; name: string; area: Area };
+type Option = { id: string; name: string; context?: string; area: Area };
 const DEPARTMENTS = Object.entries(DEPARTMENT_NAMES) as [DepartmentId, string][];
 const departmentOption = ([id, name]: [DepartmentId, string]): Option => ({ id, name, area: { kind: "department", id } });
 
-export function AreaSearch({ quartiers, communes, area, onSelect }: { quartiers: QMeta[]; communes: CommuneMeta[]; area: Area; onSelect: (a: Area) => void }) {
-  const [open, setOpen] = useState(false);
+const tileCls = (on: boolean, near = false) =>
+  `h-10 rounded-lg border text-[15px] font-medium transition-colors ${on ? "bg-foreground text-background border-foreground" : near ? "border-foreground bg-card" : "border-border bg-card hover:bg-sunken"}`;
+
+/**
+ * Chooses an Area. Empty, it shows Paris and its 20 Arrondissements as tiles and the three Departments. Typed, it
+ * searches every Department, Quartier, Commune and Major town. It is the body of the Area popover on a laptop and of
+ * the Selection sheet on a phone. `onSelect` reports the control used, for analytics: tiles are "buttons".
+ */
+export function AreaPicker({ quartiers, communes, area, selArr, onSelect, autoFocus = false }: {
+  quartiers: QMeta[]; communes: CommuneMeta[]; area: Area; selArr?: number;
+  onSelect: (a: Area, via: "buttons" | "search") => void; autoFocus?: boolean;
+}) {
+  const inputId = useId();
   const [search, setSearch] = useState("");
   const groups = useMemo(() => {
-    const qOption = (q: QMeta): Option => ({ id: q.id, name: q.name, area: { kind: "q", id: q.id } });
+    const qOption = (q: QMeta): Option => ({ id: q.id, name: q.name, context: arrLabel(q.arr), area: { kind: "q", id: q.id } });
     const communesOf = (group: RankGroup) => communes.filter((c) => c.group === group).map((c): Option => ({ id: c.id, name: c.name, area: { kind: "commune", id: c.id } }));
     const arrs = [...new Set(quartiers.map((q) => q.arr))].sort((a, b) => a - b);
     const out: [string, Option[]][] = [
       ["Departments", DEPARTMENTS.map(departmentOption)],
-      ...arrs.map((arr): [string, Option[]] => [`${arrLabel(arr)} arrondissement`, quartiers.filter((q) => q.arr === arr).map(qOption)]),
-      ...DEPARTMENTS.map(([id, name]): [string, Option[]] => [`Communes in ${name}`, communesOf(id)]),
+      ...arrs.map((arr): [string, Option[]] => [`Quartiers of the ${arrLabel(arr)}`, quartiers.filter((q) => q.arr === arr).map(qOption)]),
+      ...DEPARTMENTS.map(([id, name]): [string, Option[]] => [`Communes · ${name}`, communesOf(id)]),
       ["Major towns", communesOf("major")],
     ];
     return out;
@@ -34,32 +44,61 @@ export function AreaSearch({ quartiers, communes, area, onSelect }: { quartiers:
     return groups.map((g) => [g, best(g[1])] as const).sort((a, b) => b[1] - a[1]).map(([g]) => g);
   }, [groups, search]);
   const selected = area.kind === "department" || area.kind === "q" || area.kind === "commune" ? area.id : undefined;
-  const cur = groups.flatMap(([, options]) => options).find((o) => o.id === selected);
+
   return (
-    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch(""); }}>
-      <PopoverTrigger asChild>
-        <button data-testid="button-area-search" className={`h-7 px-2.5 rounded-md border text-[13px] flex items-center gap-1.5 transition-colors ${cur ? "border-primary/50 text-primary bg-primary/5" : "bg-card hover:bg-muted"}`}>
-          <Search className="w-3.5 h-3.5" />{cur ? cur.name : "Find a quartier or commune"}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="p-0 w-[300px]" align="start">
-        <Command filter={searchScore}>
-          <CommandInput value={search} onValueChange={setSearch} placeholder="Search quartiers and communes..." data-testid="input-area-search" />
-          <CommandList className="max-h-[340px]">
-            <CommandEmpty>Nothing matches that name.</CommandEmpty>
-            {shownGroups.map(([heading, options]) => (
-              <CommandGroup key={heading} heading={heading}>
-                {options.map((o) => (
-                  <CommandItem key={o.id} value={searchValue(o.name, o.id)} onSelect={() => { onSelect(o.area); setOpen(false); }} data-testid={`option-area-${o.id}`}>
-                    <span className="flex-1">{o.name}</span>
-                    {o.id === selected && <Check className="w-3.5 h-3.5 text-primary" />}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <Command filter={searchScore} className="bg-transparent overflow-visible" data-testid="area-picker">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={inputId} className="text-[14px] font-medium">Find a quartier or commune</label>
+        <div className="rounded-lg border border-control bg-background focus-within:ring-2 focus-within:ring-ring [&_[cmdk-input-wrapper]]:border-0">
+          <CommandInput id={inputId} value={search} onValueChange={setSearch} autoFocus={autoFocus}
+            placeholder="Odéon, Montreuil, Vincennes…" data-testid="input-area-search" className="h-11 text-[16px] md:text-[15px] focus-visible:outline-none" />
+        </div>
+      </div>
+      {search ? (
+        <CommandList className="max-h-[min(360px,50dvh)] mt-2 -mx-1">
+          <CommandEmpty>Nothing matches that name. Try a shorter part of it.</CommandEmpty>
+          {shownGroups.map(([heading, options]) => (
+            <CommandGroup key={heading} heading={heading}>
+              {options.map((o) => (
+                <CommandItem key={o.id} value={searchValue(o.name, o.id)} onSelect={() => onSelect(o.area, "search")} data-testid={`option-area-${o.id}`}
+                  className="min-h-10 text-[15px]">
+                  <span className="flex-1">{o.name}{o.context && <span className="text-muted-foreground"> · {o.context}</span>}</span>
+                  {o.id === selected && <Check className="w-4 h-4 text-primary" aria-label="Selected" />}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
+        </CommandList>
+      ) : (
+        <div className="mt-4 flex flex-col gap-4">
+          <section aria-labelledby={`${inputId}-paris`} className="flex flex-col gap-2">
+            <h3 id={`${inputId}-paris`} className="text-[12px] font-semibold tracking-wide text-muted-foreground">PARIS</h3>
+            <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Arrondissement">
+              <button type="button" onClick={() => onSelect({ kind: "paris" }, "buttons")} aria-pressed={area.kind === "paris"} data-testid="filter-arr-all"
+                className={`col-span-5 ${tileCls(area.kind === "paris")}`}>All Paris</button>
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => {
+                const on = area.kind === "arr" && area.arr === n;
+                return (
+                  <button key={n} type="button" onClick={() => onSelect({ kind: "arr", arr: n }, "buttons")} aria-pressed={on} data-testid={`filter-arr-${n}`}
+                    aria-label={`${arrLabel(n)} arrondissement${!on && selArr === n ? ", holds the selected quartier" : ""}`}
+                    className={`font-num ${tileCls(on, !on && selArr === n)}`}>{arrLabel(n)}</button>
+                );
+              })}
+            </div>
+          </section>
+          <section aria-labelledby={`${inputId}-around`} className="flex flex-col gap-2">
+            <h3 id={`${inputId}-around`} className="text-[12px] font-semibold tracking-wide text-muted-foreground">AROUND PARIS</h3>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Department">
+              {DEPARTMENTS.map(([id, name]) => {
+                const on = area.kind === "department" && area.id === id;
+                return <button key={id} type="button" onClick={() => onSelect({ kind: "department", id }, "buttons")} aria-pressed={on} data-testid={`filter-dept-${id}`}
+                  className={`px-3 ${tileCls(on)}`}>{name}</button>;
+              })}
+            </div>
+            <p className="text-[13px] text-muted-foreground">Type a name to find any of the 80 quartiers and the communes around Paris, including the major towns.</p>
+          </section>
+        </div>
+      )}
+    </Command>
   );
 }

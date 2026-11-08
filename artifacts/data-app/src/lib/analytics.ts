@@ -28,11 +28,13 @@ export interface Events {
   "open": AreaProps & PeriodProps & { type: TypeName; map: MapMode };
   "select-area": AreaProps & { via: AreaVia };
   "select-property-type": { type: TypeName };
-  "change-period": PeriodProps & { via: "preset" | "slider"; preset?: "all" | "year" | "last-12-months" };
+  "change-period": PeriodProps & { via: "preset" | "slider" | "months"; preset?: "all" | "year" | "last-12-months" };
   "change-map-mode": { mode: MapMode };
   "change-map-level": { level: MapLevel };
   "time-travel": { via: "play" | "slider" | "heatmap-column" };
   "change-ranking-group": { group: RankGroup };
+  /** The view of the area comparison: the map or the list on a phone, the ranking or the quarter grid in the list. */
+  "change-compare-view": { view: "map" | "list" | "ranking" | "quarters" };
   "sort-ranking": { by: "price" | "change" };
   "change-heatmap-colour": { by: "price" | "change" };
   "change-granularity": { gran: GranularityParameter };
@@ -44,9 +46,9 @@ export interface Events {
   /** The panel whose CSV was downloaded, by its test id. */
   "export-csv": { panel: string };
   "print": undefined;
+  /** The link to the current view was copied or shared. The link itself is never sent. */
+  "copy-link": { via: "clipboard" | "share" };
   "toggle-dark-mode": { on: boolean };
-  "refresh": undefined;
-  "set-auto-refresh": { interval: "off" | "5m" | "15m" | "1h" | "24h" };
 }
 
 type Umami = { track: (...args: unknown[]) => unknown };

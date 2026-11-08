@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from "react";
-import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, type PropertyTypeParameter, type YearRange } from "@workspace/api-client-react";
+import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, type PropertyTypeParameter, type SalesSummary, type YearRange } from "@workspace/api-client-react";
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChartCard, ErrorState, Segmented, TipBox, useChartColors } from "@/components/ui-bits";
-import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, TOO_FEW } from "@/lib/fmt";
+import { ChartCard, ErrorState, Segmented, SwitchField, TipBox, useChartColors } from "@/components/ui-bits";
+import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, TOO_FEW } from "@/lib/fmt";
 import { keepInSameArea, type areaParams } from "@/lib/areas";
 import { parisTrendParams, smoothOn, summaryParams, trendParams, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
@@ -15,21 +15,33 @@ export type Filters = ReturnType<typeof areaParams> & { propertyType: PropertyTy
 const PLOT_H = 260;
 const STRIP_H = 64; // 40px of bars plus the x-axis labels
 const Y_W = 46;
+// Room on the right for the names written at the end of the lines.
+const END_W = 72;
 
-function Switch({ on, onClick, label, disabled, testId }: { on: boolean; onClick: () => void; label: string; disabled?: boolean; testId: string }) {
-  return (
-    <button disabled={disabled} onClick={onClick} data-testid={testId} aria-pressed={on}
-      className={`print:hidden h-8 px-2.5 rounded-md border text-[13px] flex items-center gap-1.5 transition-colors disabled:opacity-40 ${on ? "border-primary/40 text-primary" : "hover:bg-muted"}`}>
-      <span className={`w-6 h-3.5 rounded-full relative transition-colors ${on ? "bg-primary" : "bg-muted-foreground/30"}`}>
-        <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-background transition-transform ${on ? "translate-x-2.5" : ""}`} />
-      </span>
-      {label}
-    </button>
-  );
+/** Writes a line's name and last value just after its last point, so the lines need no legend to be told apart. */
+const endLabel = (name: string, color: string, last: number, dy: number) =>
+  function EndLabel(p: { x?: number | string; y?: number | string; index?: number; value?: number | string | null }) {
+    if (p.index !== last || p.value == null || p.x == null || p.y == null) return <g />;
+    return (
+      <text x={Number(p.x) + 8} y={Number(p.y) + dy} fill={color} fontSize={12} fontWeight={600} dominantBaseline="middle">
+        <tspan x={Number(p.x) + 8}>{name}</tspan>
+        <tspan x={Number(p.x) + 8} dy={14} fontWeight={500} style={{ fontFamily: "var(--app-font-mono)" }}>{num(Number(p.value))}</tspan>
+      </text>
+    );
+  };
+
+/** The Change of the Selection in one sentence, so a Visitor reads the answer before the chart. */
+function takeaway(s: SalesSummary | undefined, paris: SalesSummary | undefined, areaName: string): string | null {
+  if (!s || s.startMedianPricePerSqm == null || s.endMedianPricePerSqm == null || s.changePct == null) return null;
+  const n = s.changeWindowMonths;
+  const base = `In ${inArea(areaName)}, the median was ${sqm(s.endMedianPricePerSqm)} in the last ${n} months of the Period, against ${num(s.startMedianPricePerSqm)} in the first ${n}: ${pct(s.changePct)}.`;
+  return keep(paris?.changePct != null ? `${base} All Paris moved by ${pct(paris.changePct)}.` : base);
 }
 
-export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, setGran, isDark, years }: {
+export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, setGran, isDark, years, summary, paris }: {
   selection: Selection; gran: GranularityParameter; areaName: string; setGran: (g: GranularityParameter) => void; isDark: boolean; years: YearRange[];
+  /** The Selection's figures and All Paris's, for the sentence above the chart. */
+  summary?: SalesSummary; paris?: SalesSummary;
 }) {
   const c = useChartColors(isDark);
   const { choices, setChoices } = usePanelChoices();
@@ -74,13 +86,17 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
     return [Math.max(0, Math.floor((lo - pad) / 500) * 500), Math.ceil((hi + pad) / 500) * 500];
   }, [data, showBand]);
   const lowN = data.filter((d) => d.low).length;
+  // The two end labels must not overlap: the lower line's label goes below its point.
+  const lastPt = data[data.length - 1];
+  const parisBelow = lastPt?.paris != null && lastPt.medianPricePerSqm != null && lastPt.paris < lastPt.medianPricePerSqm;
+  const shortName = areaName.replace(/ arrondissement$/, "");
   const noMedian = data.every((d) => d.medianPricePerSqm == null);
   // The charts depend only on their data and settings, so a change elsewhere on the page does not redraw them.
   const ptype = view.ptype;
   const charts = useMemo(() => (
     <>
           {noMedian ? <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H }}>{TOO_FEW}</div> : <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
-            <ComposedChart data={data} syncId="trend" margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <ComposedChart data={data} syncId="trend" margin={{ top: 8, right: END_W, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
               <XAxis dataKey="shown" hide />
               <YAxis tickFormatter={(v: number) => `${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={Y_W} domain={domain} allowDataOverflow tickCount={5} />
@@ -104,8 +120,10 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
               {showBand && <Area dataKey="band" stroke="none" fill={c.accent} fillOpacity={0.06} isAnimationActive={false} type="linear" activeDot={false} />}
               {showBand && <Line dataKey="p25PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
               {showBand && <Line dataKey="p75PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
-              {hasArea && <Line dataKey="paris" stroke={c.second} strokeWidth={1.6} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls />}
-              <Line dataKey="medianPricePerSqm" stroke={c.accent} strokeWidth={2.5} isAnimationActive={false} type="linear"
+              {hasArea && <Line dataKey="paris" stroke={c.second} strokeWidth={1.75} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls
+                label={endLabel("All Paris", c.second, data.length - 1, parisBelow ? 8 : -22)} />}
+              <Line dataKey="medianPricePerSqm" stroke={c.accent} strokeWidth={2.75} isAnimationActive={false} type="linear"
+                label={hasArea ? endLabel(shortName, c.accent, data.length - 1, parisBelow ? -22 : 8) : undefined}
                 activeDot={{ r: 5, stroke: c.bg, strokeWidth: 2 }}
                 dot={(p: { cx?: number; cy?: number | null; index?: number; payload?: { low: boolean } }) =>
                   p.cy == null ? <g key={p.index} /> : p.payload?.low ? <circle key={p.index} cx={p.cx} cy={p.cy} r={4} fill={c.bg} stroke={c.accent} strokeWidth={1.5} strokeDasharray="2 1.5" />
@@ -113,10 +131,10 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
             </ComposedChart>
           </ResponsiveContainer>}
           <ResponsiveContainer width="100%" height={STRIP_H} debounce={0}>
-            <BarChart data={data} syncId="trend" margin={{ top: 6, right: 8, left: 0, bottom: 0 }} barCategoryGap="18%">
-              <XAxis dataKey="shown" tick={{ fontSize: 11.5, fill: c.tick }} stroke={c.tick} minTickGap={24} />
+            <BarChart data={data} syncId="trend" margin={{ top: 6, right: END_W, left: 0, bottom: 0 }} barCategoryGap="18%">
+              <XAxis dataKey="shown" tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} minTickGap={28} />
               <YAxis width={Y_W} tick={false} axisLine={false} domain={[0, "dataMax"]}
-                label={{ value: "Sales", position: "insideRight", fill: c.tick, fontSize: 11, offset: 6 }} />
+                label={{ value: "Sales", position: "insideRight", fill: c.tick, fontSize: 12, offset: 6 }} />
               <Tooltip content={() => null} cursor={{ fill: c.cursor }} isAnimationActive={false} />
               <Bar dataKey="count" isAnimationActive={false} radius={[1, 1, 0, 0]}>
                 {data.map((d, i) => <Cell key={i} fill={d.low ? c.accent : c.tick} fillOpacity={d.low ? 0.5 : 0.35} />)}
@@ -124,18 +142,19 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
             </BarChart>
           </ResponsiveContainer>
     </>
-  ), [data, domain, showBand, hasArea, noMedian, c, ptype]);
+  ), [data, domain, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName]);
 
   return (
-    <ChartCard testId="trend" title={`Price per m² over time in ${areaName}`} isDark={isDark}
+    <ChartCard testId="trend" title={`Median price per m² over time in ${inArea(areaName)}`} isDark={isDark}
       loading={q.isLoading} fetching={q.isFetching || all.isFetching}
       csv={data.map(({ band: _b, shown: _s, ...r }) => r)} csvName="price-trend.csv"
-      desc={<>The line is the median price per m² for each {gran}{hasArea && <>; the dashed line is All Paris</>}. The strip below counts sales. {smooth ? `Each point averages ${win} periods to reduce noise.` : ""}</>}
-      right={
+      lede={takeaway(summary, hasArea ? paris : undefined, areaName)}
+      desc={<>One point per {gran}{hasArea && <>; the dashed line is All Paris</>}. The strip below counts sales.{smooth ? ` Each point averages ${win} periods to reduce noise.` : ""}</>}
+      controls={
         <>
-          <Segmented testId="gran" label="Granularity" value={gran} onChange={setGran} options={[["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]]} />
-          <Switch testId="toggle-smooth" on={smooth} disabled={gran === "year"} onClick={() => { track("toggle-smoothing", { on: !smooth }); setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on: !smooth } })); }} label="Smoothing" />
-          <Switch testId="toggle-band" on={showBand} onClick={() => { track("toggle-band", { on: !showBand }); setShowBand((b) => !b); }} label="P25-P75" />
+          <Segmented testId="gran" label="Time step" value={gran} onChange={setGran} options={[["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]]} />
+          <SwitchField testId="toggle-smooth" checked={smooth} disabled={gran === "year"} onCheckedChange={(on) => { track("toggle-smoothing", { on }); setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on } })); }} label="Smoothing" />
+          <SwitchField testId="toggle-band" checked={showBand} onCheckedChange={(on) => { track("toggle-band", { on }); setShowBand(on); }} label="Middle half of sales" />
         </>
       }>
       {q.isLoading ? <Skeleton className="w-full" style={{ height: PLOT_H + STRIP_H }} /> : q.isError ? <ErrorState onRetry={() => q.refetch()} /> : data.length === 0 ? (
@@ -143,7 +162,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
       ) : (
         <>
           {charts}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-muted-foreground">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[13px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5"><span className="w-4 h-0.5" style={{ background: c.accent }} />Median per m²</span>
             {showBand && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted" style={{ borderColor: c.accent }} />P25 and P75, the middle half of sales</span>}
             {hasArea && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed" style={{ borderColor: c.second }} />All Paris</span>}

@@ -25,6 +25,10 @@ export const houseShareWarning = (share: number | null | undefined) =>
 export const kShort = (n: number) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : Math.abs(n) >= 1e3 ? `${Math.round(n / 1e3)}k` : `${Math.round(n)}`);
 
 export const arrLabel = (n: number) => (n === 1 ? "1er" : `${n}e`);
+/** Joins a figure to its digits and unit with no-break spaces, so "12 054 EUR" never breaks across two lines. */
+export const keep = (s: string) => s.replace(/(\d) (?=\d)/g, "$1\u00a0").replace(/(\d) (?=(k|M|Md)?\s?(EUR|m²))/g, "$1\u00a0").replace(/ (EUR|m²)/g, "\u00a0$1");
+/** An Area's name after "in": "the 11e arrondissement", "all of Paris", "Montreuil". */
+export const inArea = (name: string) => (name === "All Paris" ? "all of Paris" : /arrondissement$/.test(name) ? `the ${name}` : name);
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const monthLabel = (ym: string) => {

@@ -30,3 +30,16 @@ test("orTooFew formats a value and shows the text for a null, never zero", () =>
   assert.equal(orTooFew(null, eur), "Too few sales");
   assert.equal(orTooFew(undefined, eur), "Too few sales");
 });
+
+test("inArea reads after the word in", async () => {
+  const { inArea } = await import("./fmt");
+  assert.equal(inArea("11e arrondissement"), "the 11e arrondissement");
+  assert.equal(inArea("All Paris"), "all of Paris");
+  assert.equal(inArea("Montreuil"), "Montreuil");
+});
+
+test("keep joins a figure to its unit", async () => {
+  const { keep } = await import("./fmt");
+  assert.equal(keep("12 054 sales"), "12\u00a0054 sales");
+  assert.equal(keep("between 9 070 EUR/m² and 573 k EUR."), "between 9\u00a0070\u00a0EUR/m² and 573\u00a0k\u00a0EUR.");
+});

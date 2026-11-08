@@ -7,25 +7,26 @@ import {
   useGetArrondissementBoundaries, useGetQuartierBoundaries, useGetCommuneBoundaries,
   type AreaStat, type AreaTrendPoint, type GranularityParameter, type YearRange,
 } from "@workspace/api-client-react";
-import { Sun, Moon, Printer, X, Info, MapPin } from "lucide-react";
+import { Sun, Moon, Printer, X, Link2, MoreHorizontal } from "lucide-react";
 import { useViewState, viewQuery, type MapLevel, type MapMode, type ViewState } from "@/lib/view-state";
 import { areaProps, openProps, track, type AreaVia } from "@/lib/analytics";
 import { areaChange, areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
+import { useTheme } from "@/hooks/use-theme";
+import { toast } from "@/hooks/use-toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
-import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct, houseShareLabel } from "@/lib/fmt";
-import { areaStatParams, areaTrendParams, heatParams, summaryParams, type PanelChoices } from "@/lib/selection-queries";
+import { arrLabel, rangeLabel, longMonthLabel, num, keep } from "@/lib/fmt";
+import { areaStatParams, areaTrendParams, heatParams, parisSummaryParams, summaryParams, type PanelChoices } from "@/lib/selection-queries";
 import { PanelChoicesContext, RequestedView, useShownView, type Patch } from "@/lib/shown-view";
-import { btnCls, FetchDot } from "@/components/ui-bits";
+import { FetchDot, Segmented, iconBtnCls, outlineBtnCls } from "@/components/ui-bits";
 import { Kpis } from "@/components/kpis";
 import { HeroTrend } from "@/components/hero-trend";
 import { MapPanel } from "@/components/map-panel";
-import { Ranking } from "@/components/ranking";
-import { Heatmap } from "@/components/heatmap";
+import { AreasCard } from "@/components/areas-card";
 import { Distributions, RoomsChart } from "@/components/distributions";
 import { Transactions } from "@/components/transactions";
 import type { CommuneMeta, QMeta } from "@/components/area-picker";
-import { FilterBar } from "@/components/filter-bar";
-import { RefreshControl } from "@/components/refresh-control";
+import { SelectionBar } from "@/components/selection-bar";
 
 const DATA_SOURCES = ["DVF open data (DGFiP)", "Paris OpenData boundaries", "Etalab Contours administratifs (ODbL)"];
 
@@ -34,12 +35,12 @@ export default function Dashboard() {
   const first = useGetSalesSummary({ propertyType: "all" });
   if (!first.data) {
     return first.isError ? (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3 bg-background text-[14px]" data-testid="dashboard-error">
-        <p>The sales data did not load.</p>
-        <button onClick={() => first.refetch()} data-testid="button-retry" className={`h-8 px-3 rounded-md ${btnCls}`}>Try again</button>
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3 bg-background text-[16px] px-6 text-center" data-testid="dashboard-error" role="alert">
+        <p>The sales data did not load. Check your connection and try again.</p>
+        <button onClick={() => first.refetch()} data-testid="button-retry" className={outlineBtnCls}>Try again</button>
       </div>
     ) : (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-background text-[14px] text-muted-foreground" data-testid="dashboard-loading">Loading the sales data...</div>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background text-[16px] text-muted-foreground" data-testid="dashboard-loading" role="status">Loading the sales data…</div>
     );
   }
   const { datasetFrom, datasetTo, releaseMonth, years } = first.data;
@@ -106,10 +107,11 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   view: ViewState; requested: { readonly current: ViewState }; quartiers: QMeta[]; communes: CommuneMeta[]; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; selectAreaOnly: (a: Area, via: AreaVia) => void; movedTo: { from?: string; to?: string } | null;
 }) {
   const { ptype, area, from, to, mapMode, mapLevel, rank } = view;
-  const [isDark, setIsDark] = useState(false);
+  const { isDark, toggle: toggleTheme } = useTheme();
   const [travel, setTravel] = useState<string | null>(null);
+  // On a phone the map and the list take turns; from a tablet up they sit side by side.
+  const [compareTab, setCompareTab] = useState<"map" | "list">("map");
 
-  useEffect(() => { document.documentElement.classList.toggle("dark", isDark); }, [isDark]);
   useEffect(() => { setTravel(null); }, [from, to, ptype, mapLevel]);
 
   // Boundaries. ViewHost turns the Quartier and Commune boundaries into the lists of names.
@@ -127,6 +129,9 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
 
   const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  // All Paris for the same type and Period, beside an Area's figures. selectionQueries loads it with the Selection.
+  const parisP = useMemo(() => parisSummaryParams(selection), [selection]);
+  const parisSummary = useGetSalesSummary(parisP, { query: { queryKey: getGetSalesSummaryQueryKey(parisP), enabled: area.kind !== "paris" } });
   // The data note's figures do not depend on the Area, so the note keeps the last summary while a new Area loads.
   const noteSummary = useRef(summary.data);
   if (summary.data) noteSummary.current = summary.data;
@@ -176,7 +181,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
     return m == null ? "transparent" : scale.color(m);
   }, [areaMedians, scale]);
 
-  const selectRow = useCallback((id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }, "heatmap"), [rank, selectArea]);
+  // `only`: the heat map's Focus button only selects, so it never clicks off the Area already selected.
+  const selectRow = useCallback((id: string, only = false) => (only ? selectAreaOnly : selectArea)(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }, "heatmap"), [rank, selectArea, selectAreaOnly]);
   // Stable callbacks, so the memoised panels redraw only when their data changes. An event records a change of the
   // requested view: while a view loads, the buttons show the shown view, and a click back to it is still a change.
   const setMode = useCallback((m: MapMode) => { if (requested.current.mapMode !== m) track("change-map-mode", { mode: m }); patch({ mapMode: m }); }, [patch, requested]);
@@ -196,131 +202,191 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const communeGroup = groupOfArea(area);
   const areaName = area.kind === "department" ? DEPARTMENT_NAMES[area.id]
     : area.kind === "commune" ? communes.find((c) => c.id === area.id)?.name ?? "Commune"
-    : area.kind === "arr" ? arrStats.find((s) => s.arrondissement === area.arr)?.name ?? `${arrLabel(area.arr)} arrondissement`
+    : area.kind === "arr" ? `${arrLabel(area.arr)} arrondissement`
     : area.kind === "q" ? qById.get(area.id)?.name ?? "Quartier" : "All Paris";
   const areaKicker = area.kind === "department" ? "Department"
     : area.kind === "commune" ? (communeB.data && !communes.some((c) => c.id === area.id) ? "" : communeGroup === "major" ? "Major town" : `Commune in ${DEPARTMENT_NAMES[communeGroup as DepartmentId]}`)
-    : area.kind === "arr" ? "Arrondissement" : area.kind === "q" ? `Quartier in the ${selArr ? arrLabel(selArr) : ""} arrondissement` : "";
+    // The Arrondissement's own name, such as Popincourt, so the heading matches the Selection bar's "11e arrondissement".
+    : area.kind === "arr" ? arrStats.find((s) => s.arrondissement === area.arr)?.name ?? "Arrondissement" : area.kind === "q" ? `Quartier in the ${selArr ? arrLabel(selArr) : ""} arrondissement` : "";
   const typeLabel = ptype === "all" ? "all homes" : ptype === "Appartement" ? "apartments" : "houses";
   const scopeLabel = `${typeLabel}, ${areaName}, ${rangeLabel(ef, et)}`;
   const lastRefreshed = summary.dataUpdatedAt ? new Date(summary.dataUpdatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
 
-  // A Selection of one type says nothing through its House share, and with no median there is nothing to note.
-  const introShare = ptype === "all" && summary.data?.medianPricePerSqm != null ? houseShareLabel(summary.data.houseShare) : null;
-
   const typeSentence = typeLabel[0].toUpperCase() + typeLabel.slice(1);
-  const focusLine = summary.data ? `${typeSentence}, ${rangeLabel(ef, et)}: ${num(summary.data.count)} sales.` : `${typeSentence}, ${rangeLabel(ef, et)}.`;
+  const focusLine = keep(summary.data ? `${typeSentence}, ${rangeLabel(ef, et)}: ${num(summary.data.count)} sales.` : `${typeSentence}, ${rangeLabel(ef, et)}.`);
+  // Where the Area sits: Paris > Arrondissement > Quartier, or Department > Commune. Each step selects that Area.
+  const crumbs: { label: string; area?: Area }[] =
+    area.kind === "arr" ? [{ label: "All Paris", area: { kind: "paris" } }, { label: areaName }]
+    : area.kind === "q" ? [{ label: "All Paris", area: { kind: "paris" } }, ...(selArr ? [{ label: `${arrLabel(selArr)} arrondissement`, area: { kind: "arr", arr: selArr } as Area }] : []), { label: areaName }]
+    : area.kind === "commune" && communeGroup !== "major" && communeGroup !== "paris" ? [{ label: DEPARTMENT_NAMES[communeGroup as DepartmentId], area: { kind: "department", id: communeGroup as DepartmentId } }, { label: areaName }]
+    : [];
+
+  const copyLink = useCallback(async () => {
+    const url = window.location.href;
+    // A phone offers its own share sheet; a laptop copies the link.
+    if (typeof navigator.share === "function" && window.matchMedia("(pointer: coarse)").matches) {
+      try { await navigator.share({ title: document.title, url }); track("copy-link", { via: "share" }); } catch { /* cancelled */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      track("copy-link", { via: "clipboard" });
+      toast({ title: "Link copied", description: "It opens this exact view: area, type, period and panels." });
+    } catch {
+      toast({ title: "The link could not be copied", description: "Copy it from the address bar instead." });
+    }
+  }, []);
+  const print = () => { track("print"); window.print(); };
+  const flipTheme = () => { track("toggle-dark-mode", { on: !isDark }); toggleTheme(); };
+  const showCompare = (v: "map" | "list") => { if (v !== compareTab) track("change-compare-view", { view: v }); setCompareTab(v); };
 
   return (
-    <div className="relative z-[1] min-h-[100dvh] bg-background px-4 md:px-6 py-3 md:py-4">
-      <div className="max-w-[1480px] mx-auto">
+    <div className="relative z-[1] min-h-[100dvh] bg-background">
+      {/* Moves the focus by hand: following the #figures link would add a history entry, and Back would only remove the hash. */}
+      <a href="#figures" onClick={(e) => { e.preventDefault(); const f = document.getElementById("figures"); f?.focus(); f?.scrollIntoView(); }} className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-foreground focus:text-background">Skip to the figures</a>
+      <div className="max-w-[1440px] mx-auto px-4 md:px-8">
         {/* Masthead: one line */}
-        <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b-2 border-foreground pb-2">
-          <div className="flex flex-wrap items-baseline gap-x-4">
-            <div className="font-display font-bold text-[20px] leading-tight" data-testid="text-title">Paris & Suburbs Property Sales</div>
-            <div className="text-[13px] text-muted-foreground" data-testid="text-coverage">Data to {longMonthLabel(datasetTo)}, {longMonthLabel(releaseMonth)} release</div>
+        <header className="flex items-center justify-between gap-x-6 gap-y-2 border-b-2 border-foreground py-2 md:py-3">
+          <div className="min-w-0 flex flex-wrap items-baseline gap-x-4">
+            <p className="font-display font-bold text-[17px] md:text-[20px] leading-tight" data-testid="text-title">Paris &amp; Suburbs Property Sales</p>
+            <p className="text-[13px] md:text-[14px] text-muted-foreground" data-testid="text-coverage">Data to {longMonthLabel(datasetTo)}<span className="hidden md:inline">, {longMonthLabel(releaseMonth)} release</span></p>
           </div>
-          <div className="flex items-center gap-2 print:hidden">
-            <RefreshControl />
-            <button onClick={() => { track("print"); window.print(); }} data-testid="button-pdf" aria-label="Print or save as PDF" title="Print or save as PDF" className={`flex items-center justify-center w-8 h-8 rounded-md ${btnCls}`}><Printer className="w-3.5 h-3.5" /></button>
-            <button onClick={() => { track("toggle-dark-mode", { on: !isDark }); setIsDark((d) => !d); }} data-testid="button-theme" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} className={`flex items-center justify-center w-8 h-8 rounded-md ${btnCls}`}>{isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}</button>
+          <div className="hidden md:flex items-center gap-2 print:hidden">
+            <button type="button" onClick={copyLink} data-testid="button-copy-link" className={outlineBtnCls}><Link2 className="w-4 h-4" aria-hidden />Copy link to this view</button>
+            <button type="button" onClick={print} data-testid="button-pdf" aria-label="Print or save as PDF" title="Print or save as PDF" className={iconBtnCls}><Printer className="w-[18px] h-[18px]" aria-hidden /></button>
+            <button type="button" onClick={flipTheme} data-testid="button-theme" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} title={isDark ? "Light mode" : "Dark mode"} className={iconBtnCls}>
+              {isDark ? <Sun className="w-[18px] h-[18px]" aria-hidden /> : <Moon className="w-[18px] h-[18px]" aria-hidden />}
+            </button>
+          </div>
+          <div className="md:hidden print:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className={iconBtnCls} aria-label="More: share, print, theme" data-testid="button-more"><MoreHorizontal className="w-5 h-5" aria-hidden /></button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px] rounded-xl p-1.5">
+                <DropdownMenuItem onSelect={copyLink} className="min-h-11 text-[15px] gap-3"><Link2 className="w-4 h-4" aria-hidden />Share this view</DropdownMenuItem>
+                <DropdownMenuItem onSelect={print} className="min-h-11 text-[15px] gap-3"><Printer className="w-4 h-4" aria-hidden />Print or save as PDF</DropdownMenuItem>
+                <DropdownMenuItem onSelect={flipTheme} className="min-h-11 text-[15px] gap-3">{isDark ? <Sun className="w-4 h-4" aria-hidden /> : <Moon className="w-4 h-4" aria-hidden />}{isDark ? "Light mode" : "Dark mode"}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
-        {/* Intro band: scrolls away, the filter bar below stays sticky */}
-        <section className="py-3 md:py-4 border-b flex flex-wrap items-end justify-between gap-x-8 gap-y-3" data-testid="intro">
-          <div className="max-w-[760px]">
-            <h1 className="font-display font-bold text-[24px] md:text-[32px] leading-[1.1]" data-testid="text-headline">What homes in Paris and its suburbs have sold for since {longMonthLabel(datasetFrom)}, and where prices moved</h1>
-            <p className="mt-1.5 text-[14px] md:text-[15px] text-muted-foreground leading-snug">
-              Apartment and house sales from the DGFiP's Demandes de valeurs foncières, from {longMonthLabel(datasetFrom)} to {longMonthLabel(datasetTo)}, the latest official release.
-              <span className="hidden md:inline"> Pick a period, a property type or an area, or click the map to drill down.</span>
-            </p>
-          </div>
-          {summary.data && (
-            <div className="hidden xl:block text-right" data-testid="intro-figures">
-              <p className="text-[13px] font-medium mb-1" data-testid="text-intro-area">Figures for {areaName}</p>
-              <dl className="flex gap-8">
-                <div><dt className="text-[13px] text-muted-foreground">Sales</dt><dd className="font-display font-bold text-[22px] text-primary">{num(summary.data.count)}</dd></div>
-                <div><dt className="text-[13px] text-muted-foreground">Median per m²</dt><dd className="font-display font-bold text-[22px] text-primary">{sqmOrTooFew(summary.data.medianPricePerSqm)}</dd>{introShare && <dd className="text-[12.5px] text-muted-foreground" data-testid="text-intro-house-share">{introShare}</dd>}</div>
-                <div><dt className="text-[13px] text-muted-foreground">Change over the period</dt><dd className="font-display font-bold text-[22px] text-primary">{summary.data.changePct != null ? pct(summary.data.changePct) : "n/a"}</dd></div>
-              </dl>
-            </div>
-          )}
+        {/* Intro: scrolls away, the Selection bar below stays pinned */}
+        <section className="pt-5 pb-5 md:pt-9 md:pb-7 flex flex-col gap-2.5" data-testid="intro">
+          <h1 className="font-display font-bold text-[26px] md:text-[40px] leading-[1.12] max-w-[20em] text-balance" data-testid="text-headline">What homes in Paris and its suburbs have sold for since {longMonthLabel(datasetFrom)}, and where prices moved</h1>
+          <p className="text-[16px] md:text-[18px] leading-relaxed text-muted-foreground max-w-[66ch] text-pretty">
+            Every apartment and house sale recorded by the DGFiP, {longMonthLabel(datasetFrom)} to {longMonthLabel(datasetTo)}.
+            <span className="hidden md:inline"> Choose an area, a property type and a period: every figure on the page follows your choice.</span>
+          </p>
         </section>
 
-        {/* Sticky filters: time, property type, area */}
-        <FilterBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById} />
+        <SelectionBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById}
+          count={summary.data?.count} />
         {movedTo && from === movedTo.from && to === movedTo.to && (
-          <p className="mb-3 text-[13px] text-muted-foreground print:hidden" data-testid="period-moved-notice">
+          <p className="mt-3 text-[14px] text-muted-foreground print:hidden" data-testid="period-moved-notice" role="status">
             The dates in this link are outside the latest DVF release, so the Period moved to {rangeLabel(ef, et)}.
           </p>
         )}
 
-        <main>
-          {/* Map first */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_520px] gap-4 mb-5">
-            <MapPanel isDark={isDark} ptype={ptype} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
-              area={area} selArr={selArr} areaParams={areaP} mode={mapMode} setMode={setMode}
-              level={mapLevel} setLevel={setLevel} arrStats={arrStats} communeStats={communeStats}
-              statsLoading={byArr.isLoading || byCommune.isLoading} statsError={byArr.isError || byCommune.isError}
-              retryStats={retryStats} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
-              arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
-              travel={travel} setTravel={setTravel} onSelect={selectFeature} onSelectArea={selectDot} />
-            <Ranking stats={rankStats} trend={heatData} loading={rankLoading} fetching={byArr.isFetching || byCommune.isFetching || heat.isFetching} error={rankError}
-              retry={retryStats} scale={scale} selId={selId} onSelect={selectFromRanking}
-              rank={rank} onRank={setRank} ptype={ptype} isDark={isDark} />
-          </div>
-
-          {/* Focus header */}
-          <div className="flex flex-wrap items-end justify-between gap-3 mb-3" data-testid="focus-header">
-            <div>
-              <h2 className="font-display font-bold text-[26px] leading-tight flex items-center gap-2" data-testid="text-area-name"><MapPin className="w-5 h-5 text-primary" aria-hidden />{areaName}</h2>
-              <p className="text-[14px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{areaKicker && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
-            </div>
-            {area.kind !== "paris" && (
-              <button onClick={() => selectArea({ kind: "paris" }, "back-link")} data-testid="button-clear-area"
-                className="h-8 px-3 rounded-md border border-primary/40 text-primary text-[13px] flex items-center gap-1.5 hover:bg-primary/5 transition-colors print:hidden">
-                <X className="w-3.5 h-3.5" />Back to All Paris
-              </button>
-            )}
-          </div>
-
-          <Kpis s={summary.data} ptype={ptype} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
-
-          <div className="mb-4">
-            <HeroTrend selection={selection} gran={view.gran} areaName={areaName} setGran={setGran} isDark={isDark} years={years} />
-          </div>
-
-          <div className="mb-4">
-            <Heatmap data={heatData} rows={rankRows} loading={heat.isLoading || heat.isPlaceholderData || rankLoading} fetching={heat.isFetching} error={heat.isError || rankError} retry={retryHeat}
-              scale={scale.color} domain={domain} selId={selId} onSelectRow={selectRow} rank={rank} onRank={setRank} ptype={ptype} travel={travel}
-              onSelectPeriod={showTravel} isDark={isDark} />
-          </div>
-
-          <Distributions filters={filters} houseShare={ptype === "all" ? summary.data?.houseShare : null} isDark={isDark} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 mb-4">
-            <RoomsChart filters={filters} isDark={isDark} />
-            <section className="flex items-start gap-3 rounded-lg border bg-card px-5 py-4 text-[14px] leading-relaxed" data-testid="text-source-note">
-              <Info className="w-4 h-4 text-primary shrink-0 mt-1" aria-hidden />
-              <div className="space-y-2 max-w-[68ch]">
-                <h2 className="font-display font-bold text-[17px]">About the data</h2>
-                <p>The figures come from Demandes de valeurs foncières (DVF), published by the DGFiP. They cover residential sales in Paris and 135 Communes around it from {rangeLabel(datasetFrom, datasetTo)}, the latest official release. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface and has a price of 1,000 to 35,000 EUR/m².</p>
-                {noteSummary.current && <p>{num(noteSummary.current.excludedCount)} residential transactions in the whole dataset are left out by these rules. They are sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².</p>}
-                <p className="text-muted-foreground">Changes compare the median of the first {noteSummary.current?.changeWindowMonths ?? 3} months of the selected period with the median of the last {noteSummary.current?.changeWindowMonths ?? 3} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.</p>
-                <p className="text-muted-foreground">Sources: {DATA_SOURCES.join(", ")}.{lastRefreshed && ` Last loaded at ${lastRefreshed}.`}</p>
+        <main id="figures" tabIndex={-1} className="outline-none">
+          {/* The answer first: the focused Area and its key figures */}
+          <section aria-labelledby="text-area-name" className="pt-6 md:pt-7" data-testid="focus-header">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0 flex flex-col gap-1.5">
+                {crumbs.length > 0 && (
+                  <nav aria-label="Where this area sits">
+                    <ol className="flex flex-wrap items-center gap-x-1.5 text-[15px] md:text-[14px]">
+                      {crumbs.map((c, i) => (
+                        <li key={c.label} className="flex items-center gap-1.5">
+                          {i > 0 && <span aria-hidden className="text-control">/</span>}
+                          {c.area ? <button type="button" onClick={() => selectAreaOnly(c.area!, "back-link")} className="text-primary underline underline-offset-[3px] hover:opacity-80" data-testid={`crumb-${i}`}>{c.label}</button>
+                            : <span aria-current="page" className="text-muted-foreground">{c.label}</span>}
+                        </li>
+                      ))}
+                    </ol>
+                  </nav>
+                )}
+                <h2 id="text-area-name" className="font-display font-bold text-[30px] md:text-[36px] leading-[1.1]" data-testid="text-area-name">{areaName}</h2>
+                <p className="text-[16px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{areaKicker && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
               </div>
-            </section>
-          </div>
+              {area.kind !== "paris" && (
+                <button type="button" onClick={() => selectArea({ kind: "paris" }, "back-link")} data-testid="button-clear-area" className={`${outlineBtnCls} print:hidden`}>
+                  <X className="w-4 h-4" aria-hidden />Back to All Paris
+                </button>
+              )}
+            </div>
+            <div className="mt-4 md:mt-5">
+              <Kpis s={summary.data} paris={area.kind !== "paris" ? parisSummary.data : undefined} ptype={ptype} loading={summary.isLoading} fetching={summary.isFetching} error={summary.isError} />
+            </div>
+          </section>
 
-          <Transactions selection={selection} scopeLabel={scopeLabel} scale={scale.color} areaColor={areaColor} isDark={isDark}
-            onSelectArea={selectFromSales}
-            onSelectQuartierName={selectQuartierName} />
+          {/* Then the comparison: map and list */}
+          <section aria-labelledby="compare-title" className="pt-12 md:pt-14">
+            <div className="flex flex-col gap-1 mb-4">
+              <h2 id="compare-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">Compare areas</h2>
+              <p className="text-[16px] text-muted-foreground">Select an area on the map or in the list to focus the whole page on it.</p>
+            </div>
+            <Segmented role="tablist" label="Compare view" testId="compare-tab" value={compareTab} onChange={showCompare} stretch tall className="md:hidden mb-3"
+              options={[["map", "Map"], ["list", "List"]]} />
+            <div className="flex flex-wrap gap-4 items-start">
+              <div className={`flex-[999_1_560px] min-w-0 ${compareTab === "map" ? "" : "hidden md:block"}`}>
+                <MapPanel isDark={isDark} ptype={ptype} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
+                  area={area} selArr={selArr} areaParams={areaP} mode={mapMode} setMode={setMode}
+                  level={mapLevel} setLevel={setLevel} arrStats={arrStats} communeStats={communeStats}
+                  statsLoading={byArr.isLoading || byCommune.isLoading} statsError={byArr.isError || byCommune.isError}
+                  retryStats={retryStats} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
+                  arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
+                  travel={travel} setTravel={setTravel} onSelect={selectFeature} onSelectArea={selectDot} />
+              </div>
+              <div className={`flex-[1_1_480px] min-w-0 ${compareTab === "list" ? "" : "hidden md:block"}`}>
+                <AreasCard rank={rank} onRank={setRank} stats={rankStats} trend={heatData} heatData={heatData} rows={rankRows}
+                  loading={rankLoading} heatLoading={heat.isLoading || heat.isPlaceholderData || rankLoading}
+                  fetching={byArr.isFetching || byCommune.isFetching || heat.isFetching} error={rankError} heatError={heat.isError || rankError}
+                  retry={retryStats} retryHeat={retryHeat} scale={scale} domain={domain} selId={selId}
+                  onSelect={selectFromRanking} onSelectRow={selectRow} ptype={ptype} travel={travel} onSelectPeriod={showTravel} isDark={isDark} />
+              </div>
+            </div>
+          </section>
+
+          <section className="pt-6">
+            <HeroTrend selection={selection} gran={view.gran} areaName={areaName} setGran={setGran} isDark={isDark} years={years}
+              summary={summary.data} paris={area.kind !== "paris" ? parisSummary.data : undefined} />
+          </section>
+
+          <section aria-labelledby="dist-title" className="pt-12 md:pt-14">
+            <div className="flex flex-col gap-1 mb-4">
+              <h2 id="dist-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">What sold, and for how much</h2>
+              <p className="text-[16px] text-muted-foreground">{summary.data ? `The spread of the ${num(summary.data.count)} sales in the Selection. ` : ""}Darker bars hold the middle half.</p>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <Distributions filters={filters} houseShare={ptype === "all" ? summary.data?.houseShare : null} isDark={isDark} />
+              <RoomsChart filters={filters} isDark={isDark} />
+            </div>
+          </section>
+
+          <section className="pt-6">
+            <Transactions selection={selection} scopeLabel={scopeLabel} areaName={areaName} scale={scale.color} areaColor={areaColor} isDark={isDark}
+              onSelectArea={selectFromSales}
+              onSelectQuartierName={selectQuartierName} />
+          </section>
         </main>
 
-        <footer className="mt-6 pt-4 border-t text-[13px] text-muted-foreground flex flex-wrap justify-between gap-2">
-          <span>Source: DVF, Direction générale des Finances publiques. {rangeLabel(datasetFrom, datasetTo)}, {longMonthLabel(releaseMonth)} release. Nominal euros.</span>
-          <span>Basemap tiles &copy; Esri.</span>
+        {/* About the data and the sources, once, at the end */}
+        <footer className="mt-14 pb-12 border-t-2 border-foreground pt-6 flex flex-wrap gap-x-16 gap-y-6" data-testid="text-source-note">
+          <section aria-labelledby="about-title" className="flex-[2_1_480px] max-w-[72ch] flex flex-col gap-2.5 text-[15px] leading-relaxed">
+            <h2 id="about-title" className="font-display font-semibold text-[19px]">About the data</h2>
+            <p className="font-medium">The figures describe past Sales. They are not a valuation of any home.</p>
+            <p>They come from Demandes de valeurs foncières (DVF), published by the DGFiP, and cover residential sales in Paris and 135 Communes around it from {rangeLabel(datasetFrom, datasetTo)}. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface and has a price of 1,000 to 35,000 EUR/m².</p>
+            {noteSummary.current && <p>{num(noteSummary.current.excludedCount)} residential sales in the whole dataset are left out by these rules: sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².</p>}
+            <p className="text-muted-foreground">A change compares the median of the first {noteSummary.current?.changeWindowMonths ?? 3} months of the Period with the median of the last {noteSummary.current?.changeWindowMonths ?? 3} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.</p>
+          </section>
+          <section aria-labelledby="sources-title" className="flex-[1_1_260px] flex flex-col gap-1.5 text-[14px] text-muted-foreground">
+            <h2 id="sources-title" className="text-[14px] font-semibold text-foreground">Sources</h2>
+            {DATA_SOURCES.map((d) => <p key={d}>{d}</p>)}
+            <p>{longMonthLabel(releaseMonth)} release. Basemap tiles &copy; Esri.</p>
+            {lastRefreshed && <p>Last loaded at {lastRefreshed}.</p>}
+          </section>
         </footer>
       </div>
     </div>
