@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/
 import { Switch } from "@/components/ui/switch";
 import type { StepScale } from "@/lib/colour-scale";
 import { track } from "@/lib/analytics";
+import { csvSafe } from "@/lib/escape";
 import { t, t as texts } from "@/lib/i18n/messages";
 
 export type ChartColors = {
@@ -76,8 +77,10 @@ export function FetchDot({ on }: { on: boolean }) {
 }
 
 export function CsvButton({ data, filename, testId }: { data: object[]; filename: string; testId: string }) {
+  // DVF text is unchecked input, so a cell must not start a spreadsheet formula.
+  const safe = useMemo(() => csvSafe(data), [data]);
   return (
-    <CSVLink data={data} filename={filename} data-testid={`button-csv-${testId}`} onClick={() => { track("export-csv", { panel: testId }); }}
+    <CSVLink data={safe} filename={filename} data-testid={`button-csv-${testId}`} onClick={() => { track("export-csv", { panel: testId }); }}
       className={`print:hidden ${iconBtnCls}`} aria-label={t().ui.csv} title={t().ui.csvTitle}>
       <Download className="w-[18px] h-[18px]" aria-hidden />
     </CSVLink>
