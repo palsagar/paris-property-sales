@@ -30,13 +30,13 @@ The site shows what homes in Paris and its suburbs have sold for, and how prices
 | Price per m² | The price divided by the built surface |
 | Change | The percentage difference between the median Price per m² at the start and at the end of the Period |
 
-The interface is in English only. A French version is planned.
+The interface is in English and in French. A Visitor switches with the EN | FR control in the masthead. The French text uses the French terms in `CONTEXT.md`.
 
 ## 2. The page as a whole
 
 The site is one long page with a centred column at most 1440 px wide. The page answers first, then compares. From top to bottom it holds:
 
-1. **Masthead**, on one line. On the left are the title, "Paris & Suburbs Property Sales", and the coverage, "Data to {month}". From 768 px wide it adds ", {month} release". On the right, from 768 px wide, are an outline button "Copy link to this view" and two icon buttons: Print (it also saves a PDF) and Dark mode. On a phone, one "More" menu holds "Share this view", "Print or save as PDF" and the theme. A 2 px rule in the text colour runs underneath.
+1. **Masthead.** On the left are the title, "Paris & Suburbs Property Sales", and the coverage, "Data to {month}". From 768 px wide it adds ", {month} release". On the right, from 768 px wide, are two rows aligned right. The first row is the author line in 13 px muted text: "by Sagar Pal · ★ Star on GitHub". "Sagar Pal" links to sagar-pal.dev and the star links to the GitHub repository, both in a new tab. The second row holds the EN | FR switch, an outline button "Copy link to this view" and two icon buttons: Print (it also saves a PDF) and Dark mode. On a phone, the switch sits next to one "More" menu, which holds "Share this view", "Print or save as PDF" and the theme, and the author line sits below them in a shorter form, "by Sagar Pal · ★ Star". In print, the switch and the buttons are hidden and the author line stays. A 2 px rule in the text colour runs underneath.
 2. **Intro.** The headline "What homes in Paris and its suburbs have sold for since {month}, and where prices moved", with one sentence about the source. From 768 px wide, a second sentence says that every figure follows the Visitor's choice. The intro scrolls away. It has no figures of its own.
 3. **Selection bar.** It is pinned to the top of the screen at every width (section 3). A thin progress line under it shows that a change is loading.
 4. **The selected Area and its key figures.** A breadcrumb shows where the Area sits, for example "All Paris / 6e arrondissement / Odéon" for a Quartier, or the Department of a Commune. Each level above the Area is a link that selects it. The Area's name is a 30–36 px heading, with a line such as "All homes, 2024: 1 234 sales." A "Back to All Paris" button appears when an Area is selected. The key figures follow (section 4).
@@ -241,7 +241,7 @@ These are observations, not decisions. The redesign fixed the earlier list: the 
 - **The dot map's form.** It stays as dots, with no clusters or squares. It stays on the current map library and not on WebGL.
 - **The speed target and the change model.** Each Selection change takes at most 200 ms of work. The page changes in one redraw when the data is in, and keeps the old Selection, correctly named, until then. The map's fly-to is outside the 200 ms.
 - **The Selection in the URL**, so that links reproduce a view.
-- **The vocabulary** from section 1, in English for now.
+- **The vocabulary** from section 1, in English and in French.
 
 ## Appendix: where things live in the code
 

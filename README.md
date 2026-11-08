@@ -105,6 +105,7 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 | `STATIC_DIR` | API server | The folder with the built dashboard. If it is not set, the server provides only the API. |
 | `NODE_ENV` | API server | Use `production`. |
 | `LOG_LEVEL` | API server | Optional. The default is `info`. |
+| `SITE_URL` | API server | The public address of the site, for example `https://parism2.gpuphysics.dev`, with no path. The server uses it for the absolute addresses of the link preview image. The Docker image sets it. Without a valid value, link previews have no image. |
 | `UMAMI_SCRIPT_URL` | API server | Optional. The address of the Umami `script.js`, for example `https://stats.example.fr/script.js`. With `UMAMI_WEBSITE_ID`, the server adds the Umami script to the dashboard's page. Without both, the site sends no analytics. |
 | `UMAMI_WEBSITE_ID` | API server | Optional. The website ID from Umami's settings. |
 | `UMAMI_DOMAINS` | API server | Optional. A comma-separated list of host names, for example `prix.example.fr`. Umami then counts only visits to these hosts. |
