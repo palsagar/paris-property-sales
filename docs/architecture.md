@@ -107,17 +107,19 @@ The site counts visits and the use of its controls with [Umami](https://umami.is
 | Event | Properties |
 | --- | --- |
 | `open` | The Selection and map mode of a link or bookmark. It is sent once, and only when the link carries settings. |
-| `select-area` | `level`, `area` (its name), `code` and `via`: buttons, search, map, dot, ranking, heatmap, sales-list or back-link |
-| `select-property-type`, `change-period` | The new value. A Period is sent as months, with `via` (preset or slider) and the preset's kind. The slider sends one event at its release. |
+| `select-area` | `level`, `area` (its name), `code` and `via`: buttons, search, map, dot, ranking, heatmap, sales-list or back-link. Back and Forward in the browser send nothing, because they are not a control. |
+| `select-property-type`, `change-period` | The new value. A Period is sent as months, with `via` (preset, slider, or months for the From and To menus) and the preset's kind. The slider sends one event at its release. |
 | `change-map-mode`, `change-map-level`, `time-travel`, `change-ranking-group`, `sort-ranking`, `change-heatmap-colour`, `change-granularity`, `toggle-smoothing`, `toggle-band`, `sort-sales`, `page-sales` | The new value |
+| `change-compare-view` | `view`: map or list (the tabs on a phone), ranking or quarters (the tabs of the areas card) |
 | `export-csv` | The panel |
-| `print`, `refresh` | None |
-| `toggle-dark-mode`, `set-auto-refresh` | The new value |
+| `copy-link` | `via`: clipboard or share. The link itself is never sent. |
+| `print` | None |
+| `toggle-dark-mode` | The new value |
 
 These are never sent:
 - anything about a single Sale, such as its id, street, price or position, because data sent to Umami cannot be taken back (see [decision record 6](adr/0006-public-site-limits.md))
 - the text typed in the area search box
-- hovers, map zoom and pan, the frames of a drag, automatic refreshes and errors
+- hovers, map zoom and pan, the frames of a drag, and errors
 
 The `analytics` section of `e2e/latency.mjs` replaces Umami with a stub. It checks the event of each control and that no event carries a key outside the agreed list or a number other than a page of the Sales list.
 
