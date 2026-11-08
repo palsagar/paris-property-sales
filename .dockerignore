@@ -9,3 +9,7 @@ data-raw
 attached_assets
 *.zip
 artifacts/api-server/data
+.playwright-mcp
+.superpowers
+**/.ruff_cache
+**/__pycache__

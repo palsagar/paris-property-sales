@@ -26,6 +26,9 @@ COPY --from=build /runtime/node_modules ./node_modules
 # The image holds no sales data. Mount a folder with sales.duckdb at /app/data at run time.
 COPY --from=build /app/artifacts/data-app/dist/public ./public
 EXPOSE 3000
+# Run as the image's unprivileged user. The app files stay owned by root, so the process cannot change them.
+# DuckDB opens sales.duckdb read-only and needs only read access to the mount. Its home (/home/node) is writable.
+USER node
 # This image has no curl or wget, so Node makes the health request.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:' + process.env.PORT + '/api/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
