@@ -25,8 +25,8 @@ export const getSalesSummaryQueryArrondissementMax = 20;
 
 export const getSalesSummaryQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
 export const getSalesSummaryQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
-export const getSalesSummaryQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getSalesSummaryQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesSummaryQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getSalesSummaryQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetSalesSummaryQueryParams = zod.object({
@@ -80,8 +80,8 @@ export const getPriceDistributionQueryArrondissementMax = 20;
 
 export const getPriceDistributionQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
 export const getPriceDistributionQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
-export const getPriceDistributionQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getPriceDistributionQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getPriceDistributionQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getPriceDistributionQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetPriceDistributionQueryParams = zod.object({
@@ -117,8 +117,8 @@ export const getPricePerSqmDistributionQueryArrondissementMax = 20;
 
 export const getPricePerSqmDistributionQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
 export const getPricePerSqmDistributionQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
-export const getPricePerSqmDistributionQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getPricePerSqmDistributionQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getPricePerSqmDistributionQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getPricePerSqmDistributionQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetPricePerSqmDistributionQueryParams = zod.object({
@@ -155,8 +155,8 @@ export const getSalesTrendQueryArrondissementMax = 20;
 
 export const getSalesTrendQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
 export const getSalesTrendQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
-export const getSalesTrendQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getSalesTrendQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesTrendQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getSalesTrendQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 export const getSalesTrendQueryGranularityDefault = `quarter`;
 export const getSalesTrendQueryWindowDefault = 1;
 export const getSalesTrendQueryWindowMax = 12;
@@ -194,8 +194,8 @@ export const GetSalesTrendResponse = zod.array(GetSalesTrendResponseItem)
  */
 export const getAreaTrendQueryLevelDefault = `arrondissement`;
 export const getAreaTrendQueryPropertyTypeDefault = `all`;
-export const getAreaTrendQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getAreaTrendQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getAreaTrendQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getAreaTrendQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 export const getAreaTrendQueryGranularityDefault = `quarter`;
 export const getAreaTrendQueryWindowDefault = 1;
 export const getAreaTrendQueryWindowMax = 12;
@@ -230,8 +230,8 @@ export const getSalesByRoomsQueryArrondissementMax = 20;
 
 export const getSalesByRoomsQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
 export const getSalesByRoomsQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
-export const getSalesByRoomsQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getSalesByRoomsQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesByRoomsQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getSalesByRoomsQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetSalesByRoomsQueryParams = zod.object({
@@ -259,8 +259,8 @@ export const GetSalesByRoomsResponse = zod.array(GetSalesByRoomsResponseItem)
  * @summary Price statistics and price change for each of the 20 arrondissements
  */
 export const getSalesByArrondissementQueryPropertyTypeDefault = `all`;
-export const getSalesByArrondissementQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getSalesByArrondissementQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesByArrondissementQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getSalesByArrondissementQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetSalesByArrondissementQueryParams = zod.object({
@@ -292,8 +292,8 @@ export const GetSalesByArrondissementResponse = zod.array(GetSalesByArrondisseme
  * @summary Price statistics and price change for each of the 80 administrative quartiers
  */
 export const getSalesByQuartierQueryPropertyTypeDefault = `all`;
-export const getSalesByQuartierQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getSalesByQuartierQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesByQuartierQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getSalesByQuartierQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetSalesByQuartierQueryParams = zod.object({
@@ -325,8 +325,8 @@ export const GetSalesByQuartierResponse = zod.array(GetSalesByQuartierResponseIt
  * @summary Price statistics and price change for each Commune with Sales
  */
 export const getSalesByCommuneQueryPropertyTypeDefault = `all`;
-export const getSalesByCommuneQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getSalesByCommuneQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesByCommuneQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getSalesByCommuneQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetSalesByCommuneQueryParams = zod.object({
@@ -362,8 +362,8 @@ export const getSalesPointsQueryArrondissementMax = 20;
 
 export const getSalesPointsQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
 export const getSalesPointsQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
-export const getSalesPointsQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const getSalesPointsQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getSalesPointsQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const getSalesPointsQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 
 
 export const GetSalesPointsQueryParams = zod.object({
@@ -404,8 +404,8 @@ export const listTransactionsQueryArrondissementMax = 20;
 
 export const listTransactionsQueryQuartierRegExp = new RegExp('^[0-9]{7}$');
 export const listTransactionsQueryCommuneRegExp = new RegExp('^[0-9]{5}$');
-export const listTransactionsQueryFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
-export const listTransactionsQueryToRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const listTransactionsQueryFromRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+export const listTransactionsQueryToRegExp = new RegExp('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
 export const listTransactionsQuerySortByDefault = `date`;
 export const listTransactionsQuerySortDirDefault = `desc`;
 export const listTransactionsQueryLimitDefault = 25;

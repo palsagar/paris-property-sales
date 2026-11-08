@@ -191,6 +191,16 @@ describe("Areas in the query", () => {
     assert.equal(GetSalesSummaryQueryParams.safeParse({ department: "92" }).success, true);
   });
 
+  test("impossible dates are rejected", () => {
+    for (const date of ["2024-99-99", "2024-00-10", "2024-13-01", "2024-01-00", "2024-01-32"]) {
+      assert.equal(GetSalesSummaryQueryParams.safeParse({ from: date }).success, false, date);
+      assert.equal(GetSalesSummaryQueryParams.safeParse({ to: date }).success, false, date);
+    }
+    for (const date of ["2024-01-01", "2024-12-31", "2024-02-29", "2024-10-19"]) {
+      assert.equal(GetSalesSummaryQueryParams.safeParse({ from: date, to: date }).success, true, date);
+    }
+  });
+
   test("the Commune route is cached", async () => {
     const base = await startApp();
     const url = `${base}/sales/by-commune?propertyType=all`;
