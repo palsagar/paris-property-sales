@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 import router from "./routes";
 import { responseCache } from "./lib/responseCache";
 import { logger } from "./lib/logger";
+import { loadPage, umamiTag } from "./lib/umami";
 
 const app: Express = express();
 
@@ -41,10 +42,18 @@ app.use("/api", responseCache, router);
 const staticDir = process.env["STATIC_DIR"];
 if (staticDir) {
   const root = path.resolve(staticDir);
+  // The page is read once, with the analytics tag when Umami is configured (lib/umami.ts).
+  const umami = umamiTag(process.env);
+  if (umami.warning) logger.warn(umami.warning);
+  const { page, error } = loadPage(path.join(root, "index.html"), umami.tag);
+  if (error) logger.error(error);
+  const sendPage = (_req: express.Request, res: express.Response) => {
+    if (page === null) { res.status(404).end(); return; }
+    res.set("Cache-Control", "no-cache").type("html").send(page);
+  };
+  app.get("/index.html", sendPage);
   app.use(express.static(root, { index: false, maxAge: "1h" }));
-  app.get(/^\/(?!api\/).*/, (_req, res) => {
-    res.sendFile(path.join(root, "index.html"));
-  });
+  app.get(/^\/(?!api\/).*/, sendPage);
 }
 
 app.use(

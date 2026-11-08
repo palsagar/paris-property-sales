@@ -3,6 +3,7 @@ import { CSVLink } from "react-csv";
 import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
 import type { StepScale } from "@/lib/colour-scale";
+import { track } from "@/lib/analytics";
 
 export type ChartColors = {
   grid: string; tick: string; accent: string; second: string; bg: string; cursor: string; ink: string; paper: string; nodata: string;
@@ -75,7 +76,7 @@ export function ChartCard({ title, desc, csv, csvName, loading, fetching = false
         <div className="flex items-center gap-2 flex-wrap">
           {right}
           {!loading && csv && csv.length > 0 && (
-            <CSVLink data={csv as object[]} filename={csvName} data-testid={`button-csv-${testId}`}
+            <CSVLink data={csv as object[]} filename={csvName} data-testid={`button-csv-${testId}`} onClick={() => { track("export-csv", { panel: testId }); }}
               className={`print:hidden flex items-center justify-center w-7 h-7 rounded-md active:scale-95 ${btnCls}`}
               aria-label="Download this chart's data as CSV" title="Download CSV">
               <Download className="w-3.5 h-3.5" />

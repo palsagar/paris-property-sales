@@ -96,6 +96,31 @@ The dashboard is a React application with one page.
 
 The Vite development server has no proxy for `/api`, so the dashboard shows no data under `vite dev` until a proxy is added.
 
+## Analytics
+
+The site counts visits and the use of its controls with [Umami](https://umami.is), self-hosted next to the site on Coolify. Umami sets no cookies.
+
+- The server adds the Umami script to `index.html` only when `UMAMI_SCRIPT_URL` and `UMAMI_WEBSITE_ID` are set (`lib/umami.ts` in the API server). Local builds, the tests and forks of the repository therefore send nothing. The script loads with `async`, so a slow Umami server never delays the dashboard, and it honours Do Not Track.
+- Each visit counts as one page view, without the query string. The query string holds the Selection, and the events below record it.
+- `lib/analytics.ts` in the dashboard lists every event and its properties. Each control's handler calls `track()`, which sends the event on a later task, so it adds no work to the click. An event fires only when the Visitor changes something.
+
+| Event | Properties |
+| --- | --- |
+| `open` | The Selection and map mode of a link or bookmark. It is sent once, and only when the link carries settings. |
+| `select-area` | `level`, `area` (its name), `code` and `via`: buttons, search, map, dot, ranking, heatmap, sales-list or back-link |
+| `select-property-type`, `change-period` | The new value. A Period is sent as months, with `via` (preset or slider) and the preset's kind. The slider sends one event at its release. |
+| `change-map-mode`, `change-map-level`, `time-travel`, `change-ranking-group`, `sort-ranking`, `change-heatmap-colour`, `change-granularity`, `toggle-smoothing`, `toggle-band`, `sort-sales`, `page-sales` | The new value |
+| `export-csv` | The panel |
+| `print`, `refresh` | None |
+| `toggle-dark-mode`, `set-auto-refresh` | The new value |
+
+These are never sent:
+- anything about a single Sale, such as its id, street, price or position, because data sent to Umami cannot be taken back (see [decision record 6](adr/0006-public-site-limits.md))
+- the text typed in the area search box
+- hovers, map zoom and pan, the frames of a drag, automatic refreshes and errors
+
+The `analytics` section of `e2e/latency.mjs` replaces Umami with a stub. It checks the event of each control and that no event carries a key outside the agreed list or a number other than a page of the Sales list.
+
 ## Deployment
 
 The site runs on [Coolify](https://coolify.io) on a VPS in the EU. Coolify builds the image from this public repository. The image holds no sales data, so the data lives in a folder on the VPS and is mounted into the container. See [decision record 1](adr/0001-sales-data-outside-git-and-image.md).
@@ -138,7 +163,7 @@ The site is not ready for the public yet. These items must be complete first.
 
 - **Block search engines.** Change `robots.txt` and the `robots` meta tag, and block `/api` as well. Both currently allow indexing.
 - **Make the API private to the site.** Remove the open CORS setting, add rate limits, and limit exports to what is on screen. The cap on the records in one response is done: `/sales/points` returns at most 5,000 Sales, and a page of `/sales/transactions` at most 200. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong. Many such requests at once can also stop the server, because each one holds its whole result in memory until it finishes. The 5,000 Sale cap reduces this risk, and the rate limits must bound it.
-- **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts.
+- **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts. It must name Umami, say that it sets no cookies and records no data about a single Sale, and say that the site honours Do Not Track.
 - **Self-host the fonts and replace the Esri tiles.** We could not confirm that Esri's tile address can be used on a public site without an account. Choose a map provider with terms that clearly allow public use.
 - **Accept the re-identification risk knowingly.** No Sale holds its `id_mutation` any more, so a Visitor cannot join a Sale to the public DVF file by that identifier. Date, price, surface and street together still identify 404,405 of the 404,582 Sales uniquely. We accept this risk, and the DGFiP condition against indirect re-identification is not fully met. [Decision record 6](adr/0006-public-site-limits.md) records it.
 

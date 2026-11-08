@@ -8,6 +8,7 @@ import { keepInSameArea, type areaParams } from "@/lib/areas";
 import { parisTrendParams, smoothOn, summaryParams, trendParams, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
 import { yearBucketLabel } from "@/lib/period";
+import { track } from "@/lib/analytics";
 
 export type Filters = ReturnType<typeof areaParams> & { propertyType: PropertyTypeParameter; from?: string; to?: string };
 
@@ -133,8 +134,8 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
       right={
         <>
           <Segmented testId="gran" label="Granularity" value={gran} onChange={setGran} options={[["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]]} />
-          <Switch testId="toggle-smooth" on={smooth} disabled={gran === "year"} onClick={() => setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on: !smooth } }))} label="Smoothing" />
-          <Switch testId="toggle-band" on={showBand} onClick={() => setShowBand((b) => !b)} label="P25-P75" />
+          <Switch testId="toggle-smooth" on={smooth} disabled={gran === "year"} onClick={() => { track("toggle-smoothing", { on: !smooth }); setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on: !smooth } })); }} label="Smoothing" />
+          <Switch testId="toggle-band" on={showBand} onClick={() => { track("toggle-band", { on: !showBand }); setShowBand((b) => !b); }} label="P25-P75" />
         </>
       }>
       {q.isLoading ? <Skeleton className="w-full" style={{ height: PLOT_H + STRIP_H }} /> : q.isError ? <ErrorState onRetry={() => q.refetch()} /> : data.length === 0 ? (

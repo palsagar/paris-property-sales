@@ -5,6 +5,7 @@ import { ChartCard, ErrorState, GradientLegend, Segmented } from "@/components/u
 import { RankSwitch } from "@/components/ranking";
 import { num, sqm, pct, makeDivScale, TOO_FEW, houseShareLabel } from "@/lib/fmt";
 import type { RankGroup } from "@/lib/areas";
+import { track } from "@/lib/analytics";
 
 export const Heatmap = memo(function Heatmap({ data, rows, loading, fetching, error, retry, scale, domain, selId, onSelectRow, rank, onRank, ptype, travel, onSelectPeriod, isDark }: {
   data: AreaTrendPoint[]; rows: { id: string; label: string }[]; loading: boolean; fetching: boolean; error: boolean; retry: () => void;
@@ -40,7 +41,7 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, fetching, er
     <ChartCard testId="heatmap" title="Price per m² by area and quarter" isDark={isDark} loading={loading} fetching={fetching}
       csv={data} csvName={`heatmap-${rank}-quarter.csv`}
       desc="Each cell is the median price per m² for one quarter. Click a row to select the area. Click a year mark above a column to show that quarter on the map."
-      right={<Segmented label="Colour by" testId="heat-mode" value={rel} onChange={(v) => setRel(v as "level" | "rel")} options={[["level", "Price level"], ["rel", "Change since first quarter"]]} />}>
+      right={<Segmented label="Colour by" testId="heat-mode" value={rel} onChange={(v) => { if (v !== rel) track("change-heatmap-colour", { by: v === "level" ? "price" : "change" }); setRel(v as "level" | "rel"); }} options={[["level", "Price level"], ["rel", "Change since first quarter"]]} />}>
       <RankSwitch value={rank} onChange={onRank} testId="heat-rank-switch" />
       {loading ? <Skeleton className="w-full h-[440px]" /> : error ? <ErrorState onRetry={retry} /> : periods.length === 0 ? (
         <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">No sales in this period. Pick a longer one.</div>

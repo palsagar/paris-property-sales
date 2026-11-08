@@ -7,6 +7,7 @@ import { endOfMonth, monthsBefore, rangeLabel } from "@/lib/fmt";
 import { areaParams, keepInSameArea } from "@/lib/areas";
 import { timeTrendParams } from "@/lib/selection-queries";
 import type { ViewState } from "@/lib/view-state";
+import { periodProps, track } from "@/lib/analytics";
 
 /** `chartView` is the shown view, for the small chart. `from` and `to` are the requested Period, for the handles. */
 export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years, onChange, isDark }: {
@@ -35,7 +36,9 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
     pending.current = null;
     setDraft(null);
     if (r.data !== data) return;
-    if (r.s === 0 && r.e === periods.length - 1) onChange(undefined, undefined);
+    const full = r.s === 0 && r.e === periods.length - 1;
+    if (r.s !== startIdx || r.e !== endIdx) track("change-period", { via: "slider", ...(full ? {} : periodProps(periods[r.s], periods[r.e])) });
+    if (full) onChange(undefined, undefined);
     else onChange(periods[r.s], endOfMonth(periods[r.e]));
   };
   const commitRef = useRef(commit);
@@ -56,10 +59,11 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
     refocus.current = -1;
   }, [startIdx, endIdx]);
 
-  const presets: [string, string | undefined, string | undefined][] = [
-    ["All dates", undefined, undefined],
-    ...years.map((y) => [y.label, y.from, y.to] as [string, string, string]),
-    ["Last 12 months", monthsBefore(datasetTo, 11), datasetTo],
+  type Preset = "all" | "year" | "last-12-months";
+  const presets: [string, string | undefined, string | undefined, Preset][] = [
+    ["All dates", undefined, undefined, "all"],
+    ...years.map((y) => [y.label, y.from, y.to, "year"] as [string, string, string, Preset]),
+    ["Last 12 months", monthsBefore(datasetTo, 11), datasetTo, "last-12-months"],
   ];
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
 
@@ -93,10 +97,14 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-[13px] text-muted-foreground">Period</span>
         <div className="flex flex-wrap rounded-md border bg-card p-0.5">
-          {presets.map(([l, f, t]) => {
+          {presets.map(([l, f, t, kind]) => {
             const active = (f ?? undefined) === from && (t === undefined ? to === undefined : t === to);
+            const choose = () => {
+              if (!active) track("change-period", { via: "preset", preset: kind, ...periodProps(f, t) });
+              onChange(f, t);
+            };
             return (
-              <button key={l} onClick={() => onChange(f, t)} data-testid={`preset-${l.replace(/\s/g, "-").toLowerCase()}`}
+              <button key={l} onClick={choose} data-testid={`preset-${l.replace(/\s/g, "-").toLowerCase()}`}
                 aria-pressed={active} className={`px-2.5 h-7 text-[13px] rounded transition-colors ${active ? "bg-foreground text-background" : "hover:bg-muted"}`}>{l}</button>
             );
           })}

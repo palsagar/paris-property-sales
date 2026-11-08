@@ -5,6 +5,7 @@ import { AreaSearch, type QMeta } from "@/components/area-picker";
 import { arrLabel } from "@/lib/fmt";
 import type { RankGroup } from "@/lib/areas";
 import { useRequestedView } from "@/lib/shown-view";
+import { track, typeName } from "@/lib/analytics";
 import type { ViewState } from "@/lib/view-state";
 
 /**
@@ -18,7 +19,7 @@ export const FilterBar = memo(function FilterBar({ chartView, datasetFrom, datas
   const { view, patch, selectArea, updating } = useRequestedView();
   const { ptype, area, from, to } = view;
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
-  const selectArr = (arr: number) => selectArea({ kind: "arr", arr });
+  const selectArr = (arr: number) => selectArea({ kind: "arr", arr }, "buttons");
 
   return (
     <div className="md:sticky top-0 z-[500] -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-3 bg-background border-b space-y-2 print:static">
@@ -29,7 +30,7 @@ export const FilterBar = memo(function FilterBar({ chartView, datasetFrom, datas
           <span className="text-[13px] text-muted-foreground">Property</span>
           <div className="flex rounded-md border bg-card p-0.5" role="group" aria-label="Property type">
             {([["all", "All"], ["Appartement", "Apartments"], ["Maison", "Houses"]] as [PropertyTypeParameter, string][]).map(([v, l]) => (
-              <button key={v} onClick={() => patch({ ptype: v })} data-testid={`filter-type-${v}`} aria-pressed={ptype === v}
+              <button key={v} onClick={() => { if (v !== ptype) track("select-property-type", { type: typeName(v) }); patch({ ptype: v }); }} data-testid={`filter-type-${v}`} aria-pressed={ptype === v}
                 className={`px-3 h-7 text-[13px] rounded transition-colors ${ptype === v ? "bg-foreground text-background" : "hover:bg-muted"}`}>{l}</button>
             ))}
           </div>
@@ -37,13 +38,13 @@ export const FilterBar = memo(function FilterBar({ chartView, datasetFrom, datas
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className="text-[13px] text-muted-foreground">Area</span>
           <div className="flex flex-wrap gap-0.5" role="group" aria-label="Arrondissement">
-            <button onClick={() => selectArea({ kind: "paris" })} data-testid="filter-arr-all" aria-pressed={area.kind === "paris"} className={`px-2 h-7 text-[13px] rounded transition-colors ${area.kind === "paris" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Paris</button>
+            <button onClick={() => selectArea({ kind: "paris" }, "buttons")} data-testid="filter-arr-all" aria-pressed={area.kind === "paris"} className={`px-2 h-7 text-[13px] rounded transition-colors ${area.kind === "paris" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>Paris</button>
             {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
               <button key={n} onClick={() => selectArr(n)} data-testid={`filter-arr-${n}`} aria-pressed={area.kind === "arr" && area.arr === n} aria-label={`${arrLabel(n)} arrondissement`}
                 className={`w-7 h-7 text-[12.5px] font-num rounded transition-colors ${area.kind === "arr" && area.arr === n ? "bg-primary text-primary-foreground" : selArr === n ? "ring-1 ring-primary text-primary" : "hover:bg-muted"}`}>{n}</button>
             ))}
           </div>
-          <AreaSearch quartiers={quartiers} communes={communes} area={area} onSelect={selectArea} />
+          <AreaSearch quartiers={quartiers} communes={communes} area={area} onSelect={(a) => selectArea(a, "search")} />
         </div>
       </div>
       {/* Bottom right, where it covers none of the header's buttons. */}
