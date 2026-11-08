@@ -3,7 +3,8 @@ import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, 
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, SwitchField, TipBox, useChartColors } from "@/components/ui-bits";
-import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, tooFew } from "@/lib/fmt";
+import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, tooFew, bucketLabel } from "@/lib/fmt";
+import { t } from "@/lib/i18n/messages";
 import { keepInSameArea, type areaParams } from "@/lib/areas";
 import { parisTrendParams, smoothOn, summaryParams, trendParams, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
@@ -34,8 +35,9 @@ const endLabel = (name: string, color: string, last: number, dy: number) =>
 function takeaway(s: SalesSummary | undefined, paris: SalesSummary | undefined, areaName: string): string | null {
   if (!s || s.startMedianPricePerSqm == null || s.endMedianPricePerSqm == null || s.changePct == null) return null;
   const n = s.changeWindowMonths;
-  const base = `In ${inArea(areaName)}, the median was ${sqm(s.endMedianPricePerSqm)} in the last ${n} months of the Period, against ${num(s.startMedianPricePerSqm)} in the first ${n}: ${pct(s.changePct)}.`;
-  return keep(paris?.changePct != null ? `${base} All Paris moved by ${pct(paris.changePct)}.` : base);
+  const tr = t().trend;
+  const base = tr.takeaway(inArea(areaName), sqm(s.endMedianPricePerSqm), n, num(s.startMedianPricePerSqm), pct(s.changePct));
+  return keep(paris?.changePct != null ? base + tr.parisMoved(pct(paris.changePct)) : base);
 }
 
 export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, setGran, isDark, years, summary, paris }: {
@@ -63,7 +65,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
       const prevKey = `${Number(p.period.slice(0, 4)) - 1}${p.period.slice(4)}`;
       const prev = byP.get(prevKey);
       return {
-        ...p, shown: gran === "year" ? yearBucketLabel(p.period, p.label, years) : p.label, band: [p.p25PricePerSqm, p.p75PricePerSqm] as [number | null, number | null],
+        ...p, shown: gran === "year" ? yearBucketLabel(p.period, bucketLabel(p.period, gran), years) : bucketLabel(p.period, gran), band: [p.p25PricePerSqm, p.p75PricePerSqm] as [number | null, number | null],
         paris: paris.get(p.period), low: p.count > 0 && p.count < 10,
         yoy: prev && prev.medianPricePerSqm && p.medianPricePerSqm != null ? ((p.medianPricePerSqm - prev.medianPricePerSqm) / prev.medianPricePerSqm) * 100 : null,
       };
@@ -93,6 +95,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
   const noMedian = data.every((d) => d.medianPricePerSqm == null);
   // The charts depend only on their data and settings, so a change elsewhere on the page does not redraw them.
   const ptype = view.ptype;
+  const tr = t().trend, allParis = t().fmt.allParis;
   const charts = useMemo(() => (
     <>
           {noMedian ? <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H }}>{tooFew()}</div> : <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
@@ -104,24 +107,24 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload as (typeof data)[number];
-                  if (d.count === 0) return <TipBox title={d.shown} rows={[["Sales", "No sales"]]} />;
+                  if (d.count === 0) return <TipBox title={d.shown} rows={[[tr.sales, tr.noSales]]} />;
                   const rows: [string, string, string?][] = [
-                    ["Median per m²", sqmOrTooFew(d.medianPricePerSqm), c.accent],
-                    ["P25 to P75", d.p25PricePerSqm != null && d.p75PricePerSqm != null ? `${num(d.p25PricePerSqm)} to ${num(d.p75PricePerSqm)}` : tooFew()],
-                    ["Median price", orTooFew(d.medianPrice, eur)],
-                    ["Sales", num(d.count)],
+                    [tr.medianSqm, sqmOrTooFew(d.medianPricePerSqm), c.accent],
+                    [tr.p25p75, d.p25PricePerSqm != null && d.p75PricePerSqm != null ? tr.range(num(d.p25PricePerSqm), num(d.p75PricePerSqm)) : tooFew()],
+                    [tr.medianPrice, orTooFew(d.medianPrice, eur)],
+                    [tr.sales, num(d.count)],
                   ];
                   const share = ptype === "all" ? houseShareLabel(d.houseShare) : null;
-                  if (share) rows.push(["House share", share]);
-                  if (d.yoy != null) rows.push(["Change on a year earlier", pct(d.yoy)]);
-                  if (d.paris != null) rows.push(["All Paris", sqm(d.paris), c.second]);
-                  return <TipBox title={d.shown} rows={rows} note={d.low && d.medianPricePerSqm != null ? "Fewer than 10 sales in this period, so treat the figure with care." : undefined} />;
+                  if (share) rows.push([tr.houseShare, share]);
+                  if (d.yoy != null) rows.push([tr.yoy, pct(d.yoy)]);
+                  if (d.paris != null) rows.push([allParis, sqm(d.paris), c.second]);
+                  return <TipBox title={d.shown} rows={rows} note={d.low && d.medianPricePerSqm != null ? tr.lowNote : undefined} />;
                 }} />
               {showBand && <Area dataKey="band" stroke="none" fill={c.accent} fillOpacity={0.06} isAnimationActive={false} type="linear" activeDot={false} />}
               {showBand && <Line dataKey="p25PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
               {showBand && <Line dataKey="p75PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
               {hasArea && <Line dataKey="paris" stroke={c.second} strokeWidth={1.75} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls
-                label={endLabel("All Paris", c.second, data.length - 1, parisBelow ? 8 : -22)} />}
+                label={endLabel(allParis, c.second, data.length - 1, parisBelow ? 8 : -22)} />}
               <Line dataKey="medianPricePerSqm" stroke={c.accent} strokeWidth={2.75} isAnimationActive={false} type="linear"
                 label={hasArea ? endLabel(shortName, c.accent, data.length - 1, parisBelow ? -22 : 8) : undefined}
                 activeDot={{ r: 5, stroke: c.bg, strokeWidth: 2 }}
@@ -134,7 +137,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
             <BarChart data={data} syncId="trend" margin={{ top: 6, right: END_W, left: 0, bottom: 0 }} barCategoryGap="18%">
               <XAxis dataKey="shown" tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} minTickGap={28} />
               <YAxis width={Y_W} tick={false} axisLine={false} domain={[0, "dataMax"]}
-                label={{ value: "Sales", position: "insideRight", fill: c.tick, fontSize: 12, offset: 6 }} />
+                label={{ value: tr.sales, position: "insideRight", fill: c.tick, fontSize: 12, offset: 6 }} />
               <Tooltip content={() => null} cursor={{ fill: c.cursor }} isAnimationActive={false} />
               <Bar dataKey="count" isAnimationActive={false} radius={[1, 1, 0, 0]}>
                 {data.map((d, i) => <Cell key={i} fill={d.low ? c.accent : c.tick} fillOpacity={d.low ? 0.5 : 0.35} />)}
@@ -142,32 +145,32 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
             </BarChart>
           </ResponsiveContainer>
     </>
-  ), [data, domain, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName]);
+  ), [data, domain, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName, tr, allParis]);
 
   return (
-    <ChartCard testId="trend" title={`Median price per m² over time in ${inArea(areaName)}`} isDark={isDark}
+    <ChartCard testId="trend" title={tr.title(inArea(areaName))} isDark={isDark}
       loading={q.isLoading} fetching={q.isFetching || all.isFetching}
       csv={data.map(({ band: _b, shown: _s, ...r }) => r)} csvName="price-trend.csv"
       lede={takeaway(summary, hasArea ? paris : undefined, areaName)}
-      desc={<>One point per {gran}{hasArea && <>; the dashed line is All Paris</>}. The strip below counts sales.{smooth ? ` Each point averages ${win} periods to reduce noise.` : ""}</>}
+      desc={tr.desc(gran, hasArea, smooth ? win ?? 0 : 0)}
       controls={
         <>
-          <Segmented testId="gran" label="Time step" value={gran} onChange={setGran} options={[["month", "Month"], ["quarter", "Quarter"], ["year", "Year"]]} />
-          <SwitchField testId="toggle-smooth" checked={smooth} disabled={gran === "year"} onCheckedChange={(on) => { track("toggle-smoothing", { on }); setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on } })); }} label="Smoothing" />
-          <SwitchField testId="toggle-band" checked={showBand} onCheckedChange={(on) => { track("toggle-band", { on }); setShowBand(on); }} label="Middle half of sales" />
+          <Segmented testId="gran" label={tr.timeStep} value={gran} onChange={setGran} options={[["month", tr.month], ["quarter", tr.quarter], ["year", tr.year]]} />
+          <SwitchField testId="toggle-smooth" checked={smooth} disabled={gran === "year"} onCheckedChange={(on) => { track("toggle-smoothing", { on }); setChoices((ch) => ({ ...ch, smooth: { gran, isQuartier, on } })); }} label={tr.smoothing} />
+          <SwitchField testId="toggle-band" checked={showBand} onCheckedChange={(on) => { track("toggle-band", { on }); setShowBand(on); }} label={tr.band} />
         </>
       }>
       {q.isLoading ? <Skeleton className="w-full" style={{ height: PLOT_H + STRIP_H }} /> : q.isError ? <ErrorState onRetry={() => q.refetch()} /> : data.length === 0 ? (
-        <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H + STRIP_H }}>No sales match this selection. Try a longer period or a larger area.</div>
+        <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H + STRIP_H }}>{tr.empty}</div>
       ) : (
         <>
           {charts}
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[13px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><span className="w-4 h-0.5" style={{ background: c.accent }} />Median per m²</span>
-            {showBand && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted" style={{ borderColor: c.accent }} />P25 and P75, the middle half of sales</span>}
-            {hasArea && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed" style={{ borderColor: c.second }} />All Paris</span>}
-            <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: c.tick, opacity: 0.4 }} />Number of sales</span>
-            {lowN > 0 && <span className="inline-flex items-center gap-1.5 text-primary"><span className="w-2.5 h-2.5 rounded-full border border-dashed border-primary" />{lowN} period{lowN > 1 ? "s" : ""} with fewer than 10 sales</span>}
+            <span className="inline-flex items-center gap-1.5"><span className="w-4 h-0.5" style={{ background: c.accent }} />{tr.medianSqm}</span>
+            {showBand && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted" style={{ borderColor: c.accent }} />{tr.bandLegend}</span>}
+            {hasArea && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed" style={{ borderColor: c.second }} />{allParis}</span>}
+            <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: c.tick, opacity: 0.4 }} />{tr.count}</span>
+            {lowN > 0 && <span className="inline-flex items-center gap-1.5 text-primary"><span className="w-2.5 h-2.5 rounded-full border border-dashed border-primary" />{tr.lowPeriods(lowN)}</span>}
           </div>
         </>
       )}

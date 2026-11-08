@@ -756,6 +756,85 @@ const sections = {
       await p.ctx.close();
       check("french-frame: no English in the frame, the Selection bar, the key figures and the pickers", Object.keys(left).length === 0, { left });
     }
+
+    // french-panels: no English anywhere on the page, for each tab and segment of the panels.
+    {
+      const left = {};
+      const sweep = async (page, name) => { const f = await frenchSweep(page, "body"); if (f.length) left[name] = f; };
+      p = await openPage("/", { locale: "fr-FR" });
+      await settle(p.net);
+      await sweep(p.page, "default view");
+      for (const id of ["areas-tab-quarters", "heat-mode-rel", "areas-tab-ranking", "rank-sort-change", "map-mode-change", "gran-month", "gran-year"]) {
+        await click(p.page, id);
+        await settle(p.net);
+        await sweep(p.page, id);
+      }
+      await p.page.selectOption('[data-testid="rank-switch"]', "93");
+      await settle(p.net);
+      await sweep(p.page, "ranking of Seine-Saint-Denis");
+      await p.ctx.close();
+      p = await openPage("/?arr=11&map=dots", { locale: "fr-FR" });
+      await settle(p.net);
+      await sweep(p.page, "11e with the dot map");
+      await p.ctx.close();
+      check("french-panels: no English left on the page", Object.keys(left).length === 0, { left });
+    }
+
+    // french-tooltips: the map's tooltips are French and their HTML is intact.
+    {
+      const bad = (t) => !t || ENGLISH.test(t) || /&#39;|&amp;|</.test(t);
+      p = await openPage("/", { locale: "fr-FR" });
+      await settle(p.net);
+      const mapBox = await p.page.locator('[data-testid="card-map"] .leaflet-container').boundingBox();
+      await p.page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+      const box = await p.page.locator('[data-testid="card-map"] .leaflet-container').boundingBox();
+      await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await p.page.waitForTimeout(400);
+      const areaTip = await p.page.evaluate(() => [...document.querySelectorAll(".leaflet-tooltip:not(.map-label)")].map((t) => t.innerText).join("\n"));
+      await p.ctx.close();
+      p = await openPage("/?arr=6&map=dots", { locale: "fr-FR" });
+      await settle(p.net);
+      const dot = await findDot(p.page, /vendu|ventes près d'ici/);
+      const dotTip = dot ? await p.page.evaluate(() => [...document.querySelectorAll(".leaflet-tooltip:not(.map-label)")].map((t) => t.innerText).join("\n")) : "";
+      await p.ctx.close();
+      check("french-tooltips: the map's tooltips are French and show no HTML code", !!mapBox && !bad(areaTip) && !!dot && !bad(dotTip), { areaTip, dotTip });
+    }
+
+    // french-fits-phone: no French screen scrolls sideways at 375 px, and the Selection bar stays on screen.
+    {
+      const wide = {};
+      for (const path of ["/", "/?commune=93048"]) {
+        p = await openPage(path, { locale: "fr-FR", viewport: { width: 375, height: 800 } });
+        await settle(p.net);
+        const m = await p.page.evaluate(() => ({ scroll: document.scrollingElement.scrollWidth, bar: document.querySelector('[data-testid="selection-bar"]').getBoundingClientRect().right }));
+        if (m.scroll > 375 || m.bar > 375) wide[path] = m;
+        await p.ctx.close();
+      }
+      check("french-fits-phone: no sideways scroll at 375 px in French", Object.keys(wide).length === 0, { wide });
+    }
+
+    // labels-from-dates: the client builds the same labels as the server in English, and French ones in French.
+    {
+      const labelsOf = async (locale) => {
+        const q = await openPage("/", { locale });
+        await settle(q.net);
+        const ticks = await q.page.evaluate(() => [...document.querySelectorAll('[data-testid="card-trend"] .recharts-cartesian-axis-tick-value')].map((t) => t.textContent));
+        await click(q.page, "button-period");
+        await q.page.waitForSelector('[data-testid="time-control"]');
+        const presets = await q.page.evaluate(() => [...document.querySelectorAll('[data-testid^="preset-"]')].map((b) => b.textContent));
+        await q.ctx.close();
+        return { ticks, presets };
+      };
+      const en = await labelsOf("en-GB"), fr = await labelsOf("fr-FR");
+      const serverYears = years.map((y) => y.label);
+      const partial = years.find((y) => !(y.from.endsWith("-01-01") && y.to.endsWith("-12-31")));
+      check("labels-from-dates: English labels match the server's, French ones read T1 2024 and juil.–déc.",
+        en.ticks.some((t) => /^\d{4} Q[1-4]$/.test(t)) && serverYears.every((l) => en.presets.includes(l))
+          && fr.ticks.some((t) => /^T[1-4] \d{4}$/.test(t)) && !fr.ticks.some((t) => /Q[1-4]/.test(t))
+          // A Partial year names its months in lower case in French, for example "2021, juil.–déc.".
+          && (!partial || fr.presets.includes(partial.label) === false && fr.presets.some((l) => l.startsWith(`${partial.from.slice(0, 4)}, `) && /^[a-zéû.–]+$/.test(l.slice(6)))),
+        { en, fr, serverYears });
+    }
   },
 
   /** Each control sends its Umami event, with only the agreed properties and nothing about a single Sale. */
@@ -911,7 +990,7 @@ const sections = {
  * The position of a dot on the map: it hovers a grid of points from the centre outwards until a dot's tooltip shows.
  * A boundary's tooltip lingers for its fade, so each point waits before it reads the tooltip. Its text is never printed.
  */
-async function findDot(page) {
+async function findDot(page, text = /sold on|sales near here/) {
   // The key figures now come before the map, so the map starts below the fold: bring it into view first.
   await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
@@ -923,7 +1002,7 @@ async function findDot(page) {
   for (const pt of points) {
     await page.mouse.move(pt.x, pt.y);
     await page.waitForTimeout(300);
-    const onDot = await page.evaluate(() => [...document.querySelectorAll(".leaflet-tooltip")].some((t) => /sold on|sales near here/.test(t.textContent)));
+    const onDot = await page.evaluate((src) => [...document.querySelectorAll(".leaflet-tooltip")].some((t) => new RegExp(src).test(t.textContent)), text.source);
     if (onDot) return pt;
   }
   return null;

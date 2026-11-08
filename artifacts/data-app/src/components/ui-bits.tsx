@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/
 import { Switch } from "@/components/ui/switch";
 import type { StepScale } from "@/lib/colour-scale";
 import { track } from "@/lib/analytics";
+import { t, t as texts } from "@/lib/i18n/messages";
 
 export type ChartColors = {
   grid: string; tick: string; accent: string; second: string; bg: string; cursor: string; ink: string; paper: string; nodata: string;
@@ -69,7 +70,7 @@ export function TipBox({ title, rows, note }: { title: ReactNode; rows: [string,
 export function FetchDot({ on }: { on: boolean }) {
   return (
     <span className={`text-[12px] font-normal font-sans tracking-normal text-muted-foreground transition-opacity duration-300 ${on ? "opacity-100" : "opacity-0"}`} aria-live="polite">
-      {on ? "Updating" : ""}
+      {on ? t().ui.updating : ""}
     </span>
   );
 }
@@ -77,7 +78,7 @@ export function FetchDot({ on }: { on: boolean }) {
 export function CsvButton({ data, filename, testId }: { data: object[]; filename: string; testId: string }) {
   return (
     <CSVLink data={data} filename={filename} data-testid={`button-csv-${testId}`} onClick={() => { track("export-csv", { panel: testId }); }}
-      className={`print:hidden ${iconBtnCls}`} aria-label="Download this panel's data as CSV" title="Download CSV">
+      className={`print:hidden ${iconBtnCls}`} aria-label={t().ui.csv} title={t().ui.csvTitle}>
       <Download className="w-[18px] h-[18px]" aria-hidden />
     </CSVLink>
   );
@@ -112,8 +113,8 @@ export function ChartCard({ title, desc, lede, csv, csvName, loading, fetching =
 export function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="h-full min-h-[200px] flex flex-col items-center justify-center gap-3 text-[15px] text-muted-foreground text-center px-4" role="alert">
-      <p>This data did not load. Check your connection and try again.</p>
-      <button onClick={onRetry} className={outlineBtnCls} data-testid="button-retry">Try again</button>
+      <p>{t().ui.notLoaded}</p>
+      <button onClick={onRetry} className={outlineBtnCls} data-testid="button-retry">{t().ui.tryAgain}</button>
     </div>
   );
 }
@@ -182,7 +183,7 @@ export function GradientLegend({ title, min, max, scale, fmt, mid, className = "
 export function StepLegend({ title, scale, fmt, className = "w-full" }: { title: ReactNode; scale: StepScale; fmt: (n: number) => string; className?: string }) {
   const step = 100 / scale.colors.length;
   const t = scale.thresholds;
-  const range = (i: number) => (i === 0 ? `under ${fmt(t[0]!)}` : i >= t.length ? `${fmt(t[t.length - 1]!)}+` : `${fmt(t[i - 1]!)}–${fmt(t[i]!)}`);
+  const range = (i: number) => (i === 0 ? texts().ui.under(fmt(t[0]!)) : i >= t.length ? `${fmt(t[t.length - 1]!)}+` : `${fmt(t[i - 1]!)}–${fmt(t[i]!)}`);
   return (
     <div className={className} data-testid="step-legend">
       <div className="text-[13px] mb-1.5 text-muted-foreground">{title}</div>

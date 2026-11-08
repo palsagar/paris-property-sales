@@ -4,12 +4,12 @@ import { en } from "./en";
 import { fr } from "./fr";
 
 type Node = unknown;
-/** Every leaf of a texts object, with its path. A function text is called with 2 for each argument. */
+/** Every leaf of a texts object, with its path. A function text is called with "2" for each argument, which works as a number and as a string. */
 function leaves(o: Node, path = ""): [string, string, "string" | "function"][] {
   if (typeof o === "string") return [[path, o, "string"]];
   if (typeof o === "function") {
-    const args = Array.from({ length: o.length }, () => 2);
-    return [[path, String((o as (...a: number[]) => unknown)(...args)), "function"]];
+    const args = Array.from({ length: o.length }, () => "2");
+    return [[path, String((o as (...a: string[]) => unknown)(...args)), "function"]];
   }
   if (Array.isArray(o)) return o.flatMap((v, i) => leaves(v, `${path}[${i}]`));
   return Object.entries(o as Record<string, Node>).flatMap(([k, v]) => leaves(v, path ? `${path}.${k}` : k));
