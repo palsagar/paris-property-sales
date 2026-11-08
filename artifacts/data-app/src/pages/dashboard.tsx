@@ -27,6 +27,10 @@ import { Distributions, RoomsChart } from "@/components/distributions";
 import { Transactions } from "@/components/transactions";
 import type { CommuneMeta, QMeta } from "@/components/area-picker";
 import { SelectionBar } from "@/components/selection-bar";
+import { AuthorLinks } from "@/components/author-links";
+import { useLanguage } from "@/lib/i18n/provider";
+import { t } from "@/lib/i18n/messages";
+import type { Lang } from "@/lib/i18n/language";
 
 const DATA_SOURCES = ["DVF open data (DGFiP)", "Paris OpenData boundaries", "Etalab Contours administratifs (ODbL)"];
 
@@ -237,6 +241,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
     }
   }, []);
   const print = () => { track("print"); window.print(); };
+  const { lang, change: changeLang } = useLanguage();
+  const switchLang = (l: Lang) => { if (l === lang) return; track("change-language", { to: l }); changeLang(l); };
   const flipTheme = () => { track("toggle-dark-mode", { on: !isDark }); toggleTheme(); };
   const showCompare = (v: "map" | "list") => { if (v !== compareTab) track("change-compare-view", { view: v }); setCompareTab(v); };
 
@@ -251,24 +257,31 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
             <p className="font-display font-bold text-[17px] md:text-[20px] leading-tight" data-testid="text-title">Paris &amp; Suburbs Property Sales</p>
             <p className="text-[13px] md:text-[14px] text-muted-foreground" data-testid="text-coverage">Data to {longMonthLabel(datasetTo)}<span className="hidden md:inline">, {longMonthLabel(releaseMonth)} release</span></p>
           </div>
-          <div className="hidden md:flex items-center gap-2 print:hidden">
-            <button type="button" onClick={copyLink} data-testid="button-copy-link" className={outlineBtnCls}><Link2 className="w-4 h-4" aria-hidden />Copy link to this view</button>
-            <button type="button" onClick={print} data-testid="button-pdf" aria-label="Print or save as PDF" title="Print or save as PDF" className={iconBtnCls}><Printer className="w-[18px] h-[18px]" aria-hidden /></button>
-            <button type="button" onClick={flipTheme} data-testid="button-theme" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} title={isDark ? "Light mode" : "Dark mode"} className={iconBtnCls}>
-              {isDark ? <Sun className="w-[18px] h-[18px]" aria-hidden /> : <Moon className="w-[18px] h-[18px]" aria-hidden />}
-            </button>
-          </div>
-          <div className="md:hidden print:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className={iconBtnCls} aria-label="More: share, print, theme" data-testid="button-more"><MoreHorizontal className="w-5 h-5" aria-hidden /></button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[220px] rounded-xl p-1.5">
-                <DropdownMenuItem onSelect={copyLink} className="min-h-11 text-[15px] gap-3"><Link2 className="w-4 h-4" aria-hidden />Share this view</DropdownMenuItem>
-                <DropdownMenuItem onSelect={print} className="min-h-11 text-[15px] gap-3"><Printer className="w-4 h-4" aria-hidden />Print or save as PDF</DropdownMenuItem>
-                <DropdownMenuItem onSelect={flipTheme} className="min-h-11 text-[15px] gap-3">{isDark ? <Sun className="w-4 h-4" aria-hidden /> : <Moon className="w-4 h-4" aria-hidden />}{isDark ? "Light mode" : "Dark mode"}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {/* Laptop: the author line above the switch and the buttons. Phone: the switch beside "More", the author line below. */}
+          <div className="shrink-0 flex flex-col-reverse md:flex-col items-end gap-1.5 print:flex-col">
+            <AuthorLinks />
+            <div className="flex items-center gap-2 print:hidden">
+              <Segmented testId="lang" label={t().header.langLabel} value={lang} options={[["en", "EN"], ["fr", "FR"]]} onChange={switchLang} />
+              <div className="hidden md:flex items-center gap-2 print:hidden">
+                <button type="button" onClick={copyLink} data-testid="button-copy-link" className={outlineBtnCls}><Link2 className="w-4 h-4" aria-hidden />Copy link to this view</button>
+                <button type="button" onClick={print} data-testid="button-pdf" aria-label="Print or save as PDF" title="Print or save as PDF" className={iconBtnCls}><Printer className="w-[18px] h-[18px]" aria-hidden /></button>
+                <button type="button" onClick={flipTheme} data-testid="button-theme" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} title={isDark ? "Light mode" : "Dark mode"} className={iconBtnCls}>
+                  {isDark ? <Sun className="w-[18px] h-[18px]" aria-hidden /> : <Moon className="w-[18px] h-[18px]" aria-hidden />}
+                </button>
+              </div>
+              <div className="md:hidden print:hidden">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className={iconBtnCls} aria-label="More: share, print, theme" data-testid="button-more"><MoreHorizontal className="w-5 h-5" aria-hidden /></button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[220px] rounded-xl p-1.5">
+                    <DropdownMenuItem onSelect={copyLink} className="min-h-11 text-[15px] gap-3"><Link2 className="w-4 h-4" aria-hidden />Share this view</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={print} className="min-h-11 text-[15px] gap-3"><Printer className="w-4 h-4" aria-hidden />Print or save as PDF</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={flipTheme} className="min-h-11 text-[15px] gap-3">{isDark ? <Sun className="w-4 h-4" aria-hidden /> : <Moon className="w-4 h-4" aria-hidden />}{isDark ? "Light mode" : "Dark mode"}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           </div>
         </header>
 

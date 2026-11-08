@@ -10,6 +10,12 @@ const DEPARTMENTS: Record<string, string> = {
 export const fr: Messages = {
   header: {
     siteName: "Ventes immobilières à Paris et alentours",
+    langLabel: "Language · Langue",
+  },
+  author: {
+    by: "par",
+    star: "Étoile sur GitHub",
+    starShort: "Étoile",
   },
   months: {
     short: ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."],

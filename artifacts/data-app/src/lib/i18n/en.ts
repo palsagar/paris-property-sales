@@ -2,6 +2,13 @@
 export const en = {
   header: {
     siteName: "Paris & Suburbs Property Sales",
+    /** The same in both languages, so a reader of either finds the switch. */
+    langLabel: "Language · Langue",
+  },
+  author: {
+    by: "by",
+    star: "Star on GitHub",
+    starShort: "Star",
   },
   months: {
     short: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],

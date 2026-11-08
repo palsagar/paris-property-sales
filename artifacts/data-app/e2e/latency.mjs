@@ -623,6 +623,83 @@ const sections = {
     const skip = await page.evaluate(() => ({ history: history.length, active: document.activeElement?.id }));
     check("skip link: it focuses the figures and adds no history entry", skip.history === histBefore && skip.active === "figures", { before: histBefore, ...skip });
     await p.ctx.close();
+
+    // The language: the browser's first language, a saved choice, and the Selection kept in the URL.
+    const langOf = (page) => page.evaluate(() => ({ html: document.documentElement.lang, title: document.title,
+      en: document.querySelector('[data-testid="lang-en"]')?.getAttribute("aria-pressed"), fr: document.querySelector('[data-testid="lang-fr"]')?.getAttribute("aria-pressed") }));
+    p = await openPage("/", { locale: "fr-FR" });
+    const frDefault = await langOf(p.page);
+    await p.ctx.close();
+    p = await openPage("/", { locale: "en-GB" });
+    const enDefault = await langOf(p.page);
+    check("lang-default: a French browser gets French, an English one English",
+      frDefault.html === "fr" && frDefault.fr === "true" && enDefault.html === "en" && enDefault.en === "true", { frDefault, enDefault });
+    await click(p.page, "lang-fr");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    const langSwitched = await langOf(p.page);
+    await p.page.reload({ waitUntil: "networkidle" });
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    const langReloaded = await langOf(p.page);
+    check("lang-switch: the switch sets French and it stays after a reload",
+      langSwitched.html === "fr" && langSwitched.title === "Ventes immobilières à Paris et alentours" && langReloaded.html === "fr" && langReloaded.fr === "true", { langSwitched, langReloaded });
+    await p.ctx.close();
+
+    p = await openPage("/?arr=11&type=Appartement", { locale: "fr-FR" });
+    await settle(p.net);
+    const url0 = p.page.url();
+    await click(p.page, "lang-en");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    await click(p.page, "lang-fr");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    const kept = { url: p.page.url(), name: await p.page.textContent('[data-testid="text-area-name"]') };
+    check("lang-keeps-selection: a switch keeps the URL and adds no lang parameter",
+      kept.url === url0 && !new URL(kept.url).searchParams.has("lang") && /11e/.test(kept.name ?? ""), { url0, ...kept });
+    await p.ctx.close();
+
+    {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "fr-FR" });
+      const page = await ctx.newPage();
+      await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
+      if (DIST) await page.route((u) => u.origin === new URL(BASE).origin && !u.pathname.startsWith("/api"), async (r) => {
+        const u = new URL(r.request().url());
+        const f = extname(u.pathname) ? u.pathname.slice(1) : "index.html";
+        try { await r.fulfill({ body: await readFile(join(DIST, f)), contentType: MIME[extname(f)] ?? "application/octet-stream" }); } catch { await r.abort(); }
+      });
+      await page.addInitScript(() => Object.defineProperty(window, "localStorage", { get() { throw new DOMException("blocked", "SecurityError"); } }));
+      await page.goto(BASE + "/", { waitUntil: "networkidle" });
+      await page.waitForSelector('[data-testid="card-kpi-0"]', { timeout: 15000 }).catch(() => {});
+      const loaded = await langOf(page);
+      await page.click('[data-testid="lang-en"]').catch(() => {});
+      await page.waitForTimeout(300);
+      const after = await langOf(page);
+      check("lang-without-storage: the page loads in the browser's language and the switch still works", loaded.html === "fr" && loaded.fr === "true" && after.html === "en" && after.en === "true", { loaded, after });
+      await ctx.close();
+    }
+
+    // The author links, on a laptop and on a phone.
+    for (const width of [1440, 375]) {
+      p = await openPage("/", { viewport: { width, height: 900 } });
+      const links = await p.page.evaluate(() => ["link-author-site", "link-author-github"].map((id) => {
+        const a = document.querySelector(`header [data-testid="${id}"]`);
+        const r = a?.getBoundingClientRect();
+        return a && { href: a.getAttribute("href"), target: a.getAttribute("target"), rel: a.getAttribute("rel"), visible: !!r && r.width > 0 && r.right <= innerWidth };
+      }));
+      const [site, gh] = links;
+      check(`author-links: both links show in the header at ${width} px`,
+        !!site && !!gh && site.visible && gh.visible && site.href === "https://sagar-pal.dev" && gh.href === "https://github.com/palsagar/paris-property-sales"
+          && links.every((l) => l.target === "_blank" && /noopener/.test(l.rel ?? "")), { links });
+      await p.ctx.close();
+    }
+
+    // Print: the switch and the buttons hide, the author line stays.
+    p = await openPage("/");
+    await p.page.emulateMedia({ media: "print" });
+    const printHeader = await p.page.evaluate(() => {
+      const shown = (sel) => { const e = document.querySelector(sel); return !!e && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== "hidden"; };
+      return { lang: shown('[data-testid="lang-en"]'), copy: shown('[data-testid="button-copy-link"]'), author: shown('header [data-testid="link-author-site"]') };
+    });
+    check("print-header: the switch and the buttons hide in print, the author line stays", !printHeader.lang && !printHeader.copy && printHeader.author, printHeader);
+    await p.ctx.close();
   },
 
   /** Each control sends its Umami event, with only the agreed properties and nothing about a single Sale. */
@@ -740,8 +817,35 @@ const sections = {
         && fromDot[0][1].via === "dot" && fromDot[0][1].level === "quartier", { found: !!dot, got: fromDot });
     await p.ctx.close();
 
+    // The language switch and the author links.
+    p = await openPage("/", { umami: true });
+    await settle(p.net);
+    await expect("a click on the language already chosen sends nothing", () => click(p.page, "lang-en"), []);
+    await expect("a language change", () => click(p.page, "lang-fr"), [["change-language", { to: "fr" }]]);
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    // The links open a new tab: keep the click in this page.
+    await p.page.evaluate(() => document.addEventListener("click", (e) => { if (e.target.closest?.("a[target=_blank]")) e.preventDefault(); }, true));
+    await expect("the author's site", () => click(p.page, "link-author-site"), [["author-link", { target: "site" }]]);
+    await expect("the GitHub link", () => click(p.page, "link-author-github"), [["author-link", { target: "github" }]]);
+    await p.ctx.close();
+
+    // events-same-in-french: the same Area gives the same event in both languages.
+    const areaEvent = async (locale) => {
+      const q = await openPage("/", { umami: true, locale });
+      await settle(q.net);
+      const before = (await events(q.page)).length;
+      await click(q.page, "filter-arr-11");
+      await settle(q.net);
+      await q.page.waitForTimeout(50);
+      const got = (await events(q.page)).slice(before).filter(([n]) => n === "select-area");
+      await q.ctx.close();
+      return got;
+    };
+    const inEn = await areaEvent("en-GB"), inFr = await areaEvent("fr-FR");
+    check("analytics: events-same-in-french", inEn.length === 1 && same(inEn, inFr), { inEn, inFr });
+
     // Every event, whatever the control: only the agreed keys, and no number but a page of the Sales list.
-    const KEYS = new Set(["url", "level", "area", "code", "via", "type", "from", "to", "map", "preset", "mode", "group", "by", "gran", "on", "column", "dir", "page", "panel", "interval"]);
+    const KEYS = new Set(["url", "level", "area", "code", "via", "type", "from", "to", "map", "preset", "mode", "group", "by", "gran", "on", "column", "dir", "page", "panel", "interval", "target"]);
     const bad = all.filter(([, props]) => props && Object.entries(props).some(([k, v]) => !KEYS.has(k) || (typeof v === "number" && k !== "page") || (typeof v === "string" && v.length > 60)));
     check("analytics: no event carries a key outside the agreed list, a price or a long text", all.length > 10 && bad.length === 0, { events: all.length, bad: bad.map(([n, props]) => [n, Object.keys(props)]) });
   },
