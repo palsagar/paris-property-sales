@@ -302,7 +302,7 @@ export const en = {
     tooFew: "Too few sales",
     allParis: "All Paris",
     /** An Area's name after the words that come before it in a sentence: "in the 11e arrondissement". */
-    inArea: (name: string) => (name === "All Paris" ? "all of Paris" : /arrondissement$/.test(name) ? `the ${name}` : name),
+    inArea: (name: string, _kind?: string) => (name === "All Paris" ? "all of Paris" : /arrondissement$/.test(name) ? `the ${name}` : name),
     quarter: (y: number, q: number) => `${y} Q${q}`,
     houseShare: (pct: number) => `${pct}% houses`,
     houseShareWarning: (pct: number) => `Houses are ${pct}% of these sales. A house's price includes its land, so this median is harder to compare.`,

@@ -67,7 +67,7 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
   const typeOf = (type: string) => (type === "Maison" ? l.house : l.apartment);
 
   return (
-    <ChartCard testId="transactions" title={l.title(inArea(areaName))} isDark={isDark} loading={tx.isLoading} fetching={tx.isFetching}
+    <ChartCard testId="transactions" title={l.title(inArea(areaName, view.area.kind))} isDark={isDark} loading={tx.isLoading} fetching={tx.isFetching}
       desc={l.desc(tx.data ? t().sales(num(tx.data.total), tx.data.total) : "", scopeLabel)} csv={tx.data?.items} csvName="transactions.csv">
       {tx.isError ? <ErrorState onRetry={() => tx.refetch()} /> : (
         <>

@@ -29,8 +29,11 @@ export const kShort = (n: number) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(
 export const arrLabel = (n: number) => (n === 1 ? "1er" : `${n}e`);
 /** Joins a figure to its digits and unit with no-break spaces, so "12 054 EUR" never breaks across two lines. */
 export const keep = (s: string) => s.replace(/(\d) (?=\d)/g, "$1\u00a0").replace(/(\d) (?=(k|M|Md)?\s?(EUR|m²))/g, "$1\u00a0").replace(/ (EUR|m²)/g, "\u00a0$1");
-/** An Area's name as it reads in a sentence: "the 11e arrondissement" in English, "dans le 11e arrondissement" in French. */
-export const inArea = (name: string) => t().fmt.inArea(name);
+/**
+ * An Area's name as it reads in a sentence: "the 11e arrondissement" in English, "dans le 11e arrondissement" in French.
+ * French needs the Area's kind, because a Quartier reads "dans le quartier Halles" and a Commune "à Montreuil".
+ */
+export const inArea = (name: string, kind?: string) => t().fmt.inArea(name, kind);
 
 const short = (m: number) => t().months.short[m - 1];
 export const monthLabel = (ym: string) => {

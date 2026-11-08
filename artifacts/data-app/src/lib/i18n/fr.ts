@@ -317,8 +317,8 @@ export const fr: Messages = {
     tooFew: "Trop peu de ventes",
     allParis: "Tout Paris",
     /** Le nom d'un Secteur avec sa préposition : « dans le 11e arrondissement », « à Montreuil ». */
-    inArea: (name: string) =>
-      name === "Tout Paris" ? "dans tout Paris" : /arrondissement$/.test(name) ? `dans le ${name}` : DEPARTMENTS[name] ?? `à ${name}`,
+    inArea: (name: string, kind?: string) =>
+      name === "Tout Paris" ? "dans tout Paris" : /arrondissement$/.test(name) ? `dans le ${name}` : kind === "q" ? `dans le quartier ${name}` : DEPARTMENTS[name] ?? `à ${name}`,
     quarter: (y: number, q: number) => `T${q} ${y}`,
     houseShare: (pct: number) => `${pct}% de maisons`,
     houseShareWarning: (pct: number) => `Les maisons font ${pct}% de ces ventes. Le prix d'une maison comprend son terrain, donc cette médiane se compare moins bien.`,

@@ -83,3 +83,17 @@ test("numbers and money do not change with the language", async () => {
   }
   setLang("en");
 });
+
+test("in French, a Quartier reads 'dans le quartier', a Commune 'à'", async () => {
+  const { inArea } = await import("./fmt");
+  const { setLang } = await import("./i18n/language");
+  setLang("fr");
+  try {
+    assert.equal(inArea("Halles", "q"), "dans le quartier Halles");
+    assert.equal(inArea("Montreuil", "commune"), "à Montreuil");
+    assert.equal(inArea("11e arrondissement", "arr"), "dans le 11e arrondissement");
+  } finally {
+    setLang("en");
+  }
+  assert.equal(inArea("Halles", "q"), "Halles");
+});

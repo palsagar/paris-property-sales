@@ -51,6 +51,9 @@ export default function Dashboard() {
   return <ViewHost datasetFrom={datasetFrom} datasetTo={datasetTo} releaseMonth={releaseMonth} years={years} />;
 }
 
+// The open event is sent once per visit. It lives outside the page, which a language change redraws from the start.
+let openSent = false;
+
 type DatasetProps = { datasetFrom: string; datasetTo: string; releaseMonth: string; years: YearRange[] };
 
 /** Owns the requested view and the panel choices, and shows the dashboard for the view whose data has loaded. */
@@ -88,11 +91,10 @@ function ViewHost(props: DatasetProps) {
   const selectAreaOnly = useCallback((a: Area, via: AreaVia) => select(a, via, false), [select]);
   // The Selection a Visitor arrives with, once, when a link or bookmark carries settings. It waits for the Area's name.
   const firstView = useRef(view);
-  const opened = useRef(false);
   const nameLoading = (firstView.current.area.kind === "q" && qB.isPending) || (firstView.current.area.kind === "commune" && communeB.isPending);
   useEffect(() => {
-    if (opened.current || nameLoading) return;
-    opened.current = true;
+    if (openSent || nameLoading) return;
+    openSent = true;
     if (viewQuery(firstView.current) !== "") track("open", openProps(firstView.current, names));
   }, [nameLoading, names]);
   const requested = useMemo(() => ({ view, patch, selectArea, updating }), [view, patch, selectArea, updating]);

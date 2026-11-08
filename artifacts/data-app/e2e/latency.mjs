@@ -964,6 +964,12 @@ const sections = {
     await expect("the GitHub link", () => click(p.page, "link-author-github"), [["author-link", { target: "github" }]]);
     await p.ctx.close();
 
+    // A language change on a link with settings sends no second open event: the page redraws, but the visit is the same.
+    p = await openPage("/?arr=6", { umami: true });
+    await settle(p.net);
+    await expect("a language change on a link with settings sends only change-language", () => click(p.page, "lang-fr"), [["change-language", { to: "fr" }]]);
+    await p.ctx.close();
+
     // events-same-in-french: the same Area gives the same event in both languages.
     const areaEvent = async (locale) => {
       const q = await openPage("/", { umami: true, locale });

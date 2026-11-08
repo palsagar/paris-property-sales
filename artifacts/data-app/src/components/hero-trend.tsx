@@ -32,11 +32,11 @@ const endLabel = (name: string, color: string, last: number, dy: number) =>
   };
 
 /** The Change of the Selection in one sentence, so a Visitor reads the answer before the chart. */
-function takeaway(s: SalesSummary | undefined, paris: SalesSummary | undefined, areaName: string): string | null {
+function takeaway(s: SalesSummary | undefined, paris: SalesSummary | undefined, areaName: string, kind: string): string | null {
   if (!s || s.startMedianPricePerSqm == null || s.endMedianPricePerSqm == null || s.changePct == null) return null;
   const n = s.changeWindowMonths;
   const tr = t().trend;
-  const base = tr.takeaway(inArea(areaName), sqm(s.endMedianPricePerSqm), n, num(s.startMedianPricePerSqm), pct(s.changePct));
+  const base = tr.takeaway(inArea(areaName, kind), sqm(s.endMedianPricePerSqm), n, num(s.startMedianPricePerSqm), pct(s.changePct));
   return keep(paris?.changePct != null ? base + tr.parisMoved(pct(paris.changePct)) : base);
 }
 
@@ -148,10 +148,10 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
   ), [data, domain, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName, tr, allParis]);
 
   return (
-    <ChartCard testId="trend" title={tr.title(inArea(areaName))} isDark={isDark}
+    <ChartCard testId="trend" title={tr.title(inArea(areaName, selection.area.kind))} isDark={isDark}
       loading={q.isLoading} fetching={q.isFetching || all.isFetching}
       csv={data.map(({ band: _b, shown: _s, ...r }) => r)} csvName="price-trend.csv"
-      lede={takeaway(summary, hasArea ? paris : undefined, areaName)}
+      lede={takeaway(summary, hasArea ? paris : undefined, areaName, selection.area.kind)}
       desc={tr.desc(gran, hasArea, smooth ? win ?? 0 : 0)}
       controls={
         <>
