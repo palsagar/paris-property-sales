@@ -7,6 +7,7 @@ import { eur, sqm, num, dateLabel } from "@/lib/fmt";
 import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
 import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
+import { track } from "@/lib/analytics";
 
 const COLS: { key: string; label: string; sort?: ListTransactionsSortBy; right?: boolean }[] = [
   { key: "date", label: "Date", sort: "date" }, { key: "address", label: "Street" }, { key: "area", label: "Area" }, { key: "quartier", label: "Quartier" },
@@ -28,7 +29,11 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
   if (held.key !== key) setHeld({ key, page: 0 });
   const page = held.key === key ? held.page : 0;
   const setPage = (f: (x: number) => number) => setHeld({ key, page: f(page) });
-  const sortOn = (by: ListTransactionsSortBy) => setChoices((c) => ({ ...c, sortBy: by, sortDir: c.sortBy === by && c.sortDir === "desc" ? "asc" : "desc" }));
+  const sortOn = (by: ListTransactionsSortBy) => {
+    const dir = sortBy === by && sortDir === "desc" ? "asc" : "desc";
+    track("sort-sales", { column: by, dir });
+    setChoices((c) => ({ ...c, sortBy: by, sortDir: dir }));
+  };
   const p = transactionParams(view, choices, page * PAGE);
   const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameArea(filters) } });
   const totalPages = tx.data ? Math.max(1, Math.ceil(tx.data.total / PAGE)) : 1;
@@ -86,9 +91,9 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
           <div className="flex items-center justify-between mt-3 text-[13px] print:hidden">
             <span className="text-muted-foreground">{tx.data && tx.data.total > 0 ? `${num(page * PAGE + 1)}-${num(Math.min((page + 1) * PAGE, tx.data.total))} of ${num(tx.data.total)}` : ""}</span>
             <div className="flex items-center gap-1.5">
-              <button disabled={page === 0} onClick={() => setPage((x) => x - 1)} data-testid="button-prev" aria-label="Previous page" className="h-7 w-7 flex items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+              <button disabled={page === 0} onClick={() => { track("page-sales", { page }); setPage((x) => x - 1); }} data-testid="button-prev" aria-label="Previous page" className="h-7 w-7 flex items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
               <span className="font-num px-2">{page + 1} / {num(totalPages)}</span>
-              <button disabled={page + 1 >= totalPages} onClick={() => setPage((x) => x + 1)} data-testid="button-next" aria-label="Next page" className="h-7 w-7 flex items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+              <button disabled={page + 1 >= totalPages} onClick={() => { track("page-sales", { page: page + 2 }); setPage((x) => x + 1); }} data-testid="button-next" aria-label="Next page" className="h-7 w-7 flex items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
             </div>
           </div>
         </>

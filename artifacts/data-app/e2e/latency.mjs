@@ -4,6 +4,7 @@
 // Run: pnpm --filter @workspace/data-app run latency [section ...]   (BASE_URL defaults to http://localhost:3000)
 // MOTION=1 runs without reduced motion, to measure the map's fly-to, which is outside the 200 ms.
 // DIST=<folder of a dashboard build> serves that build in place of the server's, with the API still from BASE_URL.
+// The analytics section replaces Umami with a stub that records each event; the other sections run without Umami.
 import { chromium } from "playwright-core";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
@@ -22,7 +23,7 @@ const { datasetFrom, datasetTo, years } = await (await fetch(`${BASE}/api/sales/
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 /** One page with the counters the checks read: API requests in flight, cache misses, React commits, skeletons added. */
-async function openPage(path = "/") {
+async function openPage(path = "/", { umami = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
   const page = await ctx.newPage();
   await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
@@ -50,6 +51,14 @@ async function openPage(path = "/") {
       for (const m of list) for (const n of m.addedNodes) if (isBlank(n)) window.__blanks++;
     }).observe(document, { childList: true, subtree: true });
   });
+  if (umami) {
+    await page.addInitScript(() => {
+      window.__events = [];
+      window.print = () => {};
+      // The page view passes a function that builds its payload, as Umami's own script would call it.
+      window.umami = { track: (a, b) => window.__events.push(typeof a === "function" ? ["pageview", a({ url: location.pathname + location.search })] : [a, b]) };
+    });
+  }
   const net = { inflight: 0, last: 0, requests: 0, misses: 0, urls: [] };
   const isApi = (r) => r.url().includes("/api/");
   page.on("request", (r) => { if (isApi(r)) { net.inflight++; net.requests++; net.urls.push(r.url().split("/api")[1]); net.last = Date.now(); } });
@@ -471,7 +480,115 @@ const sections = {
     check("panel state: no blank after Smoothing was switched by hand", st.blanks === 0, { blanks: st.blanks });
     await p.ctx.close();
   },
+
+  /** Each control sends its Umami event, with only the agreed properties and nothing about a single Sale. */
+  async analytics() {
+    const all = [];
+    const events = async (page) => page.evaluate(() => window.__events);
+    // Runs one action and returns the events it sent.
+    const sent = async (p, act) => {
+      const before = (await events(p.page)).length;
+      await act();
+      await settle(p.net);
+      await p.page.waitForTimeout(50);
+      const now = await events(p.page);
+      return now.slice(before);
+    };
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+    let p = await openPage("/", { umami: true });
+    await settle(p.net);
+    let ev = await events(p.page);
+    check("analytics: one page view, without the query string, and no open event on a plain visit",
+      ev.filter(([n]) => n === "pageview").length === 1 && ev[0]?.[1]?.url === "/" && !ev.some(([n]) => n === "open"), { events: ev.map(([n]) => n) });
+
+    const expect = async (name, act, want) => {
+      const got = await sent(p, act);
+      all.push(...got);
+      check(`analytics: ${name}`, same(got, want), { got });
+    };
+    await expect("an Area button", () => click(p.page, "filter-arr-5"),
+      [["select-area", { level: "arrondissement", area: "Paris 5e", code: "5", via: "buttons" }]]);
+    // The Sales list first, while the Selection still has many pages.
+    await expect("a sort of the Sales list", () => click(p.page, "sort-price"), [["sort-sales", { column: "price", dir: "desc" }]]);
+    await expect("a page of the Sales list", () => click(p.page, "button-next"), [["page-sales", { page: 2 }]]);
+    await expect("a property type", () => click(p.page, "filter-type-Maison"), [["select-property-type", { type: "house" }]]);
+    await expect("a click on the property type already chosen sends nothing", () => click(p.page, "filter-type-Maison"), []);
+    const last12 = { from: (() => { const [y, m] = datasetTo.split("-").map(Number); const d = new Date(Date.UTC(y, m - 12, 1)); return d.toISOString().slice(0, 7); })(), to: datasetTo.slice(0, 7) };
+    await expect("a Period preset", () => click(p.page, "preset-last-12-months"),
+      [["change-period", { via: "preset", preset: "last-12-months", ...last12 }]]);
+    await expect("a map mode", () => click(p.page, "map-mode-change"), [["change-map-mode", { mode: "change" }]]);
+    await expect("a click on the map mode already chosen sends nothing", () => click(p.page, "map-mode-change"), []);
+    await expect("a CSV download", () => click(p.page, "button-csv-trend"), [["export-csv", { panel: "trend" }]]);
+    await expect("print", () => click(p.page, "button-pdf"), [["print", null]]);
+
+    // The slider sends one event, at the release, whatever the number of drag frames.
+    const handle = p.page.locator('[data-testid="time-control"] .recharts-brush-traveller').first();
+    const box = await handle.boundingBox();
+    const brush = await p.page.locator('[data-testid="time-control"] .recharts-brush').first().boundingBox();
+    const y = box.y + box.height / 2;
+    const slid = await sent(p, async () => {
+      await p.page.mouse.move(box.x + box.width / 2, y);
+      await p.page.mouse.down();
+      await p.page.mouse.move(brush.x + brush.width * 0.3, y, { steps: 8 });
+      await p.page.mouse.up();
+    });
+    all.push(...slid);
+    const u = new URL(p.page.url()).searchParams;
+    check("analytics: the slider sends one event at its release",
+      same(slid, [["change-period", { via: "slider", from: u.get("from")?.slice(0, 7), to: u.get("to")?.slice(0, 7) }]]), { got: slid });
+
+    // The search box: the event names the Area chosen, never the text typed.
+    const typed = "odeo";
+    const found = await sent(p, async () => { await search(p, typed); await p.page.keyboard.press("Enter"); });
+    all.push(...found);
+    check("analytics: the search box sends the Area chosen, not the text typed",
+      found.length === 1 && found[0][0] === "select-area" && found[0][1].via === "search" && found[0][1].level === "quartier" && !JSON.stringify(found).includes(typed), { got: found });
+    all.push(...(await events(p.page)).filter(([n]) => n === "pageview"));
+    await p.ctx.close();
+
+    // A link that carries settings, and a dot.
+    p = await openPage("/?arr=6&map=dots&level=quartier", { umami: true });
+    await settle(p.net);
+    ev = await events(p.page);
+    all.push(...ev);
+    const open = ev.find(([n]) => n === "open")?.[1];
+    check("analytics: a link with settings sends one open event with its Selection",
+      ev.filter(([n]) => n === "open").length === 1 && same(open, { level: "arrondissement", area: "Paris 6e", code: "6", type: "all", map: "dots" }), { open });
+    const dot = await findDot(p.page);
+    let fromDot = [];
+    if (dot) fromDot = await sent(p, () => p.page.mouse.click(dot.x, dot.y));
+    all.push(...fromDot);
+    check("analytics: a dot sends only the Area it selects",
+      !!dot && fromDot.length === 1 && fromDot[0][0] === "select-area" && same(Object.keys(fromDot[0][1]), ["level", "area", "code", "via"])
+        && fromDot[0][1].via === "dot" && fromDot[0][1].level === "quartier", { found: !!dot, got: fromDot });
+    await p.ctx.close();
+
+    // Every event, whatever the control: only the agreed keys, and no number but a page of the Sales list.
+    const KEYS = new Set(["url", "level", "area", "code", "via", "type", "from", "to", "map", "preset", "mode", "group", "by", "gran", "on", "column", "dir", "page", "panel", "interval"]);
+    const bad = all.filter(([, props]) => props && Object.entries(props).some(([k, v]) => !KEYS.has(k) || (typeof v === "number" && k !== "page") || (typeof v === "string" && v.length > 60)));
+    check("analytics: no event carries a key outside the agreed list, a price or a long text", all.length > 10 && bad.length === 0, { events: all.length, bad: bad.map(([n, props]) => [n, Object.keys(props)]) });
+  },
 };
+
+/**
+ * The position of a dot on the map: it hovers a grid of points from the centre outwards until a dot's tooltip shows.
+ * A boundary's tooltip lingers for its fade, so each point waits before it reads the tooltip. Its text is never printed.
+ */
+async function findDot(page) {
+  const box = await page.locator('[data-testid="card-map"] .leaflet-container').boundingBox();
+  const points = [];
+  for (let i = 1; i < 12; i++) for (let j = 1; j < 8; j++) points.push({ x: box.x + (box.width * i) / 12, y: box.y + (box.height * j) / 8 });
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  points.sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+  for (const pt of points) {
+    await page.mouse.move(pt.x, pt.y);
+    await page.waitForTimeout(300);
+    const onDot = await page.evaluate(() => [...document.querySelectorAll(".leaflet-tooltip")].some((t) => /sold on|sales near here/.test(t.textContent)));
+    if (onDot) return pt;
+  }
+  return null;
+}
 
 /** Records the time of each change of the heading and of the first KPI, in the page's clock. */
 async function watchHeading(page) {

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { AreaVia } from "./analytics";
 import type { Area } from "./areas";
 import { selectionQueries, type PanelChoices } from "./selection-queries";
 import { viewQuery, type ViewState } from "./view-state";
@@ -38,7 +39,7 @@ export function useShownView(view: ViewState, choices: PanelChoices): { shown: V
 export type Patch = (p: Partial<ViewState> | ((s: ViewState) => Partial<ViewState>)) => void;
 
 /** The requested view, for the controls that must answer a click at once. */
-export const RequestedView = createContext<{ view: ViewState; patch: Patch; selectArea: (a: Area) => void; updating: boolean } | null>(null);
+export const RequestedView = createContext<{ view: ViewState; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; updating: boolean } | null>(null);
 
 export function useRequestedView() {
   const v = useContext(RequestedView);

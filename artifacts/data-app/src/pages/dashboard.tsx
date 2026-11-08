@@ -8,7 +8,8 @@ import {
   type AreaStat, type AreaTrendPoint, type GranularityParameter, type YearRange,
 } from "@workspace/api-client-react";
 import { Sun, Moon, Printer, X, Info, MapPin } from "lucide-react";
-import { useViewState, type MapLevel, type MapMode, type ViewState } from "@/lib/view-state";
+import { useViewState, viewQuery, type MapLevel, type MapMode, type ViewState } from "@/lib/view-state";
+import { areaProps, openProps, track, type AreaVia } from "@/lib/analytics";
 import { areaChange, areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
 import { arrLabel, rangeLabel, longMonthLabel, num, sqmOrTooFew, pct, houseShareLabel } from "@/lib/fmt";
@@ -52,15 +53,37 @@ function ViewHost(props: DatasetProps) {
   const [view, patch, movedTo] = useViewState(props.datasetFrom, props.datasetTo);
   const [choices, setChoices] = useState<PanelChoices>({ smooth: null, sortBy: "date", sortDir: "desc" });
   const { shown, updating } = useShownView(view, choices);
+  // The names of the Quartiers and Communes, for analytics. The panels load the same boundaries, so they are fetched once.
+  const qB = useGetQuartierBoundaries();
+  const communeB = useGetCommuneBoundaries();
+  const names = useMemo(() => new Map([...(qB.data?.features ?? []), ...(communeB.data?.features ?? [])].map((f) => {
+    const p = (f as { properties: { id: string; name: string } }).properties;
+    return [String(p.id), p.name];
+  })), [qB.data, communeB.data]);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const namesRef = useRef(names);
+  namesRef.current = names;
   // A click on the selected Area clicks it off, back to Paris. While the page loads, the panels do not yet show the
-  // requested Area as selected, so a second click on it does nothing. A ref keeps selectArea stable.
+  // requested Area as selected, so a second click on it does nothing. Refs keep selectArea stable.
   const updatingRef = useRef(updating);
   updatingRef.current = updating;
-  const selectArea = useCallback((a: Area) => {
-    const clickOff = !updatingRef.current;
+  const select = useCallback((a: Area, via: AreaVia, clickOff: boolean) => {
+    const next = areaChange(viewRef.current.area, a, clickOff).area;
+    if (next) track("select-area", { ...areaProps(next, namesRef.current), via });
     patch((s) => areaChange(s.area, a, clickOff));
   }, [patch]);
-  const selectAreaOnly = useCallback((a: Area) => patch((s) => areaChange(s.area, a, false)), [patch]);
+  const selectArea = useCallback((a: Area, via: AreaVia) => select(a, via, !updatingRef.current), [select]);
+  const selectAreaOnly = useCallback((a: Area, via: AreaVia) => select(a, via, false), [select]);
+  // The Selection a Visitor arrives with, once, when a link or bookmark carries settings. It waits for the Area's name.
+  const firstView = useRef(view);
+  const opened = useRef(false);
+  const nameLoading = (firstView.current.area.kind === "q" && qB.isPending) || (firstView.current.area.kind === "commune" && communeB.isPending);
+  useEffect(() => {
+    if (opened.current || nameLoading) return;
+    opened.current = true;
+    if (viewQuery(firstView.current) !== "") track("open", openProps(firstView.current, names));
+  }, [nameLoading, names]);
   const requested = useMemo(() => ({ view, patch, selectArea, updating }), [view, patch, selectArea, updating]);
   const panelChoices = useMemo(() => ({ choices, setChoices }), [choices]);
   return (
@@ -73,7 +96,7 @@ function ViewHost(props: DatasetProps) {
 }
 
 const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, releaseMonth, years, view, patch, selectArea, selectAreaOnly, movedTo }: DatasetProps & {
-  view: ViewState; patch: Patch; selectArea: (a: Area) => void; selectAreaOnly: (a: Area) => void; movedTo: { from?: string; to?: string } | null;
+  view: ViewState; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; selectAreaOnly: (a: Area, via: AreaVia) => void; movedTo: { from?: string; to?: string } | null;
 }) {
   const { ptype, area, from, to, mapMode, mapLevel, rank } = view;
   const [isDark, setIsDark] = useState(false);
@@ -154,18 +177,22 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
     return m == null ? "transparent" : scale.color(m);
   }, [areaMedians, scale]);
 
-  const selectRow = useCallback((id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }), [rank, selectArea]);
-  // Stable callbacks, so the memoised panels redraw only when their data changes.
-  const setMode = useCallback((m: MapMode) => patch({ mapMode: m }), [patch]);
-  const setLevel = useCallback((l: MapLevel) => patch({ mapLevel: l }), [patch]);
-  const setRank = useCallback((r: RankGroup) => patch({ rank: r }), [patch]);
-  const setGran = useCallback((g: GranularityParameter) => patch({ gran: g }), [patch]);
-  const selectFeature = useCallback((p: MapFeature) => selectArea(featureArea(p)), [selectArea]);
+  const selectRow = useCallback((id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }, "heatmap"), [rank, selectArea]);
+  // Stable callbacks, so the memoised panels redraw only when their data changes. The Segmented buttons that call
+  // them skip a click on the option already chosen, so each event records a change.
+  const setMode = useCallback((m: MapMode) => { track("change-map-mode", { mode: m }); patch({ mapMode: m }); }, [patch]);
+  const setLevel = useCallback((l: MapLevel) => { track("change-map-level", { level: l }); patch({ mapLevel: l }); }, [patch]);
+  const setRank = useCallback((r: RankGroup) => { track("change-ranking-group", { group: r }); patch({ rank: r }); }, [patch]);
+  const setGran = useCallback((g: GranularityParameter) => { track("change-granularity", { gran: g }); patch({ gran: g }); }, [patch]);
+  const selectFeature = useCallback((p: MapFeature) => selectArea(featureArea(p), "map"), [selectArea]);
+  const selectDot = useCallback((a: Area) => selectAreaOnly(a, "dot"), [selectAreaOnly]);
+  const selectFromRanking = useCallback((a: Area) => selectArea(a, "ranking"), [selectArea]);
+  const selectFromSales = useCallback((a: Area) => selectArea(a, "sales-list"), [selectArea]);
   const { refetch: refetchArr } = byArr, { refetch: refetchCommune } = byCommune, { refetch: refetchHeat } = heat;
   const retryStats = useCallback(() => { refetchArr(); refetchCommune(); }, [refetchArr, refetchCommune]);
   const retryHeat = useCallback(() => { refetchHeat(); refetchArr(); refetchCommune(); }, [refetchHeat, refetchArr, refetchCommune]);
-  const selectQuartierName = useCallback((name: string) => { const q = quartiers.find((x) => x.name === name); if (q) selectArea({ kind: "q", id: q.id }); }, [quartiers, selectArea]);
-  const showTravel = useCallback((p: string) => { setTravel(p); patch({ mapMode: "level" }); }, [patch]);
+  const selectQuartierName = useCallback((name: string) => { const q = quartiers.find((x) => x.name === name); if (q) selectArea({ kind: "q", id: q.id }, "sales-list"); }, [quartiers, selectArea]);
+  const showTravel = useCallback((p: string) => { track("time-travel", { via: "heatmap-column" }); setTravel(p); patch({ mapMode: "level" }); }, [patch]);
 
   const communeGroup = groupOfArea(area);
   const areaName = area.kind === "department" ? DEPARTMENT_NAMES[area.id]
@@ -196,8 +223,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           </div>
           <div className="flex items-center gap-2 print:hidden">
             <RefreshControl />
-            <button onClick={() => window.print()} data-testid="button-pdf" aria-label="Print or save as PDF" title="Print or save as PDF" className={`flex items-center justify-center w-8 h-8 rounded-md ${btnCls}`}><Printer className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setIsDark((d) => !d)} data-testid="button-theme" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} className={`flex items-center justify-center w-8 h-8 rounded-md ${btnCls}`}>{isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}</button>
+            <button onClick={() => { track("print"); window.print(); }} data-testid="button-pdf" aria-label="Print or save as PDF" title="Print or save as PDF" className={`flex items-center justify-center w-8 h-8 rounded-md ${btnCls}`}><Printer className="w-3.5 h-3.5" /></button>
+            <button onClick={() => { track("toggle-dark-mode", { on: !isDark }); setIsDark((d) => !d); }} data-testid="button-theme" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} className={`flex items-center justify-center w-8 h-8 rounded-md ${btnCls}`}>{isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}</button>
           </div>
         </header>
 
@@ -239,9 +266,9 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
               statsLoading={byArr.isLoading || byCommune.isLoading} statsError={byArr.isError || byCommune.isError}
               retryStats={retryStats} arrTrend={arrTrend} communeTrend={communeTrend} trendFetching={arrTrendQ.isFetching || communeTrendQ.isFetching}
               arrBounds={arrB.data} qBounds={qB.data} communeBounds={communeB.data} scale={scale}
-              travel={travel} setTravel={setTravel} onSelect={selectFeature} onSelectArea={selectAreaOnly} />
+              travel={travel} setTravel={setTravel} onSelect={selectFeature} onSelectArea={selectDot} />
             <Ranking stats={rankStats} trend={heatData} loading={rankLoading} fetching={byArr.isFetching || byCommune.isFetching || heat.isFetching} error={rankError}
-              retry={retryStats} scale={scale} selId={selId} onSelect={selectArea}
+              retry={retryStats} scale={scale} selId={selId} onSelect={selectFromRanking}
               rank={rank} onRank={setRank} ptype={ptype} isDark={isDark} />
           </div>
 
@@ -252,7 +279,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
               <p className="text-[14px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{areaKicker && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
             </div>
             {area.kind !== "paris" && (
-              <button onClick={() => selectArea({ kind: "paris" })} data-testid="button-clear-area"
+              <button onClick={() => selectArea({ kind: "paris" }, "back-link")} data-testid="button-clear-area"
                 className="h-8 px-3 rounded-md border border-primary/40 text-primary text-[13px] flex items-center gap-1.5 hover:bg-primary/5 transition-colors print:hidden">
                 <X className="w-3.5 h-3.5" />Back to All Paris
               </button>
@@ -288,7 +315,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           </div>
 
           <Transactions selection={selection} scopeLabel={scopeLabel} scale={scale.color} areaColor={areaColor} isDark={isDark}
-            onSelectArea={selectArea}
+            onSelectArea={selectFromSales}
             onSelectQuartierName={selectQuartierName} />
         </main>
 

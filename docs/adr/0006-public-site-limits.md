@@ -10,6 +10,8 @@ The site is public, and the DGFiP states these conditions for DVF: the file cont
 - **No search engines.** The whole site blocks indexing, because search engines can read pages drawn by JavaScript, including the sales list. Visitors reach the site through links.
 - **A private API.** The API serves only this site. It has no open CORS, it has rate limits, it caps the records in one response, and exports cover only what is on screen. This makes bulk copying harder but cannot prevent it.
 
+Analytics events never carry data about a single Sale, such as its id, street, price or position. Data sent to the analytics server cannot be taken back.
+
 ## Accepted risk: a Sale can still be matched
 
 Removing the `id_mutation` stops the simple join to the public DVF file. A Visitor can still match a Sale, because date, price, surface and street together identify 404,405 of the 404,582 Sales uniquely. We accept this risk before launch, because hiding those details would remove what the site is for. The DGFiP condition against indirect re-identification is therefore not fully met by this choice.

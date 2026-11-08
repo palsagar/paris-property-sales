@@ -105,13 +105,16 @@ Build the dashboard and serve `artifacts/data-app/dist/public` from any static h
 | `STATIC_DIR` | API server | The folder with the built dashboard. If it is not set, the server provides only the API. |
 | `NODE_ENV` | API server | Use `production`. |
 | `LOG_LEVEL` | API server | Optional. The default is `info`. |
+| `UMAMI_SCRIPT_URL` | API server | Optional. The address of the Umami `script.js`, for example `https://stats.example.fr/script.js`. With `UMAMI_WEBSITE_ID`, the server adds the Umami script to the dashboard's page. Without both, the site sends no analytics. |
+| `UMAMI_WEBSITE_ID` | API server | Optional. The website ID from Umami's settings. |
+| `UMAMI_DOMAINS` | API server | Optional. A comma-separated list of host names, for example `prix.example.fr`. Umami then counts only visits to these hosts. |
 | `BASE_PATH` | Dashboard build | The URL prefix of the dashboard. This variable is required at build time. |
 
 ## Things to know
 
 - **Startup:** the server pre-computes the 1,683 responses of each Area's default view when it starts, which takes about 15 seconds. The API answers during that time, but the first requests can be slower.
 - **Memory:** the container used about 315 to 340 MiB after the warm-up finished, measured three times with Docker on the 404,582 Sales. Under load it needs more. In a test of 120 requests that were not in the cache, three quarters of them `/sales/points` for the whole city with different `from` dates and the rest `/sales/summary`, sent 10, 20 and 40 at a time, every request succeeded in every run. A container limited to 1 GB survived all three runs, with a peak of 527 to 543 MiB. With no limit, the peak was 760 to 784 MiB. Before the 5,000 Sale cap on `/sales/points`, the container limited to 1 GB was killed in all three runs. The peaks are the container's `memory.peak`, which includes the file cache. Each setting ran once, with Docker on Apple Silicon. Give the container at least 3 GB.
-- **External services:** the browser loads fonts from Google Fonts and map tiles from Esri, so it needs internet access to both. To self-host the fonts, replace the `@import url(...)` line at the top of `artifacts/data-app/src/index.css`. To use another map provider, replace the tile URL in `artifacts/data-app/src/components/sales-map.tsx`. Check Esri's terms of use for your level of traffic.
+- **External services:** the browser loads fonts from Google Fonts and map tiles from Esri, so it needs internet access to both. To self-host the fonts, replace the `@import url(...)` line at the top of `artifacts/data-app/src/index.css`. To use another map provider, replace the tile URL in `artifacts/data-app/src/components/sales-map.tsx`. Check Esri's terms of use for your level of traffic. When the `UMAMI_` variables are set, the browser also contacts that Umami server. See "Analytics" in `docs/architecture.md`.
 - **Coverage:** the data covers the latest DVF release, and the dashboard shows its first and last dates. Prices are nominal euros, not adjusted for inflation.
 - **Which sales are included:** a sale in the dataset is one DVF "Vente" transaction with exactly one apartment or house and no commercial premises. It costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface, and has a price of 1,000 to 35,000 EUR/m². These rules leave out some residential transactions, and the data note in the app shows how many.
 
