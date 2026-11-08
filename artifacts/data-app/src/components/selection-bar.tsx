@@ -11,13 +11,14 @@ import { DEPARTMENT_NAMES, type Area } from "@/lib/areas";
 import { useRequestedView } from "@/lib/shown-view";
 import { track, typeName } from "@/lib/analytics";
 import type { ViewState } from "@/lib/view-state";
+import { t } from "@/lib/i18n/messages";
 
-const TYPES: [PropertyTypeParameter, string][] = [["all", "All homes"], ["Appartement", "Apartments"], ["Maison", "Houses"]];
+const types = (): [PropertyTypeParameter, string][] => (["all", "Appartement", "Maison"] as const).map((v) => [v, t().types[v]]);
 
 /** The name of any Area, from the names the page already has. */
 export function areaLabel(a: Area, qById: Map<string, QMeta>, communes: CommuneMeta[]): string {
   switch (a.kind) {
-    case "paris": return "All Paris";
+    case "paris": return t().fmt.allParis;
     case "arr": return `${arrLabel(a.arr)} arrondissement`;
     case "q": return qById.get(a.id)?.name ?? "Quartier";
     case "commune": return communes.find((c) => c.id === a.id)?.name ?? "Commune";
@@ -27,10 +28,11 @@ export function areaLabel(a: Area, qById: Map<string, QMeta>, communes: CommuneM
 
 /** The Period in words: a preset's name when it is one, else its months. */
 export function periodLabel(from: string | undefined, to: string | undefined, datasetFrom: string, datasetTo: string, years: YearRange[], short = false): string {
-  if (!from && !to) return short ? "All dates" : `All dates · ${rangeLabel(datasetFrom, datasetTo)}`;
+  const s = t().selection;
+  if (!from && !to) return short ? s.allDates : `${s.allDates} · ${rangeLabel(datasetFrom, datasetTo)}`;
   const year = years.find((y) => y.from === from && y.to === to);
   if (year) return year.label;
-  if (from === monthsBefore(datasetTo, 11) && to === datasetTo) return short ? "Last 12 months" : `Last 12 months · ${rangeLabel(from, to)}`;
+  if (from === monthsBefore(datasetTo, 11) && to === datasetTo) return short ? s.last12 : `${s.last12} · ${rangeLabel(from, to)}`;
   return rangeLabel(from ?? datasetFrom, to ?? datasetTo);
 }
 
@@ -53,10 +55,12 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
   const name = areaLabel(area, qById, communes);
   const period = periodLabel(from, to, datasetFrom, datasetTo, years);
-  const typeText = TYPES.find(([v]) => v === ptype)![1];
+  const tx = t();
+  const TYPES = types();
+  const typeText = tx.types[ptype];
   const setType = (v: PropertyTypeParameter) => { if (v !== ptype) track("select-property-type", { type: typeName(v) }); patch({ ptype: v }); };
   const setPeriod = (f?: string, t?: string) => patch({ from: f, to: t });
-  const status = updating ? "Updating" : count != null ? `${num(count)} sales` : "";
+  const status = updating ? tx.selection.updating : count != null ? tx.sales(num(count), count) : "";
 
   return (
     <div className="sticky top-0 z-30 -mx-4 md:-mx-8 bg-background border-y print:hidden" data-testid="selection-bar">
@@ -64,27 +68,27 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
       <div className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-2 px-8 py-2.5">
         <Popover open={areaOpen} onOpenChange={setAreaOpen}>
           <PopoverTrigger asChild>
-            <FieldButton icon={<MapPin className="w-[18px] h-[18px]" />} label="Area" value={name} className="w-[min(300px,32vw)]" data-testid="button-area" aria-haspopup="dialog" />
+            <FieldButton icon={<MapPin className="w-[18px] h-[18px]" />} label={tx.selection.area} value={name} className="w-[min(300px,32vw)]" data-testid="button-area" aria-haspopup="dialog" />
           </PopoverTrigger>
-          <PopoverContent align="start" sideOffset={8} className="w-[440px] p-4 rounded-xl data-[state=closed]:animate-none" aria-label="Choose an area">
+          <PopoverContent align="start" sideOffset={8} className="w-[440px] p-4 rounded-xl data-[state=closed]:animate-none" aria-label={tx.selection.chooseArea}>
             <AreaPicker quartiers={quartiers} communes={communes} area={area} selArr={selArr} autoFocus
               onSelect={(a, via) => { selectArea(a, via); setAreaOpen(false); }} />
           </PopoverContent>
         </Popover>
-        <Segmented label="Property type" testId="filter-type" value={ptype} onChange={setType} options={TYPES} className="h-[52px] items-center px-1" />
+        <Segmented label={tx.selection.propertyType} testId="filter-type" value={ptype} onChange={setType} options={TYPES} className="h-[52px] items-center px-1" />
         <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
           <PopoverTrigger asChild>
-            <FieldButton icon={<CalendarDays className="w-[18px] h-[18px]" />} label="Period" className="w-[min(340px,34vw)]" data-testid="button-period" aria-haspopup="dialog"
+            <FieldButton icon={<CalendarDays className="w-[18px] h-[18px]" />} label={tx.selection.period} className="w-[min(340px,34vw)]" data-testid="button-period" aria-haspopup="dialog"
               value={<><span className="hidden xl:inline">{period}</span><span className="xl:hidden">{periodLabel(from, to, datasetFrom, datasetTo, years, true)}</span></>} />
           </PopoverTrigger>
-          <PopoverContent align="start" sideOffset={8} className="w-[540px] max-w-[calc(100vw-32px)] p-4 rounded-xl" aria-label="Choose a period">
+          <PopoverContent align="start" sideOffset={8} className="w-[540px] max-w-[calc(100vw-32px)] p-4 rounded-xl" aria-label={tx.selection.choosePeriod}>
             <TimeControl chartView={chartView} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
               onChange={setPeriod} isDark={isDark} status={status} />
           </PopoverContent>
         </Popover>
         <p role="status" aria-live="polite" className="ml-auto flex items-center gap-2 text-[14px] text-muted-foreground">
-          {updating ? <span className="updating-label inline-flex items-center gap-2" data-testid="text-updating"><Loader2 className="w-4 h-4 animate-spin text-primary" aria-hidden />Updating</span>
-            : count != null ? <><span className="font-num font-medium text-foreground">{num(count)}</span>sales in this Selection</> : null}
+          {updating ? <span className="updating-label inline-flex items-center gap-2" data-testid="text-updating"><Loader2 className="w-4 h-4 animate-spin text-primary" aria-hidden />{tx.selection.updating}</span>
+            : count != null ? <><span className="font-num font-medium text-foreground">{num(count)}</span>{tx.selection.inSelection}</> : null}
         </p>
       </div>
 
@@ -99,35 +103,35 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
                 <span className="text-[14px] text-muted-foreground truncate">{typeText} · {periodLabel(from, to, datasetFrom, datasetTo, years, true)}</span>
               </span>
               <span className="inline-flex items-center gap-1.5 h-11 px-2.5 rounded-lg bg-foreground text-background text-[14px] font-medium shrink-0">
-                <SlidersHorizontal className="w-4 h-4" aria-hidden />Change
+                <SlidersHorizontal className="w-4 h-4" aria-hidden />{tx.selection.change}
               </span>
             </button>
           </DrawerTrigger>
           <DrawerContent className="max-h-[92dvh] bg-card rounded-t-2xl shadow-lg" aria-describedby="selection-sheet-desc">
             <div className="flex items-center justify-between pl-4 pr-2 pt-1 pb-2 border-b">
-              <DrawerTitle className="font-display text-[20px] font-bold tracking-normal">Choose what to show</DrawerTitle>
-              <DrawerClose className={iconBtnCls} aria-label="Close"><X className="w-[22px] h-[22px]" aria-hidden /></DrawerClose>
+              <DrawerTitle className="font-display text-[20px] font-bold tracking-normal">{tx.selection.sheetTitle}</DrawerTitle>
+              <DrawerClose className={iconBtnCls} aria-label={tx.selection.close}><X className="w-[22px] h-[22px]" aria-hidden /></DrawerClose>
             </div>
-            <DrawerDescription id="selection-sheet-desc" className="sr-only">Choose an area, a property type and a period. The page behind updates as you choose.</DrawerDescription>
+            <DrawerDescription id="selection-sheet-desc" className="sr-only">{tx.selection.sheetDesc}</DrawerDescription>
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-6 flex flex-col gap-7" data-vaul-no-drag>
               <fieldset className="flex flex-col gap-2">
-                <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">AREA</legend>
+                <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">{tx.selection.areaLegend}</legend>
                 <AreaPicker quartiers={quartiers} communes={communes} area={area} selArr={selArr} onSelect={(a, via) => selectArea(a, via)} />
               </fieldset>
               <fieldset>
-                <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">PROPERTY</legend>
-                <Segmented label="Property type" testId="sheet-type" value={ptype} onChange={setType} options={TYPES} stretch tall />
+                <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">{tx.selection.propertyLegend}</legend>
+                <Segmented label={tx.selection.propertyType} testId="sheet-type" value={ptype} onChange={setType} options={TYPES} stretch tall />
               </fieldset>
               <fieldset>
-                <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">PERIOD</legend>
+                <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">{tx.selection.periodLegend}</legend>
                 <TimeControl chartView={chartView} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
                   onChange={setPeriod} isDark={isDark} tall />
               </fieldset>
             </div>
             <div className="px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))] border-t flex flex-col gap-2">
-              <p className="text-[14px] text-muted-foreground text-center">The page behind updates as you choose.</p>
+              <p className="text-[14px] text-muted-foreground text-center">{tx.selection.behind}</p>
               <DrawerClose className={primaryBtnCls} data-testid="button-sheet-done">
-                {updating ? "Updating…" : count != null ? `Show ${num(count)} sales` : "Done"}
+                {updating ? tx.selection.updatingDots : count != null ? tx.selection.show(tx.sales(num(count), count)) : tx.selection.done}
               </DrawerClose>
             </div>
           </DrawerContent>

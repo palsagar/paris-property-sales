@@ -98,3 +98,17 @@ test("openProps describes the Selection of a link, with the Period as months", (
   assert.equal(all.type, "all");
   assert.ok(!("from" in all) && !("to" in all));
 });
+
+test("areaProps is the same in both languages", async () => {
+  const { setLang } = await import("./i18n/language");
+  const names = new Map<string, string>();
+  const areas = [{ kind: "arr", arr: 11 }, { kind: "paris" }, { kind: "department", id: "93" }] as const;
+  const view = parseView("?arr=11&type=Appartement");
+  setLang("en");
+  const en = { areas: areas.map((a) => areaProps(a, names)), open: openProps(view, names).type };
+  setLang("fr");
+  const fr = { areas: areas.map((a) => areaProps(a, names)), open: openProps(view, names).type };
+  setLang("en");
+  assert.deepEqual(fr, en);
+  assert.equal(en.open, "apartment");
+});

@@ -7,6 +7,7 @@ import { dotTooltip, type SaleDot } from "@/lib/dots";
 import { featureId, type MapFeature } from "@/lib/areas";
 import { arrLabel } from "@/lib/fmt";
 import { useChartColors } from "@/components/ui-bits";
+import { t } from "@/lib/i18n/messages";
 
 const reduceMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -77,9 +78,9 @@ function GestureGuard({ onHint }: { onHint: (text: string) => void }) {
         delta += e.deltaY * (e.deltaMode === 1 ? 100 / 3 : e.deltaMode === 2 ? 100 : 1);
         at = map.mouseEventToContainerPoint(e as unknown as MouseEvent);
         if (!frame) frame = requestAnimationFrame(zoom);
-      } else onHint(`Hold ${mac ? "⌘" : "Ctrl"} and scroll to zoom the map`);
+      } else onHint(t().map.zoomHint(mac ? "⌘" : "Ctrl"));
     };
-    const onTouch = (e: TouchEvent) => { if (e.touches.length === 1) onHint("Use two fingers to move the map"); };
+    const onTouch = (e: TouchEvent) => { if (e.touches.length === 1) onHint(t().map.touchHint); };
     el.addEventListener("wheel", onWheel, { passive: false });
     if (L.Browser.mobile) el.addEventListener("touchmove", onTouch, { passive: true });
     return () => { el.removeEventListener("wheel", onWheel); el.removeEventListener("touchmove", onTouch); cancelAnimationFrame(frame); };
@@ -189,7 +190,7 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
       scrollWheelZoom={false} dragging={!L.Browser.mobile} className="h-full w-full">
       <AutoResize />
       <GestureGuard onHint={showHint} />
-      <TileLayer key={isDark ? "d" : "l"} attribution="Tiles &copy; Esri" maxNativeZoom={16}
+      <TileLayer key={isDark ? "d" : "l"} attribution={t().map.tiles} maxNativeZoom={16}
         url={`https://server.arcgisonline.com/ArcGIS/rest/services/${isDark ? "Canvas/World_Dark_Gray_Base" : "Canvas/World_Light_Gray_Base"}/MapServer/tile/{z}/{y}/{x}`} />
       <FlyTo feature={focusFeature} />
       {bounds && (

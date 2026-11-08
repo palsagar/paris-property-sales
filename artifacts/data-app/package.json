@@ -9,7 +9,8 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "latency": "node e2e/latency.mjs"
+    "latency": "node e2e/latency.mjs",
+    "og-image": "node --import tsx scripts/og-image.ts"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

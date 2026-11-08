@@ -9,13 +9,14 @@ import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend, outlineBtnCls } from "@/components/ui-bits";
-import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
+import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, tooFew, houseShareLabel, houseShareWarning, bucketLabel } from "@/lib/fmt";
 import { groupDots, type SaleDot } from "@/lib/dots";
 import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
 import { pointParams, quartierStatParams, quartierTrendParams } from "@/lib/selection-queries";
 import type { MapLevel, MapMode } from "@/lib/view-state";
 import { track } from "@/lib/analytics";
+import { t } from "@/lib/i18n/messages";
 
 export const MapPanel = memo(function MapPanel(props: {
   isDark: boolean; ptype: PropertyTypeParameter; from?: string; to?: string; datasetFrom: string; datasetTo: string;
@@ -52,7 +53,7 @@ export const MapPanel = memo(function MapPanel(props: {
   const { periods, labels, byKey } = useMemo(() => {
     const byKey = new Map<string, { v: number | null; n: number; h: number | null }>();
     const per = new Map<string, string>();
-    for (const r of trendRows) { byKey.set(`${r.id}|${r.period}`, { v: r.medianPricePerSqm, n: r.count, h: r.houseShare }); per.set(r.period, r.label); }
+    for (const r of trendRows) { byKey.set(`${r.id}|${r.period}`, { v: r.medianPricePerSqm, n: r.count, h: r.houseShare }); per.set(r.period, bucketLabel(r.period, "quarter")); }
     const periods = [...per.keys()].sort();
     return { periods, labels: per, byKey };
   }, [trendRows]);
@@ -94,21 +95,22 @@ export const MapPanel = memo(function MapPanel(props: {
     const label = houseShareLabel(share), warning = houseShareWarning(share);
     return (label ? `<div>${label}</div>` : "") + (warning ? `<div class="pt-sub" style="white-space:normal;width:250px">${warning}</div>` : "");
   };
+  const mt = t().map;
   const tooltipFor = (id: string, p: MapFeature) => {
     const title = `<div class="pt-title">${escapeHtml(p.name)}</div>`;
     if (mode === "dots") return title;
-    const sub = p.group ? (p.group === "major" ? "Major town" : DEPARTMENT_NAMES[p.group as DepartmentId]) : p.id ? `${arrLabel(p.arr as number)} arrondissement` : "";
+    const sub = p.group ? (p.group === "major" ? t().page.majorTown : DEPARTMENT_NAMES[p.group as DepartmentId]) : p.id ? `${arrLabel(p.arr as number)} arrondissement` : "";
     const head = title + (sub ? `<div class="pt-sub">${sub}</div>` : "");
     if (travelOn) {
       const r = byKey.get(`${id}|${travel}`);
-      return head + `<div class="pt-em">4 quarters to ${travelLabel}</div>` + (r?.v != null ? `<div>Median <b>${sqm(r.v)}</b></div>` : `<div>${TOO_FEW}</div>`) + shareLines(r?.h) + (r ? `<div>${num(r.n)} sales</div>` : "");
+      return head + `<div class="pt-em">${mt.fourQuarters(travelLabel ?? "")}</div>` + (r?.v != null ? `<div>${mt.median(sqm(r.v))}</div>` : `<div>${tooFew()}</div>`) + shareLines(r?.h) + (r ? `<div>${t().sales(num(r.n), r.n)}</div>` : "");
     }
     const s = statById.get(id);
-    if (!s) return head + "<div>No sales in this period</div>";
-    return head + `<div class="pt-sub" style="margin-top:4px">${rangeLabel(ef, et)}</div>` + (s.medianPricePerSqm != null ? `<div>Median <b>${sqm(s.medianPricePerSqm)}</b></div>` : `<div>${TOO_FEW}</div>`) + shareLines(s.houseShare) +
-      (s.medianPrice != null ? `<div>Median price ${eur(s.medianPrice)}</div>` : "") + `<div>${num(s.count)} sales</div>` +
-      `<div>Change over the period <b>${s.changePct != null ? pct(s.changePct) : "not shown, too few sales"}</b></div>` +
-      (s.startMedianPricePerSqm != null && s.endMedianPricePerSqm != null ? `<div class="pt-sub">From ${num(s.startMedianPricePerSqm)} to ${num(s.endMedianPricePerSqm)} EUR/m²</div>` : "");
+    if (!s) return head + `<div>${mt.noSales}</div>`;
+    return head + `<div class="pt-sub" style="margin-top:4px">${rangeLabel(ef, et)}</div>` + (s.medianPricePerSqm != null ? `<div>${mt.median(sqm(s.medianPricePerSqm))}</div>` : `<div>${tooFew()}</div>`) + shareLines(s.houseShare) +
+      (s.medianPrice != null ? `<div>${mt.medianPrice(eur(s.medianPrice))}</div>` : "") + `<div>${t().sales(num(s.count), s.count)}</div>` +
+      `<div>${mt.changeOver(s.changePct != null ? pct(s.changePct) : mt.notShown)}</div>` +
+      (s.startMedianPricePerSqm != null && s.endMedianPricePerSqm != null ? `<div class="pt-sub">${mt.fromTo(num(s.startMedianPricePerSqm), num(s.endMedianPricePerSqm))}</div>` : "");
   };
 
   // A dot names and selects the Area recorded on its Sale, which the rounded position can place across a boundary.
@@ -143,13 +145,12 @@ export const MapPanel = memo(function MapPanel(props: {
   const csv = mode === "dots" ? items ?? [] : travelOn ? trendRows.filter((r) => r.period === travel) : stats;
 
   return (
-    <ChartCard testId="map" level={3} title={mode === "change" ? "Change in price per m², by area" : mode === "dots" ? "Individual sales on the map" : "Median price per m², by area"}
+    <ChartCard testId="map" level={3} title={mode === "change" ? mt.changeTitle : mode === "dots" ? mt.dotsTitle : mt.levelTitle}
       isDark={isDark} loading={loading} fetching={fetching} csv={csv as object[]} csvName={`map-${mode}-${level}.csv`}
-      desc={mode === "change" ? "The median of the last months of the Period against the first. Select an area to focus the page on it." :
-        mode === "dots" ? "Each dot holds the sales at one position, rounded to about 100 m. A larger dot holds more sales; its colour is their median price per m²." : "Paris and the communes around it. Select an area to focus the page on it."}
+      desc={mode === "change" ? mt.changeDesc : mode === "dots" ? mt.dotsDesc : mt.levelDesc}
       controls={<>
-        <Segmented label="Map shows" testId="map-mode" value={mode} onChange={setMode} options={[["level", "Price level"], ["change", "Price change"], ["dots", "Sales"]]} />
-        {mode !== "dots" && <Segmented label="Map detail" testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
+        <Segmented label={mt.shows} testId="map-mode" value={mode} onChange={setMode} options={[["level", mt.level], ["change", mt.change], ["dots", mt.dots]]} />
+        {mode !== "dots" && <Segmented label={mt.detail} testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
       </>}>
       {/* isolate: Leaflet's z-indexes (400 to 1000) stay inside the map, so the sticky Selection bar stays on top of it. */}
       <div className="relative isolate h-[360px] md:h-[clamp(380px,calc(100dvh-320px),560px)] rounded-lg overflow-hidden border">
@@ -162,39 +163,39 @@ export const MapPanel = memo(function MapPanel(props: {
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
         {mode === "dots" && items && total > items.length && (
           <div className="absolute left-3 top-3 z-[400] rounded-lg bg-card border px-3 py-2 text-[13px] max-w-[260px] shadow-md" data-testid="text-dots-cap">
-            Showing the newest {num(items.length)} of {num(total)} sales with a known position. Choose a shorter period or a smaller area to see more.
+            {mt.cap(num(items.length), num(total))}
           </div>
         )}
       </div>
       {/* The legend sits under the map, not on it: the map keeps its area and the thresholds can be read at 12 px. */}
       <div className="mt-3">
         {mode === "change" ? (
-          <GradientLegend title={<>Change in price per m², {rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} className="w-full sm:max-w-[420px]" />
+          <GradientLegend title={<>{mt.changeLegend}{rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} className="w-full sm:max-w-[420px]" />
         ) : (
-          <StepLegend title={<>Median price per m², EUR, <span className="font-semibold text-foreground">{travelLabel ? `4 quarters to ${travelLabel}` : mode === "dots" ? "per dot" : rangeLabel(ef, et)}</span>. Each colour holds about one ninth of the areas.</>}
+          <StepLegend title={<>{mt.levelLegend}<span className="font-semibold text-foreground">{travelLabel ? mt.fourQuarters(travelLabel) : mode === "dots" ? mt.perDot : rangeLabel(ef, et)}</span>{mt.ninth}</>}
             scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
         )}
-        {mode === "dots" && items && total <= items.length && <div className="text-[13px] mt-1 text-muted-foreground font-num">{num(total)} sales plotted</div>}
+        {mode === "dots" && items && total <= items.length && <div className="text-[13px] mt-1 text-muted-foreground font-num">{mt.plotted(num(total))}</div>}
       </div>
       {mode === "level" && (
         <div className="mt-3 pt-3 border-t flex flex-wrap sm:flex-nowrap items-center gap-3 print:hidden" data-testid="time-travel">
           <button onClick={() => { if (!playing) track("time-travel", { via: "play" }); if (!playing && (!travelOn || travel === periods[periods.length - 1])) setTravel(periods[0]); setPlaying((p) => !p); }}
-            disabled={periods.length < 2} data-testid="button-play" aria-label={playing ? "Pause" : "Play through the quarters"}
+            disabled={periods.length < 2} data-testid="button-play" aria-label={playing ? "Pause" : mt.play}
             className="h-10 w-10 shrink-0 rounded-full bg-foreground text-background flex items-center justify-center transition-transform active:scale-95 disabled:opacity-40">
             {playing ? <Pause className="w-4 h-4" aria-hidden /> : <Play className="w-4 h-4 ml-0.5" aria-hidden />}
           </button>
           <div className="flex-1 min-w-[160px]">
             <input type="range" min={0} max={Math.max(0, periods.length - 1)} value={travelOn ? periods.indexOf(travel!) : periods.length - 1}
               onChange={(e) => { travelMoved.current = true; setPlaying(false); setTravel(periods[Number(e.target.value)]); }}
-              onPointerUp={endTravelMove} onKeyUp={endTravelMove} className="w-full h-6 accent-[hsl(var(--primary))]" data-testid="slider-travel" aria-label="Quarter shown on the map" />
+              onPointerUp={endTravelMove} onKeyUp={endTravelMove} className="w-full h-6 accent-[hsl(var(--primary))]" data-testid="slider-travel" aria-label={mt.slider} />
             <div className="flex justify-between text-[12px] text-muted-foreground font-num"><span>{labels.get(periods[0] ?? "")}</span><span>{labels.get(periods[periods.length - 1] ?? "")}</span></div>
           </div>
           <div className="sm:w-[132px] sm:text-right" aria-live="polite">
-            <div className="font-num font-medium text-[15px] leading-tight">{travelLabel ?? "Whole range"}</div>
-            <div className="text-[13px] text-muted-foreground">{travelLabel ? "4 quarters ending here" : "Median for the Period"}</div>
+            <div className="font-num font-medium text-[15px] leading-tight">{travelLabel ?? mt.whole}</div>
+            <div className="text-[13px] text-muted-foreground">{travelLabel ? mt.ending : mt.forPeriod}</div>
           </div>
           <button onClick={() => { setPlaying(false); setTravel(null); }} disabled={!travelOn} data-testid="button-travel-reset"
-            className={outlineBtnCls}><RotateCcw className="w-4 h-4" aria-hidden />Back to range average</button>
+            className={outlineBtnCls}><RotateCcw className="w-4 h-4" aria-hidden />{mt.reset}</button>
         </div>
       )}
     </ChartCard>

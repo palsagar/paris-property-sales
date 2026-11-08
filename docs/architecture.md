@@ -92,6 +92,8 @@ The dashboard is a React application with one page.
 - `e2e/latency.mjs` measures each Selection change at a 2x CPU slowdown and checks the behaviour above. A change takes at most 200 ms of main-thread work from the moment it is asked for, which for the time slider is the release of the handle. The drag's own frames, about 50 to 60 ms, and the map's fly-to on an Area change, about 60 to 110 ms, come on top, and the test reports them apart. Reduced motion turns the fly-to off.
 - Each panel in `components/` loads its own data through the generated hooks. React Query keeps responses for 5 minutes without fetching them again.
 - Charts use Recharts, and the map uses Leaflet.
+- Every visible text is in `lib/i18n/en.ts` and `lib/i18n/fr.ts`. A new text goes into both files. `fr.ts` has the type of `en.ts`, so the type check finds a missing French text, and `messages.test.ts` finds a French text that is still English. The French terms come from `CONTEXT.md`. Area names, street names and "11e arrondissement" stay the same in both languages, and so do numbers and money ("12 000 EUR").
+- The page starts in the Visitor's saved language (`localStorage` key `lang`). Without one, it starts in French when the browser's first language is French, and in English otherwise. The language is never in the URL. A change redraws the whole page under a new React key, which resets the map's zoom and any open picker. The Selection is in the URL and the data is in the React Query cache, so nothing is fetched again. The client builds the year and quarter labels from their dates, so the API stays the same in both languages.
 - The browser currently loads fonts from Google Fonts and map tiles from Esri.
 
 The Vite development server has no proxy for `/api`, so the dashboard shows no data under `vite dev` until a proxy is added.
@@ -115,6 +117,10 @@ The site counts visits and the use of its controls with [Umami](https://umami.is
 | `copy-link` | `via`: clipboard or share. The link itself is never sent. |
 | `print` | None |
 | `toggle-dark-mode` | The new value |
+| `change-language` | `to`: en or fr |
+| `author-link` | `target`: site or github |
+
+An event carries the same values in both languages. For example, `select-area` sends `area: "Paris 11e"` and `open` sends `type: "apartment"` in French too, so the statistics do not split by language. Umami also records the page title. The title follows the language ("Paris & Suburbs Property Sales" or "Ventes immobilières à Paris et alentours"), so the page title report shows both titles.
 
 These are never sent:
 - anything about a single Sale, such as its id, street, price or position, because data sent to Umami cannot be taken back (see [decision record 6](adr/0006-public-site-limits.md))
@@ -145,7 +151,9 @@ These steps have not yet run on a real Coolify server. A local test covered the 
 7. Leave the health check in the Coolify dashboard turned off. It needs `curl` or `wget` in the image, and this image has neither. The Dockerfile has its own health check, which calls `/api/healthz` through Node.
 8. Give the application at least 3 GB of memory. The container used about 315 to 340 MiB after the warm-up finished, measured three times with Docker on the 404,582 Sales. Under load it needs more. In a test of 120 requests that were not in the cache, three quarters of them `/sales/points` for the whole city with different `from` dates and the rest `/sales/summary`, sent 10, 20 and 40 at a time, every request succeeded in every run. A container limited to 1 GB survived all three runs, with a peak of 527 to 543 MiB. With no limit, the peak was 760 to 784 MiB. Before the 5,000 Sale cap on `/sales/points`, the container limited to 1 GB was killed in all three runs. The peaks are the container's `memory.peak`, which includes the file cache. Each setting ran once, with Docker on Apple Silicon.
 
-The image sets `PORT`, `STATIC_DIR` and `NODE_ENV`, so the application needs no environment variables in Coolify.
+The image sets `PORT`, `STATIC_DIR`, `NODE_ENV` and `SITE_URL` (`https://parism2.gpuphysics.dev`), so the application needs no environment variables in Coolify. Set `SITE_URL` in Coolify to override the public address. The server uses it for the absolute addresses of the link preview (`lib/pageMeta.ts`). Without a valid `SITE_URL`, link previews have no image, and the server logs a warning.
+
+Every response carries `X-Robots-Tag: noindex, nofollow`, and `index.html` has the same `robots` meta tag, so search engines do not index the site. `robots.txt` allows the page and disallows `/api/`, so the apps that draw link previews can read the page.
 
 ### Update the data
 
@@ -154,6 +162,7 @@ DGFiP publishes a DVF release each April and October. After each release:
 1. Run `uv run scripts/update_data.py` on your machine, as the [README](../README.md#update-the-data) explains.
 2. Run the `rsync` command in "First deployment" above.
 3. Restart the application in Coolify. The image does not need a rebuild.
+4. If the link preview's colours should follow the new release, run `pnpm --filter @workspace/data-app run og-image` against a local server with the new data, commit `artifacts/data-app/public/og-image.png`, and deploy. Apps such as WhatsApp keep a preview they have already shown.
 
 If a release needs a new image as well, copy the new file before the new image starts. The server stops at startup when the file has no release month.
 
@@ -163,7 +172,6 @@ Coolify's storage is not a backup, but the data does not need one. The scripts c
 
 The site is not ready for the public yet. These items must be complete first.
 
-- **Block search engines.** Change `robots.txt` and the `robots` meta tag, and block `/api` as well. Both currently allow indexing.
 - **Make the API private to the site.** Remove the open CORS setting, add rate limits, and limit exports to what is on screen. The cap on the records in one response is done: `/sales/points` returns at most 5,000 Sales, and a page of `/sales/transactions` at most 200. The rate limits need Express to trust Coolify's proxy, so that they see each Visitor's real IP address. Until then, many requests for valid but different large responses can push warmed entries out of the cache, which makes later requests slower but does not make them wrong. Many such requests at once can also stop the server, because each one holds its whole result in memory until it finishes. The 5,000 Sale cap reduces this risk, and the rate limits must bound it.
 - **Publish a legal notice and a privacy notice.** The privacy notice must cover any outside service that the browser still contacts. It must name Umami, say that it sets no cookies and records no data about a single Sale, and say that the site honours Do Not Track.
 - **Self-host the fonts and replace the Esri tiles.** We could not confirm that Esri's tile address can be used on a public site without an account. Choose a map provider with terms that clearly allow public use.
@@ -175,7 +183,6 @@ The site is not ready for the public yet. These items must be complete first.
 
 These items do not block launch.
 
-- French by default, with an English option.
 - A clear statement that the site gives no Valuation, and warnings for small samples.
 - Copy fixes: "Carrez or built surface" on the surface card, and "transactions" in the sales list.
 - A warning for a Change over a Period of less than 12 months.

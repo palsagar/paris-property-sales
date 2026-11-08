@@ -8,20 +8,27 @@ import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
 import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
 import { track } from "@/lib/analytics";
+import { t } from "@/lib/i18n/messages";
 
 /** The orders a phone offers in one menu, instead of tapping column heads. */
-const SORTS: [string, ListTransactionsSortBy, "asc" | "desc", string][] = [
-  ["date-desc", "date", "desc", "Newest first"], ["date-asc", "date", "asc", "Oldest first"],
-  ["price-desc", "price", "desc", "Price, highest first"], ["price-asc", "price", "asc", "Price, lowest first"],
-  ["pricePerSqm-desc", "pricePerSqm", "desc", "Price per m², highest first"], ["pricePerSqm-asc", "pricePerSqm", "asc", "Price per m², lowest first"],
-  ["surface-desc", "surface", "desc", "Surface, largest first"], ["surface-asc", "surface", "asc", "Surface, smallest first"],
+const SORTS: [string, ListTransactionsSortBy, "asc" | "desc"][] = [
+  ["date-desc", "date", "desc"], ["date-asc", "date", "asc"], ["price-desc", "price", "desc"], ["price-asc", "price", "asc"],
+  ["pricePerSqm-desc", "pricePerSqm", "desc"], ["pricePerSqm-asc", "pricePerSqm", "asc"], ["surface-desc", "surface", "desc"], ["surface-asc", "surface", "asc"],
 ];
+const sortLabels = () => {
+  const l = t().salesList;
+  return [l.newest, l.oldest, l.priceHigh, l.priceLow, l.sqmHigh, l.sqmLow, l.surfaceLarge, l.surfaceSmall];
+};
 
-const COLS: { key: string; label: string; sort?: ListTransactionsSortBy; right?: boolean }[] = [
-  { key: "date", label: "Date", sort: "date" }, { key: "address", label: "Street" }, { key: "area", label: "Area" }, { key: "quartier", label: "Quartier" },
-  { key: "type", label: "Type" }, { key: "rooms", label: "Rooms", right: true }, { key: "surface", label: "Surface", sort: "surface", right: true },
-  { key: "price", label: "Price", sort: "price", right: true }, { key: "ppsqm", label: "Price / m²", sort: "pricePerSqm", right: true },
-];
+// "Date", "Quartier", "Type" and "Surface" are the same words in French.
+const columns = (): { key: string; label: string; sort?: ListTransactionsSortBy; right?: boolean }[] => {
+  const l = t().salesList;
+  return [
+    { key: "date", label: "Date", sort: "date" }, { key: "address", label: l.street }, { key: "area", label: l.area }, { key: "quartier", label: "Quartier" },
+    { key: "type", label: "Type" }, { key: "rooms", label: l.rooms, right: true }, { key: "surface", label: "Surface", sort: "surface", right: true },
+    { key: "price", label: l.price, sort: "price", right: true }, { key: "ppsqm", label: l.ppsqm, sort: "pricePerSqm", right: true },
+  ];
+};
 
 export const Transactions = memo(function Transactions({ selection: view, scopeLabel, areaName, scale, areaColor, onSelectArea, onSelectQuartierName, isDark }: {
   selection: Selection; scopeLabel: string; areaName: string; scale: (v: number) => string; areaColor: (id: string) => string;
@@ -54,21 +61,23 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
   };
   // A single Arrondissement or Commune fills the Area column with one value, so it is left out.
   const showArea = view.area.kind === "paris" || view.area.kind === "department";
-  const cols = COLS.filter((col) => col.key !== "area" || showArea);
-  const pageLabel = tx.data && tx.data.total > 0 ? `${num(page * PAGE + 1)}–${num(Math.min((page + 1) * PAGE, tx.data.total))} of ${num(tx.data.total)}` : "";
+  const l = t().salesList;
+  const cols = columns().filter((col) => col.key !== "area" || showArea);
+  const pageLabel = tx.data && tx.data.total > 0 ? l.range(num(page * PAGE + 1), num(Math.min((page + 1) * PAGE, tx.data.total)), num(tx.data.total)) : "";
+  const typeOf = (type: string) => (type === "Maison" ? l.house : l.apartment);
 
   return (
-    <ChartCard testId="transactions" title={`Sales in ${inArea(areaName)}`} isDark={isDark} loading={tx.isLoading} fetching={tx.isFetching}
-      desc={<>{tx.data ? `${num(tx.data.total)} sales, ${scopeLabel}. ` : ""}A Sale shows its street only, never a house number.</>} csv={tx.data?.items} csvName="transactions.csv">
+    <ChartCard testId="transactions" title={l.title(inArea(areaName, view.area.kind))} isDark={isDark} loading={tx.isLoading} fetching={tx.isFetching}
+      desc={l.desc(tx.data ? t().sales(num(tx.data.total), tx.data.total) : "", scopeLabel)} csv={tx.data?.items} csvName="transactions.csv">
       {tx.isError ? <ErrorState onRetry={() => tx.refetch()} /> : (
         <>
           {/* Phone: one card per Sale, sorted from a menu. */}
           <div className={`md:hidden transition-opacity ${tx.isFetching && !tx.isLoading ? "opacity-60" : ""}`}>
             <div className="flex items-center gap-2.5 mb-1">
-              <label htmlFor="sales-sort" className="text-[15px] font-medium whitespace-nowrap">Sort by</label>
+              <label htmlFor="sales-sort" className="text-[15px] font-medium whitespace-nowrap">{l.sortBy}</label>
               <select id="sales-sort" value={sortKey} onChange={(e) => sortTo(e.target.value)} data-testid="select-sort-sales"
                 className="flex-1 h-11 rounded-lg border border-control bg-card px-3 text-[16px]">
-                {SORTS.map(([k, , , l]) => <option key={k} value={k}>{l}</option>)}
+                {SORTS.map(([k], i) => <option key={k} value={k}>{sortLabels()[i]}</option>)}
               </select>
             </div>
             <ul data-testid="list-sales">
@@ -85,9 +94,9 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
                     <p className="font-num text-[13px] text-muted-foreground text-right whitespace-nowrap inline-flex items-center justify-end gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-[2px]" style={{ background: scale(t.pricePerSqm) }} aria-hidden />{num(t.pricePerSqm)} /m²
                     </p>
-                    <p className="col-span-2 text-[14px] text-muted-foreground">{t.type === "Maison" ? "House" : "Apartment"} · {t.rooms} room{t.rooms > 1 ? "s" : ""} · {num(t.surface)} m²</p>
+                    <p className="col-span-2 text-[14px] text-muted-foreground">{typeOf(t.type)} · {l.roomCount(t.rooms)} · {num(t.surface)} m²</p>
                   </li>
-                ); }) : <li className="py-10 text-center text-muted-foreground border-t">No sales match this selection. Try a longer period or a larger area.</li>}
+                ); }) : <li className="py-10 text-center text-muted-foreground border-t">{l.empty}</li>}
             </ul>
           </div>
           {/* Laptop: the table. */}
@@ -122,7 +131,7 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
                     <td className="px-3 py-2 max-w-[180px] truncate">
                       {t.quartierName ? <button onClick={() => onSelectQuartierName(t.quartierName!)} className="hover:underline hover:text-primary text-left">{t.quartierName}</button> : <span className="text-muted-foreground">-</span>}
                     </td>
-                    <td className="px-3 py-2"><span className={`text-[13px] px-2 py-0.5 rounded ${t.type === "Maison" ? "bg-rise-bg text-rise" : "bg-sunken"}`}>{t.type === "Maison" ? "House" : "Apartment"}</span></td>
+                    <td className="px-3 py-2"><span className={`text-[13px] px-2 py-0.5 rounded ${t.type === "Maison" ? "bg-rise-bg text-rise" : "bg-sunken"}`}>{typeOf(t.type)}</span></td>
                     <td className="px-3 py-2 text-right font-num text-[13px]">{t.rooms}</td>
                     <td className="px-3 py-2 text-right font-num text-[13px] whitespace-nowrap">{num(t.surface)} m²</td>
                     <td className="px-3 py-2 text-right font-num text-[13px] whitespace-nowrap">{eur(t.price)}</td>
@@ -131,17 +140,17 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
                     </td>
                   </tr>
                 ); }) : (
-                  <tr><td colSpan={cols.length} className="px-3 py-12 text-center text-muted-foreground">No sales match this selection. Try a longer period or another area.</td></tr>
+                  <tr><td colSpan={cols.length} className="px-3 py-12 text-center text-muted-foreground">{l.empty}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          <nav aria-label="Sales pages" className="flex items-center justify-between gap-2 mt-3 text-[14px] print:hidden">
-            <button disabled={page === 0} onClick={() => { track("page-sales", { page }); setPage((x) => x - 1); }} data-testid="button-prev" aria-label="Previous page" className={outlineBtnCls}>
-              <ChevronLeft className="w-4 h-4" aria-hidden /><span className="hidden sm:inline">Previous</span></button>
-            <span className="font-num text-muted-foreground" aria-live="polite">{pageLabel}<span className="hidden sm:inline" data-testid="text-page"> · page {page + 1} of {num(totalPages)}</span></span>
-            <button disabled={page + 1 >= totalPages} onClick={() => { track("page-sales", { page: page + 2 }); setPage((x) => x + 1); }} data-testid="button-next" aria-label="Next page" className={outlineBtnCls}>
-              <span className="hidden sm:inline">Next</span><ChevronRight className="w-4 h-4" aria-hidden /></button>
+          <nav aria-label={l.pages} className="flex items-center justify-between gap-2 mt-3 text-[14px] print:hidden">
+            <button disabled={page === 0} onClick={() => { track("page-sales", { page }); setPage((x) => x - 1); }} data-testid="button-prev" aria-label={l.previousPage} className={outlineBtnCls}>
+              <ChevronLeft className="w-4 h-4" aria-hidden /><span className="hidden sm:inline">{l.previous}</span></button>
+            <span className="font-num text-muted-foreground" aria-live="polite">{pageLabel}<span className="hidden sm:inline" data-testid="text-page">{l.page(page + 1, num(totalPages))}</span></span>
+            <button disabled={page + 1 >= totalPages} onClick={() => { track("page-sales", { page: page + 2 }); setPage((x) => x + 1); }} data-testid="button-next" aria-label={l.nextPage} className={outlineBtnCls}>
+              <span className="hidden sm:inline">{l.next}</span><ChevronRight className="w-4 h-4" aria-hidden /></button>
           </nav>
         </>
       )}

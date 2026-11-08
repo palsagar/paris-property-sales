@@ -23,8 +23,8 @@ const { datasetFrom, datasetTo, years } = await (await fetch(`${BASE}/api/sales/
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 /** One page with the counters the checks read: API requests in flight, cache misses, React commits, skeletons added. */
-async function openPage(path = "/", { umami = false, viewport = { width: 1440, height: 900 } } = {}) {
-  const ctx = await browser.newContext({ viewport, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
+async function openPage(path = "/", { umami = false, viewport = { width: 1440, height: 900 }, locale = "en-GB" } = {}) {
+  const ctx = await browser.newContext({ viewport, locale, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
   const page = await ctx.newPage();
   await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
   if (DIST) {
@@ -122,6 +122,26 @@ async function reveal(page, id) {
   await el.waitFor({ state: "visible" });
 }
 const click = async (page, id) => { await reveal(page, id); await page.click(`[data-testid="${id}"]`); };
+
+/**
+ * The English words left on a French page, inside the element with the given test id, or in the whole body for "body".
+ * It reads the visible text and every aria-label, title and placeholder.
+ */
+const ENGLISH = /\b(the|and|of|sales?|homes?|houses?|apartments?|price|median|period|area|too few|download|share|print|copy|link|light mode|dark mode|rooms?|quarter|data to|release|all paris)\b/i;
+async function frenchSweep(page, scope) {
+  return page.evaluate(([scope, src]) => {
+    const re = new RegExp(src, "i");
+    const roots = scope === "body" ? [document.body] : [...document.querySelectorAll(`[data-testid="${scope}"]`)];
+    const found = roots.length ? [] : [`no element ${scope}`];
+    for (const root of roots) {
+      for (const line of (root.innerText ?? "").split("\n")) if (re.test(line)) found.push(line.trim());
+      for (const el of [root, ...root.querySelectorAll("[aria-label],[title],[placeholder]")]) {
+        for (const a of ["aria-label", "title", "placeholder"]) { const v = el.getAttribute(a); if (v && re.test(v)) found.push(`${a}="${v}"`); }
+      }
+    }
+    return [...new Set(found)];
+  }, [scope, ENGLISH.source]);
+}
 
 /** Opens the Area picker and types a name. Only the Enter that follows belongs in a measure. */
 async function search(p, text) {
@@ -623,6 +643,217 @@ const sections = {
     const skip = await page.evaluate(() => ({ history: history.length, active: document.activeElement?.id }));
     check("skip link: it focuses the figures and adds no history entry", skip.history === histBefore && skip.active === "figures", { before: histBefore, ...skip });
     await p.ctx.close();
+
+    // The language: the browser's first language, a saved choice, and the Selection kept in the URL.
+    const langOf = (page) => page.evaluate(() => ({ html: document.documentElement.lang, title: document.title,
+      en: document.querySelector('[data-testid="lang-en"]')?.getAttribute("aria-pressed"), fr: document.querySelector('[data-testid="lang-fr"]')?.getAttribute("aria-pressed") }));
+    p = await openPage("/", { locale: "fr-FR" });
+    const frDefault = await langOf(p.page);
+    await p.ctx.close();
+    p = await openPage("/", { locale: "en-GB" });
+    const enDefault = await langOf(p.page);
+    check("lang-default: a French browser gets French, an English one English",
+      frDefault.html === "fr" && frDefault.fr === "true" && enDefault.html === "en" && enDefault.en === "true", { frDefault, enDefault });
+    await click(p.page, "lang-fr");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    const langSwitched = await langOf(p.page);
+    await p.page.reload({ waitUntil: "networkidle" });
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    const langReloaded = await langOf(p.page);
+    check("lang-switch: the switch sets French and it stays after a reload",
+      langSwitched.html === "fr" && langSwitched.title === "Ventes immobilières à Paris et alentours" && langReloaded.html === "fr" && langReloaded.fr === "true", { langSwitched, langReloaded });
+    await p.ctx.close();
+
+    p = await openPage("/?arr=11&type=Appartement", { locale: "fr-FR" });
+    await settle(p.net);
+    const url0 = p.page.url();
+    await click(p.page, "lang-en");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    await click(p.page, "lang-fr");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    const kept = { url: p.page.url(), name: await p.page.textContent('[data-testid="text-area-name"]') };
+    check("lang-keeps-selection: a switch keeps the URL and adds no lang parameter",
+      kept.url === url0 && !new URL(kept.url).searchParams.has("lang") && /11e/.test(kept.name ?? ""), { url0, ...kept });
+    await p.ctx.close();
+
+    p = await openPage("/?arr=11", { locale: "en-GB" });
+    await settle(p.net);
+    const choicesOf = (page) => page.evaluate(() => ({
+      smooth: document.querySelector('[data-testid="toggle-smooth"]')?.getAttribute("data-state"),
+      priceSort: document.querySelector('[data-testid="sort-price"]')?.closest("th")?.getAttribute("aria-sort") ?? null }));
+    const choicesInitial = await choicesOf(p.page);
+    await click(p.page, "toggle-smooth");
+    await click(p.page, "sort-price");
+    await settle(p.net);
+    const choicesBefore = await choicesOf(p.page);
+    await click(p.page, "lang-fr");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    await settle(p.net);
+    const choicesAfter = await choicesOf(p.page);
+    check("lang-keeps-panel-choices: a switch keeps the smoothing and the sort of the Sales list",
+      choicesBefore.smooth !== choicesInitial.smooth && choicesBefore.priceSort !== null
+        && choicesAfter.smooth === choicesBefore.smooth && choicesAfter.priceSort === choicesBefore.priceSort, { choicesInitial, choicesBefore, choicesAfter });
+    await p.ctx.close();
+
+    {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "fr-FR" });
+      const page = await ctx.newPage();
+      await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
+      if (DIST) await page.route((u) => u.origin === new URL(BASE).origin && !u.pathname.startsWith("/api"), async (r) => {
+        const u = new URL(r.request().url());
+        const f = extname(u.pathname) ? u.pathname.slice(1) : "index.html";
+        try { await r.fulfill({ body: await readFile(join(DIST, f)), contentType: MIME[extname(f)] ?? "application/octet-stream" }); } catch { await r.abort(); }
+      });
+      await page.addInitScript(() => Object.defineProperty(window, "localStorage", { get() { throw new DOMException("blocked", "SecurityError"); } }));
+      await page.goto(BASE + "/", { waitUntil: "networkidle" });
+      await page.waitForSelector('[data-testid="card-kpi-0"]', { timeout: 15000 }).catch(() => {});
+      const loaded = await langOf(page);
+      await page.click('[data-testid="lang-en"]').catch(() => {});
+      await page.waitForTimeout(300);
+      const after = await langOf(page);
+      check("lang-without-storage: the page loads in the browser's language and the switch still works", loaded.html === "fr" && loaded.fr === "true" && after.html === "en" && after.en === "true", { loaded, after });
+      await ctx.close();
+    }
+
+    // The author links, on a laptop and on a phone.
+    for (const width of [1440, 375]) {
+      p = await openPage("/", { viewport: { width, height: 900 } });
+      const links = await p.page.evaluate(() => ["link-author-site", "link-author-github"].map((id) => {
+        const a = document.querySelector(`header [data-testid="${id}"]`);
+        const r = a?.getBoundingClientRect();
+        return a && { href: a.getAttribute("href"), target: a.getAttribute("target"), rel: a.getAttribute("rel"), visible: !!r && r.width > 0 && r.right <= innerWidth };
+      }));
+      const [site, gh] = links;
+      check(`author-links: both links show in the header at ${width} px`,
+        !!site && !!gh && site.visible && gh.visible && site.href === "https://sagar-pal.dev" && gh.href === "https://github.com/palsagar/paris-property-sales"
+          && links.every((l) => l.target === "_blank" && /noopener/.test(l.rel ?? "")), { links });
+      await p.ctx.close();
+    }
+
+    // Print: the switch and the buttons hide, the author line stays.
+    p = await openPage("/");
+    await p.page.emulateMedia({ media: "print" });
+    const printHeader = await p.page.evaluate(() => {
+      const shown = (sel) => { const e = document.querySelector(sel); return !!e && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== "hidden"; };
+      return { lang: shown('[data-testid="lang-en"]'), copy: shown('[data-testid="button-copy-link"]'), author: shown('header [data-testid="link-author-site"]') };
+    });
+    check("print-header: the switch and the buttons hide in print, the author line stays", !printHeader.lang && !printHeader.copy && printHeader.author, printHeader);
+    await p.ctx.close();
+
+    // french-frame: no English left in the page frame, the Selection bar and the key figures, nor in the pickers.
+    {
+      const left = {};
+      for (const path of ["/", "/?q=7510501", "/?commune=93048"]) {
+        p = await openPage(path, { locale: "fr-FR" });
+        await settle(p.net);
+        for (const scope of ["header", "intro", "selection-bar", "focus-header", "kpis"]) {
+          const found = await frenchSweep(p.page, scope);
+          if (found.length) left[`${path} ${scope}`] = found;
+        }
+        await p.ctx.close();
+      }
+      p = await openPage("/", { locale: "fr-FR" });
+      await settle(p.net);
+      await click(p.page, "button-area");
+      await p.page.waitForSelector('[data-testid="area-picker"]');
+      let found = await frenchSweep(p.page, "area-picker");
+      if (found.length) left["area picker"] = found;
+      await p.page.keyboard.press("Escape");
+      await click(p.page, "button-period");
+      await p.page.waitForSelector('[data-testid="time-control"]');
+      found = await frenchSweep(p.page, "time-control");
+      if (found.length) left["period picker"] = found;
+      await p.ctx.close();
+      p = await openPage("/", { locale: "fr-FR", viewport: { width: 375, height: 800 } });
+      await settle(p.net);
+      await click(p.page, "button-selection");
+      await p.page.waitForSelector("[data-vaul-drawer]");
+      await p.page.waitForTimeout(500);
+      await p.page.evaluate(() => document.querySelector("[data-vaul-drawer]").setAttribute("data-testid", "sheet"));
+      found = await frenchSweep(p.page, "sheet");
+      if (found.length) left["selection sheet"] = found;
+      await p.ctx.close();
+      check("french-frame: no English in the frame, the Selection bar, the key figures and the pickers", Object.keys(left).length === 0, { left });
+    }
+
+    // french-panels: no English anywhere on the page, for each tab and segment of the panels.
+    {
+      const left = {};
+      const sweep = async (page, name) => { const f = await frenchSweep(page, "body"); if (f.length) left[name] = f; };
+      p = await openPage("/", { locale: "fr-FR" });
+      await settle(p.net);
+      await sweep(p.page, "default view");
+      for (const id of ["areas-tab-quarters", "heat-mode-rel", "areas-tab-ranking", "rank-sort-change", "map-mode-change", "gran-month", "gran-year"]) {
+        await click(p.page, id);
+        await settle(p.net);
+        await sweep(p.page, id);
+      }
+      await p.page.selectOption('[data-testid="rank-switch"]', "93");
+      await settle(p.net);
+      await sweep(p.page, "ranking of Seine-Saint-Denis");
+      await p.ctx.close();
+      p = await openPage("/?arr=11&map=dots", { locale: "fr-FR" });
+      await settle(p.net);
+      await sweep(p.page, "11e with the dot map");
+      await p.ctx.close();
+      check("french-panels: no English left on the page", Object.keys(left).length === 0, { left });
+    }
+
+    // french-tooltips: the map's tooltips are French and their HTML is intact.
+    {
+      const bad = (t) => !t || ENGLISH.test(t) || /&#39;|&amp;|</.test(t);
+      p = await openPage("/", { locale: "fr-FR" });
+      await settle(p.net);
+      const mapBox = await p.page.locator('[data-testid="card-map"] .leaflet-container').boundingBox();
+      await p.page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+      const box = await p.page.locator('[data-testid="card-map"] .leaflet-container').boundingBox();
+      await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await p.page.waitForTimeout(400);
+      const areaTip = await p.page.evaluate(() => [...document.querySelectorAll(".leaflet-tooltip:not(.map-label)")].map((t) => t.innerText).join("\n"));
+      await p.ctx.close();
+      p = await openPage("/?arr=6&map=dots", { locale: "fr-FR" });
+      await settle(p.net);
+      const dot = await findDot(p.page, /vendu|ventes près d'ici/);
+      const dotTip = dot ? await p.page.evaluate(() => [...document.querySelectorAll(".leaflet-tooltip:not(.map-label)")].map((t) => t.innerText).join("\n")) : "";
+      await p.ctx.close();
+      check("french-tooltips: the map's tooltips are French and show no HTML code", !!mapBox && !bad(areaTip) && !!dot && !bad(dotTip), { areaTip, dotTip });
+    }
+
+    // french-fits-phone: no French screen scrolls sideways at 375 px, and the Selection bar stays on screen.
+    {
+      const wide = {};
+      for (const path of ["/", "/?commune=93048"]) {
+        p = await openPage(path, { locale: "fr-FR", viewport: { width: 375, height: 800 } });
+        await settle(p.net);
+        const m = await p.page.evaluate(() => ({ scroll: document.scrollingElement.scrollWidth, bar: document.querySelector('[data-testid="selection-bar"]').getBoundingClientRect().right }));
+        if (m.scroll > 375 || m.bar > 375) wide[path] = m;
+        await p.ctx.close();
+      }
+      check("french-fits-phone: no sideways scroll at 375 px in French", Object.keys(wide).length === 0, { wide });
+    }
+
+    // labels-from-dates: the client builds the same labels as the server in English, and French ones in French.
+    {
+      const labelsOf = async (locale) => {
+        const q = await openPage("/", { locale });
+        await settle(q.net);
+        const ticks = await q.page.evaluate(() => [...document.querySelectorAll('[data-testid="card-trend"] .recharts-cartesian-axis-tick-value')].map((t) => t.textContent));
+        await click(q.page, "button-period");
+        await q.page.waitForSelector('[data-testid="time-control"]');
+        const presets = await q.page.evaluate(() => [...document.querySelectorAll('[data-testid^="preset-"]')].map((b) => b.textContent));
+        await q.ctx.close();
+        return { ticks, presets };
+      };
+      const en = await labelsOf("en-GB"), fr = await labelsOf("fr-FR");
+      const serverYears = years.map((y) => y.label);
+      const partial = years.find((y) => !(y.from.endsWith("-01-01") && y.to.endsWith("-12-31")));
+      check("labels-from-dates: English labels match the server's, French ones read T1 2024 and juil.–déc.",
+        en.ticks.some((t) => /^\d{4} Q[1-4]$/.test(t)) && serverYears.every((l) => en.presets.includes(l))
+          && fr.ticks.some((t) => /^T[1-4] \d{4}$/.test(t)) && !fr.ticks.some((t) => /Q[1-4]/.test(t))
+          // A Partial year names its months in lower case in French, for example "2021, juil.–déc.".
+          && (!partial || fr.presets.includes(partial.label) === false && fr.presets.some((l) => l.startsWith(`${partial.from.slice(0, 4)}, `) && /^[a-zéû.–]+$/.test(l.slice(6)))),
+        { en, fr, serverYears });
+    }
   },
 
   /** Each control sends its Umami event, with only the agreed properties and nothing about a single Sale. */
@@ -740,8 +971,41 @@ const sections = {
         && fromDot[0][1].via === "dot" && fromDot[0][1].level === "quartier", { found: !!dot, got: fromDot });
     await p.ctx.close();
 
+    // The language switch and the author links.
+    p = await openPage("/", { umami: true });
+    await settle(p.net);
+    await expect("a click on the language already chosen sends nothing", () => click(p.page, "lang-en"), []);
+    await expect("a language change", () => click(p.page, "lang-fr"), [["change-language", { to: "fr" }]]);
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    // The links open a new tab: keep the click in this page.
+    await p.page.evaluate(() => document.addEventListener("click", (e) => { if (e.target.closest?.("a[target=_blank]")) e.preventDefault(); }, true));
+    await expect("the author's site", () => click(p.page, "link-author-site"), [["author-link", { target: "site" }]]);
+    await expect("the GitHub link", () => click(p.page, "link-author-github"), [["author-link", { target: "github" }]]);
+    await p.ctx.close();
+
+    // A language change on a link with settings sends no second open event: the page redraws, but the visit is the same.
+    p = await openPage("/?arr=6", { umami: true });
+    await settle(p.net);
+    await expect("a language change on a link with settings sends only change-language", () => click(p.page, "lang-fr"), [["change-language", { to: "fr" }]]);
+    await p.ctx.close();
+
+    // events-same-in-french: the same Area gives the same event in both languages.
+    const areaEvent = async (locale) => {
+      const q = await openPage("/", { umami: true, locale });
+      await settle(q.net);
+      const before = (await events(q.page)).length;
+      await click(q.page, "filter-arr-11");
+      await settle(q.net);
+      await q.page.waitForTimeout(50);
+      const got = (await events(q.page)).slice(before).filter(([n]) => n === "select-area");
+      await q.ctx.close();
+      return got;
+    };
+    const inEn = await areaEvent("en-GB"), inFr = await areaEvent("fr-FR");
+    check("analytics: events-same-in-french", inEn.length === 1 && same(inEn, inFr), { inEn, inFr });
+
     // Every event, whatever the control: only the agreed keys, and no number but a page of the Sales list.
-    const KEYS = new Set(["url", "level", "area", "code", "via", "type", "from", "to", "map", "preset", "mode", "group", "by", "gran", "on", "column", "dir", "page", "panel", "interval"]);
+    const KEYS = new Set(["url", "level", "area", "code", "via", "type", "from", "to", "map", "preset", "mode", "group", "by", "gran", "on", "column", "dir", "page", "panel", "interval", "target"]);
     const bad = all.filter(([, props]) => props && Object.entries(props).some(([k, v]) => !KEYS.has(k) || (typeof v === "number" && k !== "page") || (typeof v === "string" && v.length > 60)));
     check("analytics: no event carries a key outside the agreed list, a price or a long text", all.length > 10 && bad.length === 0, { events: all.length, bad: bad.map(([n, props]) => [n, Object.keys(props)]) });
   },
@@ -751,7 +1015,7 @@ const sections = {
  * The position of a dot on the map: it hovers a grid of points from the centre outwards until a dot's tooltip shows.
  * A boundary's tooltip lingers for its fade, so each point waits before it reads the tooltip. Its text is never printed.
  */
-async function findDot(page) {
+async function findDot(page, text = /sold on|sales near here/) {
   // The key figures now come before the map, so the map starts below the fold: bring it into view first.
   await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
@@ -763,7 +1027,7 @@ async function findDot(page) {
   for (const pt of points) {
     await page.mouse.move(pt.x, pt.y);
     await page.waitForTimeout(300);
-    const onDot = await page.evaluate(() => [...document.querySelectorAll(".leaflet-tooltip")].some((t) => /sold on|sales near here/.test(t.textContent)));
+    const onDot = await page.evaluate((src) => [...document.querySelectorAll(".leaflet-tooltip")].some((t) => new RegExp(src).test(t.textContent)), text.source);
     if (onDot) return pt;
   }
   return null;

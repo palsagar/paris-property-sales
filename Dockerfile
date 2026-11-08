@@ -17,7 +17,8 @@ RUN mkdir /runtime && cd /runtime && npm install --no-package-lock --omit=dev \
 FROM node:24-slim
 ENV NODE_ENV=production \
     PORT=3000 \
-    STATIC_DIR=/app/public
+    STATIC_DIR=/app/public \
+    SITE_URL=https://parism2.gpuphysics.dev
 WORKDIR /app
 COPY --from=build /app/artifacts/api-server/dist ./dist
 COPY --from=build /app/artifacts/api-server/boundaries ./boundaries

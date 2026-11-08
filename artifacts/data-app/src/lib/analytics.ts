@@ -2,6 +2,7 @@ import type { GranularityParameter, ListTransactionsSortBy, PropertyTypeParamete
 import { DEPARTMENT_NAMES, type Area, type RankGroup } from "./areas";
 import { arrLabel } from "./fmt";
 import type { MapLevel, MapMode, ViewState } from "./view-state";
+import type { Lang } from "./i18n/language";
 
 /**
  * Analytics events, sent to Umami. The server adds the Umami script only when it is configured (api-server lib/umami.ts),
@@ -49,6 +50,9 @@ export interface Events {
   /** The link to the current view was copied or shared. The link itself is never sent. */
   "copy-link": { via: "clipboard" | "share" };
   "toggle-dark-mode": { on: boolean };
+  "change-language": { to: Lang };
+  /** A click on the author's site or on the GitHub repository in the header. */
+  "author-link": { target: "github" | "site" };
 }
 
 type Umami = { track: (...args: unknown[]) => unknown };

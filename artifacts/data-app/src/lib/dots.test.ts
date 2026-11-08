@@ -101,3 +101,18 @@ test("a stacked dot's rows sit in a block that wraps, so the tooltip fits a phon
   const [d] = groupDots([sale(), sale()], "arr");
   assert.match(dotTooltip(d!, "1er"), /<div class="pt-rows">(<div class="pt-row">.*?<\/div>){2}<\/div>/);
 });
+
+test("a dot's tooltip is French after a switch, and an apostrophe stays plain text", async () => {
+  const { setLang } = await import("./i18n/language");
+  const sale = (i: number) => ({ id: String(i), lat: 48.85, lon: 2.35, price: 400000, pricePerSqm: 10000, surface: 40, type: "Appartement", date: "2024-03-05", address: "Rue de l'Église", arrondissement: 2, areaName: "2e arrondissement", quartier: null, commune: null } as unknown as SalePoint);
+  setLang("fr");
+  try {
+    const [one] = groupDots([sale(1)], "arr");
+    const [many] = groupDots([sale(1), sale(2), sale(3)], "arr");
+    assert.match(dotTooltip(one!, "2e arrondissement"), /Appartement de 40 m², vendu le 2024-03-05/);
+    assert.match(dotTooltip(many!, "2e arrondissement"), /3 ventes près d'ici/);
+    assert.match(dotTooltip(many!, "2e arrondissement"), /Rue de l&#39;Église, appartement de 40 m²/);
+  } finally {
+    setLang("en");
+  }
+});
