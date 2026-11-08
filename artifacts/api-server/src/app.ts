@@ -8,8 +8,16 @@ import router from "./routes";
 import { responseCache } from "./lib/responseCache";
 import { logger } from "./lib/logger";
 import { loadPage, umamiTag } from "./lib/umami";
+import { previewTags, siteUrl } from "./lib/pageMeta";
 
 const app: Express = express();
+
+// The DVF reuse conditions forbid indexing by search engines (docs/adr/0006-public-site-limits.md). robots.txt lets
+// preview bots read the page, so this header and the robots meta tag do the blocking, on every response.
+app.use((_req, res, next) => {
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
 
 app.use(
   pinoHttp({
@@ -42,10 +50,13 @@ app.use("/api", responseCache, router);
 const staticDir = process.env["STATIC_DIR"];
 if (staticDir) {
   const root = path.resolve(staticDir);
-  // The page is read once, with the analytics tag when Umami is configured (lib/umami.ts).
+  // The page is read once, with the analytics tag when Umami is configured (lib/umami.ts) and the link preview tags
+  // when SITE_URL is set (lib/pageMeta.ts).
   const umami = umamiTag(process.env);
   if (umami.warning) logger.warn(umami.warning);
-  const { page, error } = loadPage(path.join(root, "index.html"), umami.tag);
+  const site = siteUrl(process.env);
+  if (site.warning) logger.warn(site.warning);
+  const { page, error } = loadPage(path.join(root, "index.html"), umami.tag + previewTags(site.url));
   if (error) logger.error(error);
   const sendPage = (_req: express.Request, res: express.Response) => {
     if (page === null) { res.status(404).end(); return; }
