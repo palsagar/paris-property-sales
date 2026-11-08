@@ -3,7 +3,7 @@ import type { AreaTrendPoint, PropertyTypeParameter } from "@workspace/api-clien
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState, GradientLegend, Segmented, outlineBtnCls } from "@/components/ui-bits";
-import { num, sqm, pct, makeDivScale, TOO_FEW, houseShareLabel } from "@/lib/fmt";
+import { num, sqm, pct, makeDivScale, tooFew, houseShareLabel } from "@/lib/fmt";
 import type { RankGroup } from "@/lib/areas";
 import { track } from "@/lib/analytics";
 
@@ -70,7 +70,7 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry
               {shown && hv ? (
                 <>
                   <p className="font-semibold">{labelOf.get(shown.r)} · {labels.get(shown.c)}</p>
-                  <p className="font-num">{hv.medianPricePerSqm == null ? TOO_FEW : sqm(hv.medianPricePerSqm)} · {num(hv.count)} sales
+                  <p className="font-num">{hv.medianPricePerSqm == null ? tooFew() : sqm(hv.medianPricePerSqm)} · {num(hv.count)} sales
                     {ptype === "all" && hv.houseShare != null ? ` · ${houseShareLabel(hv.houseShare)}` : ""}
                     {hf && hv.medianPricePerSqm != null ? ` · ${pct(((hv.medianPricePerSqm - hf) / hf) * 100)} since the first quarter` : ""}
                     {hv.count < 10 && <span className="text-primary"> · fewer than 10 sales</span>}</p>
@@ -103,7 +103,7 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry
                     <button key={p} type="button" onMouseEnter={() => setHover({ r: id, c: p })} onFocus={() => setPinned({ r: id, c: p })} onClick={() => setPinned({ r: id, c: p })}
                       className={`no-tap h-4 sm:h-[18px] rounded-[2px] transition-opacity duration-150 ${isPin ? "ring-2 ring-foreground ring-offset-1 ring-offset-card" : selId === id ? "ring-1 ring-primary" : ""} ${r && r.count < 10 ? "outline-1 outline-dashed outline-foreground/50" : ""}`}
                       style={{ background: color, opacity: dim ? 0.55 : 1 }}
-                      aria-label={`${label}, ${labels.get(p)}${r && m == null ? `: ${TOO_FEW}` : ""}`} />
+                      aria-label={`${label}, ${labels.get(p)}${r && m == null ? `: ${tooFew()}` : ""}`} />
                   );
                 })}
               </div>

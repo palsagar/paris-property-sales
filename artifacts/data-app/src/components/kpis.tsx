@@ -4,7 +4,7 @@ import { Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DeltaChip } from "@/components/ui-bits";
-import { eur, eurShort, sqm, num, orTooFew, sqmOrTooFew, houseShareLabel, houseShareWarning, keep, pct, TOO_FEW } from "@/lib/fmt";
+import { eur, eurShort, sqm, num, orTooFew, sqmOrTooFew, houseShareLabel, houseShareWarning, keep, pct, tooFew } from "@/lib/fmt";
 
 /** "20 k – 3.0 M EUR": the unit once, so the range fits a card. */
 const priceRange = (min: number, max: number) => keep(`${eurShort(min).replace(/ EUR$/, "")} – ${eurShort(max)}`);
@@ -12,11 +12,11 @@ const priceRange = (min: number, max: number) => keep(`${eurShort(min).replace(/
 const cardCls = "rounded-xl border bg-card min-w-0";
 
 function Small({ label, value, sub, testId, note }: { label: string; value: string; sub: ReactNode; testId: number; note?: string | null }) {
-  const tooFew = value === TOO_FEW;
+  const isTooFew = value === tooFew();
   return (
     <article className={`${cardCls} flex-[1_1_200px] p-4 sm:p-5 flex flex-col gap-1.5`} data-testid={`card-kpi-${testId}`}>
       <h3 className="text-[14px] font-medium text-muted-foreground leading-snug">{label}</h3>
-      <p className={`font-display font-bold text-[22px] xl:text-[26px] leading-tight ${tooFew ? "text-muted-foreground" : "text-primary"}`} data-testid={`text-kpi-${testId}`}>{keep(value)}</p>
+      <p className={`font-display font-bold text-[22px] xl:text-[26px] leading-tight ${isTooFew ? "text-muted-foreground" : "text-primary"}`} data-testid={`text-kpi-${testId}`}>{keep(value)}</p>
       <div className="text-[13px] sm:text-[14px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">{sub}</div>
       {note && <p className="text-[13px] text-muted-foreground" data-testid={`text-house-share-${testId}`}>{note}</p>}
     </article>
@@ -64,7 +64,7 @@ export const Kpis = memo(function Kpis({ s, paris, ptype, loading, fetching, err
         <article className={`${cardCls} flex-[2_1_360px] p-4 sm:px-6 sm:py-5 flex flex-col gap-2.5`} data-testid="card-kpi-2">
           <h3 className="text-[14px] font-medium text-muted-foreground">Median price per m²</h3>
           <p className={`font-display font-bold text-[40px] sm:text-[48px] leading-none ${s.medianPricePerSqm == null ? "text-muted-foreground text-[28px] sm:text-[32px]" : "text-primary"}`} data-testid="text-kpi-2">
-            {s.medianPricePerSqm == null ? TOO_FEW : <>{num(s.medianPricePerSqm)} <span className="text-[18px] sm:text-[22px]">EUR/m²</span></>}
+            {s.medianPricePerSqm == null ? tooFew() : <>{num(s.medianPricePerSqm)} <span className="text-[18px] sm:text-[22px]">EUR/m²</span></>}
           </p>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted-foreground" data-testid="chip-change-2">
             {changeTip(s.startMedianPricePerSqm, s.endMedianPricePerSqm, sqm, s.changePct)}

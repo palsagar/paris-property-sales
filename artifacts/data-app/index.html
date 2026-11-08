@@ -17,9 +17,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- The theme before the first paint: the Visitor's saved choice, else the system setting (see src/hooks/use-theme.ts). -->
+    <!-- Before the first paint: the theme (the Visitor's saved choice, else the system setting, see src/hooks/use-theme.ts)
+         and the language (the saved choice, else French for a French browser, see pickLang in src/lib/i18n/language.ts). -->
     <script>
       try {
+        var l = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+        document.documentElement.lang = /^fr/i.test(l) ? "fr" : "en";
+        var s = localStorage.getItem("lang");
+        if (s === "en" || s === "fr") document.documentElement.lang = s;
         var t = localStorage.getItem("theme");
         if (t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches)) document.documentElement.classList.add("dark");
       } catch (e) {}

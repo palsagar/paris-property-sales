@@ -3,7 +3,7 @@ import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, 
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, SwitchField, TipBox, useChartColors } from "@/components/ui-bits";
-import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, TOO_FEW } from "@/lib/fmt";
+import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, tooFew } from "@/lib/fmt";
 import { keepInSameArea, type areaParams } from "@/lib/areas";
 import { parisTrendParams, smoothOn, summaryParams, trendParams, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
@@ -95,7 +95,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
   const ptype = view.ptype;
   const charts = useMemo(() => (
     <>
-          {noMedian ? <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H }}>{TOO_FEW}</div> : <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
+          {noMedian ? <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H }}>{tooFew()}</div> : <ResponsiveContainer width="100%" height={PLOT_H} debounce={0}>
             <ComposedChart data={data} syncId="trend" margin={{ top: 8, right: END_W, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
               <XAxis dataKey="shown" hide />
@@ -107,7 +107,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
                   if (d.count === 0) return <TipBox title={d.shown} rows={[["Sales", "No sales"]]} />;
                   const rows: [string, string, string?][] = [
                     ["Median per m²", sqmOrTooFew(d.medianPricePerSqm), c.accent],
-                    ["P25 to P75", d.p25PricePerSqm != null && d.p75PricePerSqm != null ? `${num(d.p25PricePerSqm)} to ${num(d.p75PricePerSqm)}` : TOO_FEW],
+                    ["P25 to P75", d.p25PricePerSqm != null && d.p75PricePerSqm != null ? `${num(d.p25PricePerSqm)} to ${num(d.p75PricePerSqm)}` : tooFew()],
                     ["Median price", orTooFew(d.medianPrice, eur)],
                     ["Sales", num(d.count)],
                   ];

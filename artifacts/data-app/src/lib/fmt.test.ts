@@ -43,3 +43,43 @@ test("keep joins a figure to its unit", async () => {
   assert.equal(keep("12 054 sales"), "12\u00a0054 sales");
   assert.equal(keep("between 9 070 EUR/m² and 573 k EUR."), "between 9\u00a0070\u00a0EUR/m² and 573\u00a0k\u00a0EUR.");
 });
+
+test("labels built on the client match the server's English labels", async () => {
+  const { yearRangeLabel, bucketLabel } = await import("./fmt");
+  const { setLang } = await import("./i18n/language");
+  setLang("en");
+  assert.equal(yearRangeLabel("2021-07-01", "2021-12-31"), "2021, Jul–Dec");
+  assert.equal(yearRangeLabel("2024-01-01", "2024-12-31"), "2024");
+  assert.equal(yearRangeLabel("2026-01-01", "2026-01-31"), "2026, Jan");
+  assert.equal(bucketLabel("2024-04-01", "quarter"), "2024 Q2");
+  assert.equal(bucketLabel("2024-03-01", "month"), "2024-03");
+  assert.equal(bucketLabel("2024-01-01", "year"), "2024");
+});
+
+test("dates and labels in French", async () => {
+  const { yearRangeLabel, bucketLabel, monthLabel, longMonthLabel, dateLabel, tooFew } = await import("./fmt");
+  const { setLang } = await import("./i18n/language");
+  setLang("fr");
+  try {
+    assert.equal(yearRangeLabel("2021-07-01", "2021-12-31"), "2021, juil.–déc.");
+    assert.equal(bucketLabel("2024-04-01", "quarter"), "T2 2024");
+    assert.equal(monthLabel("2024-02"), "févr. 2024");
+    assert.equal(longMonthLabel("2026-08"), "août 2026");
+    assert.equal(dateLabel("2024-03-05"), "5 mars 2024");
+    assert.equal(tooFew(), "Trop peu de ventes");
+  } finally {
+    setLang("en");
+  }
+});
+
+test("numbers and money do not change with the language", async () => {
+  const { pct, arrLabel } = await import("./fmt");
+  const { setLang } = await import("./i18n/language");
+  for (const l of ["en", "fr"] as const) {
+    setLang(l);
+    assert.equal(eur(12054), "12 054 EUR");
+    assert.equal(pct(3.44), "+3.4%");
+    assert.equal(arrLabel(1), "1er");
+  }
+  setLang("en");
+});

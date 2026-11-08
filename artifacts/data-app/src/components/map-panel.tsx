@@ -9,7 +9,7 @@ import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend, outlineBtnCls } from "@/components/ui-bits";
-import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, TOO_FEW, houseShareLabel, houseShareWarning } from "@/lib/fmt";
+import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, tooFew, houseShareLabel, houseShareWarning } from "@/lib/fmt";
 import { groupDots, type SaleDot } from "@/lib/dots";
 import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
@@ -101,11 +101,11 @@ export const MapPanel = memo(function MapPanel(props: {
     const head = title + (sub ? `<div class="pt-sub">${sub}</div>` : "");
     if (travelOn) {
       const r = byKey.get(`${id}|${travel}`);
-      return head + `<div class="pt-em">4 quarters to ${travelLabel}</div>` + (r?.v != null ? `<div>Median <b>${sqm(r.v)}</b></div>` : `<div>${TOO_FEW}</div>`) + shareLines(r?.h) + (r ? `<div>${num(r.n)} sales</div>` : "");
+      return head + `<div class="pt-em">4 quarters to ${travelLabel}</div>` + (r?.v != null ? `<div>Median <b>${sqm(r.v)}</b></div>` : `<div>${tooFew()}</div>`) + shareLines(r?.h) + (r ? `<div>${num(r.n)} sales</div>` : "");
     }
     const s = statById.get(id);
     if (!s) return head + "<div>No sales in this period</div>";
-    return head + `<div class="pt-sub" style="margin-top:4px">${rangeLabel(ef, et)}</div>` + (s.medianPricePerSqm != null ? `<div>Median <b>${sqm(s.medianPricePerSqm)}</b></div>` : `<div>${TOO_FEW}</div>`) + shareLines(s.houseShare) +
+    return head + `<div class="pt-sub" style="margin-top:4px">${rangeLabel(ef, et)}</div>` + (s.medianPricePerSqm != null ? `<div>Median <b>${sqm(s.medianPricePerSqm)}</b></div>` : `<div>${tooFew()}</div>`) + shareLines(s.houseShare) +
       (s.medianPrice != null ? `<div>Median price ${eur(s.medianPrice)}</div>` : "") + `<div>${num(s.count)} sales</div>` +
       `<div>Change over the period <b>${s.changePct != null ? pct(s.changePct) : "not shown, too few sales"}</b></div>` +
       (s.startMedianPricePerSqm != null && s.endMedianPricePerSqm != null ? `<div class="pt-sub">From ${num(s.startMedianPricePerSqm)} to ${num(s.endMedianPricePerSqm)} EUR/m²</div>` : "");

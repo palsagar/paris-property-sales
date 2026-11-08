@@ -23,8 +23,8 @@ const { datasetFrom, datasetTo, years } = await (await fetch(`${BASE}/api/sales/
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 /** One page with the counters the checks read: API requests in flight, cache misses, React commits, skeletons added. */
-async function openPage(path = "/", { umami = false, viewport = { width: 1440, height: 900 } } = {}) {
-  const ctx = await browser.newContext({ viewport, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
+async function openPage(path = "/", { umami = false, viewport = { width: 1440, height: 900 }, locale = "en-GB" } = {}) {
+  const ctx = await browser.newContext({ viewport, locale, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
   const page = await ctx.newPage();
   await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
   if (DIST) {
