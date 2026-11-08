@@ -544,14 +544,15 @@ const sections = {
       const d = (s, i, j) => Math.hypot(s[keys[i]][0] - s[keys[j]][0], s[keys[i]][1] - s[keys[j]][1]);
       return keys.length < 2 ? null : Math.log2(d(b, 0, keys.length - 1) / d(a, 0, keys.length - 1));
     };
-    const ctrlWheel = (deltaY, count, gapMs) => page.evaluate(async ([deltaY, count, gapMs]) => {
+    // deltaMode 0 is pixels, 1 is lines (a Firefox mouse notch) and 2 is pages.
+    const ctrlWheel = (deltaY, count, gapMs, deltaMode = 0) => page.evaluate(async ([deltaY, count, gapMs, deltaMode]) => {
       const el = document.querySelector('[data-testid="card-map"] .leaflet-container');
       const r = el.getBoundingClientRect();
       for (let i = 0; i < count; i++) {
-        el.dispatchEvent(new WheelEvent("wheel", { deltaY, ctrlKey: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true }));
+        el.dispatchEvent(new WheelEvent("wheel", { deltaY, deltaMode, ctrlKey: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true }));
         await new Promise((res) => setTimeout(res, gapMs));
       }
-    }, [deltaY, count, gapMs]);
+    }, [deltaY, count, gapMs, deltaMode]);
     let s0 = await spread();
     await ctrlWheel(-3, 20, 10);
     await page.waitForTimeout(400);
@@ -566,6 +567,33 @@ const sections = {
     await page.waitForTimeout(400);
     const notch = levels(s0, await spread());
     check("pinch zoom: one Ctrl + wheel notch zooms in by 1 level", notch !== null && Math.abs(notch - 1) < 0.05, { levels: notch && Math.round(notch * 100) / 100 });
+    // A notch in lines (Firefox: 3 lines) and in pages (1 page) also gives one level.
+    for (const [label, deltaY, deltaMode] of [["3 lines", -3, 1], ["1 page", -1, 2]]) {
+      await page.reload({ waitUntil: "networkidle" });
+      await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      s0 = await spread();
+      await ctrlWheel(deltaY, 1, 0, deltaMode);
+      await page.waitForTimeout(400);
+      const lv = levels(s0, await spread());
+      check(`pinch zoom: one Ctrl + wheel notch of ${label} zooms in by 1 level`, lv !== null && Math.abs(lv - 1) < 0.05, { levels: lv && Math.round(lv * 100) / 100 });
+    }
+    await p.ctx.close();
+
+    // In print, the ranking shows every row: its scroll box has no height cap, even at a desktop width.
+    p = await openPage("/", { viewport: { width: 1024, height: 900 } });
+    ({ page, net } = p);
+    await settle(net);
+    await page.emulateMedia({ media: "print" });
+    await page.waitForTimeout(200);
+    const printed = await page.evaluate(() => {
+      const box = document.querySelector('[data-testid="list-ranking"] [data-testid^="row-rank-"]').parentElement;
+      const b = box.getBoundingClientRect();
+      const rows = [...box.querySelectorAll('[data-testid^="row-rank-"]')];
+      const clipped = rows.filter((r) => { const q = r.getBoundingClientRect(); return q.top < b.top - 1 || q.bottom > b.bottom + 1; }).length;
+      return { scrollHeight: box.scrollHeight, clientHeight: box.clientHeight, rows: rows.length, clipped };
+    });
+    check("print: the ranking shows every row at 1024 px", printed.rows > 0 && printed.scrollHeight <= printed.clientHeight + 1 && printed.clipped === 0, printed);
     await p.ctx.close();
 
     // The heat map's Focus button only selects: it never clicks off the Area already selected.

@@ -72,7 +72,9 @@ function GestureGuard({ onHint }: { onHint: (text: string) => void }) {
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        delta += e.deltaY;
+        // deltaY can be in lines (deltaMode 1, Firefox sends 3 per mouse notch) or pages (deltaMode 2, 1 per notch).
+        // 100 / 3 per line and 100 per page turn one notch into 100, one level, as a 100 px notch in pixel mode.
+        delta += e.deltaY * (e.deltaMode === 1 ? 100 / 3 : e.deltaMode === 2 ? 100 : 1);
         at = map.mouseEventToContainerPoint(e as unknown as MouseEvent);
         if (!frame) frame = requestAnimationFrame(zoom);
       } else onHint(`Hold ${mac ? "⌘" : "Ctrl"} and scroll to zoom the map`);

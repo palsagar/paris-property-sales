@@ -65,7 +65,8 @@ export const Ranking = memo(function Ranking({ stats, trend, loading, error, ret
               <span className="hidden sm:block text-right">Sales</span>
               {showShare && <span className="hidden sm:block text-right">Houses</span>}<span>Change</span><span className="hidden sm:block">Quarters</span>
             </div>
-            <div className="md:max-h-[640px] md:overflow-y-auto">
+            {/* The print rules in index.css reset only unprefixed overflow classes, so print lifts this md: cap here, or rows go missing. */}
+            <div className="md:max-h-[640px] md:overflow-y-auto print:max-h-none print:overflow-visible">
               {rows.map((s, i) => {
                 const sel = selId === s.id;
                 const vals = (spark.get(s.id) ?? []).map((p) => p.medianPricePerSqm).filter((v): v is number => v != null);
