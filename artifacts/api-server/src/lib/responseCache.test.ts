@@ -9,6 +9,9 @@ import { createResponseCache } from "./responseCache";
 
 const servers: Server[] = [];
 
+// How many times each slow route ran, so a test can see whether requests shared one run.
+const runs = { quartier: 0, failing: 0 };
+
 /** Serves one cache in front of routes that behave like the real ones. */
 async function startApp(maxBytes?: number): Promise<string> {
   const app = express();
@@ -31,6 +34,17 @@ async function startApp(maxBytes?: number): Promise<string> {
   routes.get("/sales/by-arrondissement", async (_req, res) => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     res.json({ padding: "x".repeat(1000) });
+  });
+  routes.get("/sales/by-quartier", async (_req, res) => {
+    runs.quartier += 1;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    res.json({ padding: "q".repeat(3000) });
+  });
+  // Fails after a wait, as a route does when its query times out.
+  routes.get("/sales/price-distribution", async (_req, res) => {
+    runs.failing += 1;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    res.status(503).json({ error: "The query took too long" });
   });
   routes.get("/sales/by-commune", (_req, res) => {
     res.json({ communes: [] });
@@ -182,5 +196,75 @@ describe("Areas in the query", () => {
     const url = `${base}/sales/by-commune?propertyType=all`;
     assert.equal((await get(url)).cache, "MISS");
     assert.equal((await get(url)).cache, "HIT");
+  });
+});
+
+describe("requests that arrive together", () => {
+  test("identical requests share one run of the route and get the same response", async () => {
+    const base = await startApp();
+    const before = runs.quartier;
+    const url = `${base}/sales/by-quartier?from=2024-01-01`;
+
+    const responses = await Promise.all([get(url), get(url, "gzip"), get(url), get(url, "gzip")]);
+
+    assert.equal(runs.quartier - before, 1);
+    for (const r of responses) {
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.body, responses[0]!.body);
+    }
+  });
+
+  test("a failed run is shared with the requests that waited for it, and is not cached", async () => {
+    const base = await startApp();
+    const before = runs.failing;
+    const url = `${base}/sales/price-distribution?from=2024-01-01`;
+
+    const responses = await Promise.all([get(url), get(url), get(url)]);
+    assert.equal(runs.failing - before, 1);
+    assert.deepEqual(responses.map((r) => r.status), [503, 503, 503]);
+
+    await get(url);
+    assert.equal(runs.failing - before, 2);
+  });
+
+  test("different requests do not wait for each other", async () => {
+    const base = await startApp();
+    const before = runs.quartier;
+    await Promise.all([
+      get(`${base}/sales/by-quartier?from=2024-02-01`),
+      get(`${base}/sales/by-quartier?from=2024-02-02`),
+    ]);
+    assert.equal(runs.quartier - before, 2);
+  });
+});
+
+describe("paths that Express routes the same way", () => {
+  for (const path of ["/Sales/Summary", "/SALES/SUMMARY", "/sales/summary/"]) {
+    test(`${path} shares the entry of /sales/summary`, async () => {
+      const base = await startApp();
+      assert.equal((await get(`${base}/sales/summary?propertyType=Maison`)).cache, "MISS");
+      const other = await get(`${base}${path}?propertyType=Maison`);
+      assert.equal(other.status, 200);
+      assert.equal(other.cache, "HIT");
+    });
+  }
+});
+
+describe("compression of cached responses", () => {
+  test("gzip;q=0 gets an uncompressed body", async () => {
+    const base = await startApp();
+    const url = sizedUrl(base, 3000);
+    await get(url);
+    const res = await fetch(url, { headers: { "Accept-Encoding": "gzip;q=0" } });
+    assert.equal(res.headers.get("x-cache"), "HIT");
+    assert.equal(res.headers.get("content-encoding"), null);
+  });
+
+  test("gzip gets a compressed body", async () => {
+    const base = await startApp();
+    const url = sizedUrl(base, 3000);
+    await get(url);
+    const res = await fetch(url, { headers: { "Accept-Encoding": "gzip" } });
+    assert.equal(res.headers.get("content-encoding"), "gzip");
   });
 });
