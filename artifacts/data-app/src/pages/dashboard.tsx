@@ -15,7 +15,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { toast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
-import { arrLabel, rangeLabel, longMonthLabel, num, keep } from "@/lib/fmt";
+import { arrLabel, rangeLabel, longMonthLabel, num, keep, yearRangeLabel } from "@/lib/fmt";
 import { areaStatParams, areaTrendParams, heatParams, parisSummaryParams, summaryParams, type PanelChoices } from "@/lib/selection-queries";
 import { PanelChoicesContext, RequestedView, useShownView, type Patch } from "@/lib/shown-view";
 import { FetchDot, Segmented, iconBtnCls, outlineBtnCls } from "@/components/ui-bits";
@@ -32,22 +32,22 @@ import { useLanguage } from "@/lib/i18n/provider";
 import { t } from "@/lib/i18n/messages";
 import type { Lang } from "@/lib/i18n/language";
 
-const DATA_SOURCES = ["DVF open data (DGFiP)", "Paris OpenData boundaries", "Etalab Contours administratifs (ODbL)"];
-
 // Wait for the dates: the first state of the view needs them to move an expired link.
 export default function Dashboard() {
   const first = useGetSalesSummary({ propertyType: "all" });
+  // The year labels are built here, in the page's language, from the dates that come with them.
+  const years = useMemo(() => first.data?.years.map((y) => ({ ...y, label: yearRangeLabel(y.from, y.to) })) ?? [], [first.data]);
   if (!first.data) {
     return first.isError ? (
       <div className="min-h-[100dvh] flex flex-col items-center justify-center gap-3 bg-background text-[16px] px-6 text-center" data-testid="dashboard-error" role="alert">
-        <p>The sales data did not load. Check your connection and try again.</p>
-        <button onClick={() => first.refetch()} data-testid="button-retry" className={outlineBtnCls}>Try again</button>
+        <p>{t().page.loadError}</p>
+        <button onClick={() => first.refetch()} data-testid="button-retry" className={outlineBtnCls}>{t().page.tryAgain}</button>
       </div>
     ) : (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-background text-[16px] text-muted-foreground" data-testid="dashboard-loading" role="status">Loading the sales data…</div>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background text-[16px] text-muted-foreground" data-testid="dashboard-loading" role="status">{t().page.loading}</div>
     );
   }
-  const { datasetFrom, datasetTo, releaseMonth, years } = first.data;
+  const { datasetFrom, datasetTo, releaseMonth } = first.data;
   return <ViewHost datasetFrom={datasetFrom} datasetTo={datasetTo} releaseMonth={releaseMonth} years={years} />;
 }
 
@@ -112,6 +112,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
 }) {
   const { ptype, area, from, to, mapMode, mapLevel, rank } = view;
   const { isDark, toggle: toggleTheme } = useTheme();
+  const { lang, change: changeLang } = useLanguage();
   const [travel, setTravel] = useState<string | null>(null);
   // On a phone the map and the list take turns; from a tablet up they sit side by side.
   const [compareTab, setCompareTab] = useState<"map" | "list">("map");
@@ -204,24 +205,25 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const showTravel = useCallback((p: string) => { track("time-travel", { via: "heatmap-column" }); setTravel(p); patch({ mapMode: "level" }); }, [patch]);
 
   const communeGroup = groupOfArea(area);
+  const tx = t();
   const areaName = area.kind === "department" ? DEPARTMENT_NAMES[area.id]
     : area.kind === "commune" ? communes.find((c) => c.id === area.id)?.name ?? "Commune"
     : area.kind === "arr" ? `${arrLabel(area.arr)} arrondissement`
-    : area.kind === "q" ? qById.get(area.id)?.name ?? "Quartier" : "All Paris";
-  const areaKicker = area.kind === "department" ? "Department"
-    : area.kind === "commune" ? (communeB.data && !communes.some((c) => c.id === area.id) ? "" : communeGroup === "major" ? "Major town" : `Commune in ${DEPARTMENT_NAMES[communeGroup as DepartmentId]}`)
+    : area.kind === "q" ? qById.get(area.id)?.name ?? "Quartier" : tx.fmt.allParis;
+  const areaKicker = area.kind === "department" ? tx.page.department
+    : area.kind === "commune" ? (communeB.data && !communes.some((c) => c.id === area.id) ? "" : communeGroup === "major" ? tx.page.majorTown : tx.page.communeIn(DEPARTMENT_NAMES[communeGroup as DepartmentId]))
     // The Arrondissement's own name, such as Popincourt, so the heading matches the Selection bar's "11e arrondissement".
-    : area.kind === "arr" ? arrStats.find((s) => s.arrondissement === area.arr)?.name ?? "Arrondissement" : area.kind === "q" ? `Quartier in the ${selArr ? arrLabel(selArr) : ""} arrondissement` : "";
-  const typeLabel = ptype === "all" ? "all homes" : ptype === "Appartement" ? "apartments" : "houses";
+    : area.kind === "arr" ? arrStats.find((s) => s.arrondissement === area.arr)?.name ?? "Arrondissement" : area.kind === "q" ? tx.page.quartierIn(selArr ? arrLabel(selArr) : "") : "";
+  const typeLabel = tx.types.lower[ptype];
   const scopeLabel = `${typeLabel}, ${areaName}, ${rangeLabel(ef, et)}`;
-  const lastRefreshed = summary.dataUpdatedAt ? new Date(summary.dataUpdatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
+  // "fr-FR" and "en-GB" both give "14:05".
+  const lastRefreshed = summary.dataUpdatedAt ? new Date(summary.dataUpdatedAt).toLocaleTimeString(lang === "fr" ? "fr-FR" : "en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
 
-  const typeSentence = typeLabel[0].toUpperCase() + typeLabel.slice(1);
-  const focusLine = keep(summary.data ? `${typeSentence}, ${rangeLabel(ef, et)}: ${num(summary.data.count)} sales.` : `${typeSentence}, ${rangeLabel(ef, et)}.`);
+  const focusLine = keep(tx.page.focusLine(tx.types[ptype], rangeLabel(ef, et), summary.data ? tx.sales(num(summary.data.count), summary.data.count) : ""));
   // Where the Area sits: Paris > Arrondissement > Quartier, or Department > Commune. Each step selects that Area.
   const crumbs: { label: string; area?: Area }[] =
-    area.kind === "arr" ? [{ label: "All Paris", area: { kind: "paris" } }, { label: areaName }]
-    : area.kind === "q" ? [{ label: "All Paris", area: { kind: "paris" } }, ...(selArr ? [{ label: `${arrLabel(selArr)} arrondissement`, area: { kind: "arr", arr: selArr } as Area }] : []), { label: areaName }]
+    area.kind === "arr" ? [{ label: tx.fmt.allParis, area: { kind: "paris" } }, { label: areaName }]
+    : area.kind === "q" ? [{ label: tx.fmt.allParis, area: { kind: "paris" } }, ...(selArr ? [{ label: `${arrLabel(selArr)} arrondissement`, area: { kind: "arr", arr: selArr } as Area }] : []), { label: areaName }]
     : area.kind === "commune" && communeGroup !== "major" && communeGroup !== "paris" ? [{ label: DEPARTMENT_NAMES[communeGroup as DepartmentId], area: { kind: "department", id: communeGroup as DepartmentId } }, { label: areaName }]
     : [];
 
@@ -235,13 +237,12 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
     try {
       await navigator.clipboard.writeText(url);
       track("copy-link", { via: "clipboard" });
-      toast({ title: "Link copied", description: "It opens this exact view: area, type, period and panels." });
+      toast({ title: t().page.copied, description: t().page.copiedDesc });
     } catch {
-      toast({ title: "The link could not be copied", description: "Copy it from the address bar instead." });
+      toast({ title: t().page.copyFailed, description: t().page.copyFailedDesc });
     }
   }, []);
   const print = () => { track("print"); window.print(); };
-  const { lang, change: changeLang } = useLanguage();
   const switchLang = (l: Lang) => { if (l === lang) return; track("change-language", { to: l }); changeLang(l); };
   const flipTheme = () => { track("toggle-dark-mode", { on: !isDark }); toggleTheme(); };
   const showCompare = (v: "map" | "list") => { if (v !== compareTab) track("change-compare-view", { view: v }); setCompareTab(v); };
@@ -249,13 +250,13 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   return (
     <div className="relative z-[1] min-h-[100dvh] bg-background">
       {/* Moves the focus by hand: following the #figures link would add a history entry, and Back would only remove the hash. */}
-      <a href="#figures" onClick={(e) => { e.preventDefault(); const f = document.getElementById("figures"); f?.focus(); f?.scrollIntoView(); }} className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-foreground focus:text-background">Skip to the figures</a>
+      <a href="#figures" onClick={(e) => { e.preventDefault(); const f = document.getElementById("figures"); f?.focus(); f?.scrollIntoView(); }} className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-foreground focus:text-background">{tx.page.skip}</a>
       <div className="max-w-[1440px] mx-auto px-4 md:px-8">
         {/* Masthead: one line */}
-        <header className="flex items-center justify-between gap-x-6 gap-y-2 border-b-2 border-foreground py-2 md:py-3">
+        <header data-testid="header" className="flex items-center justify-between gap-x-6 gap-y-2 border-b-2 border-foreground py-2 md:py-3">
           <div className="min-w-0 flex flex-wrap items-baseline gap-x-4">
-            <p className="font-display font-bold text-[17px] md:text-[20px] leading-tight" data-testid="text-title">Paris &amp; Suburbs Property Sales</p>
-            <p className="text-[13px] md:text-[14px] text-muted-foreground" data-testid="text-coverage">Data to {longMonthLabel(datasetTo)}<span className="hidden md:inline">, {longMonthLabel(releaseMonth)} release</span></p>
+            <p className="font-display font-bold text-[17px] md:text-[20px] leading-tight" data-testid="text-title">{tx.header.siteName}</p>
+            <p className="text-[13px] md:text-[14px] text-muted-foreground" data-testid="text-coverage">{tx.page.dataTo(longMonthLabel(datasetTo))}<span className="hidden md:inline">{tx.page.release(longMonthLabel(releaseMonth))}</span></p>
           </div>
           {/* Laptop: the author line above the switch and the buttons. Phone: the switch beside "More", the author line below. */}
           <div className="shrink-0 flex flex-col-reverse md:flex-col items-end gap-1.5 print:flex-col">
@@ -263,21 +264,21 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
             <div className="flex items-center gap-2 print:hidden">
               <Segmented testId="lang" label={t().header.langLabel} value={lang} options={[["en", "EN"], ["fr", "FR"]]} onChange={switchLang} />
               <div className="hidden md:flex items-center gap-2 print:hidden">
-                <button type="button" onClick={copyLink} data-testid="button-copy-link" className={outlineBtnCls}><Link2 className="w-4 h-4" aria-hidden />Copy link to this view</button>
-                <button type="button" onClick={print} data-testid="button-pdf" aria-label="Print or save as PDF" title="Print or save as PDF" className={iconBtnCls}><Printer className="w-[18px] h-[18px]" aria-hidden /></button>
-                <button type="button" onClick={flipTheme} data-testid="button-theme" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} title={isDark ? "Light mode" : "Dark mode"} className={iconBtnCls}>
+                <button type="button" onClick={copyLink} data-testid="button-copy-link" className={outlineBtnCls}><Link2 className="w-4 h-4" aria-hidden />{tx.page.copyLink}</button>
+                <button type="button" onClick={print} data-testid="button-pdf" aria-label={tx.page.print} title={tx.page.print} className={iconBtnCls}><Printer className="w-[18px] h-[18px]" aria-hidden /></button>
+                <button type="button" onClick={flipTheme} data-testid="button-theme" aria-label={isDark ? tx.page.toLight : tx.page.toDark} title={isDark ? tx.page.light : tx.page.dark} className={iconBtnCls}>
                   {isDark ? <Sun className="w-[18px] h-[18px]" aria-hidden /> : <Moon className="w-[18px] h-[18px]" aria-hidden />}
                 </button>
               </div>
               <div className="md:hidden print:hidden">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button type="button" className={iconBtnCls} aria-label="More: share, print, theme" data-testid="button-more"><MoreHorizontal className="w-5 h-5" aria-hidden /></button>
+                    <button type="button" className={iconBtnCls} aria-label={tx.page.more} data-testid="button-more"><MoreHorizontal className="w-5 h-5" aria-hidden /></button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[220px] rounded-xl p-1.5">
-                    <DropdownMenuItem onSelect={copyLink} className="min-h-11 text-[15px] gap-3"><Link2 className="w-4 h-4" aria-hidden />Share this view</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={print} className="min-h-11 text-[15px] gap-3"><Printer className="w-4 h-4" aria-hidden />Print or save as PDF</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={flipTheme} className="min-h-11 text-[15px] gap-3">{isDark ? <Sun className="w-4 h-4" aria-hidden /> : <Moon className="w-4 h-4" aria-hidden />}{isDark ? "Light mode" : "Dark mode"}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={copyLink} className="min-h-11 text-[15px] gap-3"><Link2 className="w-4 h-4" aria-hidden />{tx.page.share}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={print} className="min-h-11 text-[15px] gap-3"><Printer className="w-4 h-4" aria-hidden />{tx.page.print}</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={flipTheme} className="min-h-11 text-[15px] gap-3">{isDark ? <Sun className="w-4 h-4" aria-hidden /> : <Moon className="w-4 h-4" aria-hidden />}{isDark ? tx.page.light : tx.page.dark}</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -287,10 +288,10 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
 
         {/* Intro: scrolls away, the Selection bar below stays pinned */}
         <section className="pt-5 pb-5 md:pt-9 md:pb-7 flex flex-col gap-2.5" data-testid="intro">
-          <h1 className="font-display font-bold text-[26px] md:text-[40px] leading-[1.12] max-w-[20em] text-balance" data-testid="text-headline">What homes in Paris and its suburbs have sold for since {longMonthLabel(datasetFrom)}, and where prices moved</h1>
+          <h1 className="font-display font-bold text-[26px] md:text-[40px] leading-[1.12] max-w-[20em] text-balance" data-testid="text-headline">{tx.page.headline(longMonthLabel(datasetFrom))}</h1>
           <p className="text-[16px] md:text-[18px] leading-relaxed text-muted-foreground max-w-[66ch] text-pretty">
-            Every apartment and house sale recorded by the DGFiP, {longMonthLabel(datasetFrom)} to {longMonthLabel(datasetTo)}.
-            <span className="hidden md:inline"> Choose an area, a property type and a period: every figure on the page follows your choice.</span>
+            {tx.page.lede(longMonthLabel(datasetFrom), longMonthLabel(datasetTo))}
+            <span className="hidden md:inline">{tx.page.hint}</span>
           </p>
         </section>
 
@@ -298,7 +299,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           count={summary.data?.count} />
         {movedTo && from === movedTo.from && to === movedTo.to && (
           <p className="mt-3 text-[14px] text-muted-foreground print:hidden" data-testid="period-moved-notice" role="status">
-            The dates in this link are outside the latest DVF release, so the Period moved to {rangeLabel(ef, et)}.
+            {tx.page.moved(rangeLabel(ef, et))}
           </p>
         )}
 
@@ -308,7 +309,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="min-w-0 flex flex-col gap-1.5">
                 {crumbs.length > 0 && (
-                  <nav aria-label="Where this area sits">
+                  <nav aria-label={tx.page.crumbs}>
                     <ol className="flex flex-wrap items-center gap-x-1.5 text-[15px] md:text-[14px]">
                       {crumbs.map((c, i) => (
                         <li key={c.label} className="flex items-center gap-1.5">
@@ -325,7 +326,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
               </div>
               {area.kind !== "paris" && (
                 <button type="button" onClick={() => selectArea({ kind: "paris" }, "back-link")} data-testid="button-clear-area" className={`${outlineBtnCls} print:hidden`}>
-                  <X className="w-4 h-4" aria-hidden />Back to All Paris
+                  <X className="w-4 h-4" aria-hidden />{tx.page.backToParis}
                 </button>
               )}
             </div>
@@ -337,11 +338,11 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           {/* Then the comparison: map and list */}
           <section aria-labelledby="compare-title" className="pt-12 md:pt-14">
             <div className="flex flex-col gap-1 mb-4">
-              <h2 id="compare-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">Compare areas</h2>
-              <p className="text-[16px] text-muted-foreground">Select an area on the map or in the list to focus the whole page on it.</p>
+              <h2 id="compare-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">{tx.page.compareTitle}</h2>
+              <p className="text-[16px] text-muted-foreground">{tx.page.compareDesc}</p>
             </div>
-            <Segmented role="tablist" label="Compare view" testId="compare-tab" value={compareTab} onChange={showCompare} stretch tall className="md:hidden mb-3"
-              options={[["map", "Map"], ["list", "List"]]} />
+            <Segmented role="tablist" label={tx.page.compareView} testId="compare-tab" value={compareTab} onChange={showCompare} stretch tall className="md:hidden mb-3"
+              options={[["map", tx.page.map], ["list", tx.page.list]]} />
             <div className="flex flex-wrap gap-4 items-start">
               <div className={`flex-[999_1_560px] min-w-0 ${compareTab === "map" ? "" : "hidden md:block"}`}>
                 <MapPanel isDark={isDark} ptype={ptype} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo}
@@ -369,8 +370,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
 
           <section aria-labelledby="dist-title" className="pt-12 md:pt-14">
             <div className="flex flex-col gap-1 mb-4">
-              <h2 id="dist-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">What sold, and for how much</h2>
-              <p className="text-[16px] text-muted-foreground">{summary.data ? `The spread of the ${num(summary.data.count)} sales in the Selection. ` : ""}Darker bars hold the middle half.</p>
+              <h2 id="dist-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">{tx.page.distTitle}</h2>
+              <p className="text-[16px] text-muted-foreground">{tx.page.distDesc(summary.data ? tx.sales(num(summary.data.count), summary.data.count) : "")}</p>
             </div>
             <div className="flex flex-wrap gap-4">
               <Distributions filters={filters} houseShare={ptype === "all" ? summary.data?.houseShare : null} isDark={isDark} />
@@ -388,17 +389,17 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
         {/* About the data and the sources, once, at the end */}
         <footer className="mt-14 pb-12 border-t-2 border-foreground pt-6 flex flex-wrap gap-x-16 gap-y-6" data-testid="text-source-note">
           <section aria-labelledby="about-title" className="flex-[2_1_480px] max-w-[72ch] flex flex-col gap-2.5 text-[15px] leading-relaxed">
-            <h2 id="about-title" className="font-display font-semibold text-[19px]">About the data</h2>
-            <p className="font-medium">The figures describe past Sales. They are not a valuation of any home.</p>
-            <p>They come from Demandes de valeurs foncières (DVF), published by the DGFiP, and cover residential sales in Paris and 135 Communes around it from {rangeLabel(datasetFrom, datasetTo)}. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface and has a price of 1,000 to 35,000 EUR/m².</p>
-            {noteSummary.current && <p>{num(noteSummary.current.excludedCount)} residential sales in the whole dataset are left out by these rules: sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².</p>}
-            <p className="text-muted-foreground">A change compares the median of the first {noteSummary.current?.changeWindowMonths ?? 3} months of the Period with the median of the last {noteSummary.current?.changeWindowMonths ?? 3} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.</p>
+            <h2 id="about-title" className="font-display font-semibold text-[19px]">{tx.page.aboutTitle}</h2>
+            <p className="font-medium">{tx.page.notValuation}</p>
+            <p>{tx.page.source(rangeLabel(datasetFrom, datasetTo))}</p>
+            {noteSummary.current && <p>{tx.page.excluded(num(noteSummary.current.excludedCount))}</p>}
+            <p className="text-muted-foreground">{tx.page.changeNote(noteSummary.current?.changeWindowMonths ?? 3)}</p>
           </section>
           <section aria-labelledby="sources-title" className="flex-[1_1_260px] flex flex-col gap-1.5 text-[14px] text-muted-foreground">
-            <h2 id="sources-title" className="text-[14px] font-semibold text-foreground">Sources</h2>
-            {DATA_SOURCES.map((d) => <p key={d}>{d}</p>)}
-            <p>{longMonthLabel(releaseMonth)} release. Basemap tiles &copy; Esri.</p>
-            {lastRefreshed && <p>Last loaded at {lastRefreshed}.</p>}
+            <h2 id="sources-title" className="text-[14px] font-semibold text-foreground">{tx.page.sourcesTitle}</h2>
+            {tx.page.sources.map((d) => <p key={d}>{d}</p>)}
+            <p>{tx.page.releaseNote(longMonthLabel(releaseMonth))}</p>
+            {lastRefreshed && <p>{tx.page.lastLoaded(lastRefreshed)}</p>}
           </section>
         </footer>
       </div>

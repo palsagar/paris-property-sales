@@ -123,6 +123,26 @@ async function reveal(page, id) {
 }
 const click = async (page, id) => { await reveal(page, id); await page.click(`[data-testid="${id}"]`); };
 
+/**
+ * The English words left on a French page, inside the element with the given test id, or in the whole body for "body".
+ * It reads the visible text and every aria-label, title and placeholder.
+ */
+const ENGLISH = /\b(the|and|of|sales?|homes?|houses?|apartments?|price|median|period|area|too few|download|share|print|copy|link|light mode|dark mode|rooms?|quarter|data to|release|all paris)\b/i;
+async function frenchSweep(page, scope) {
+  return page.evaluate(([scope, src]) => {
+    const re = new RegExp(src, "i");
+    const roots = scope === "body" ? [document.body] : [...document.querySelectorAll(`[data-testid="${scope}"]`)];
+    const found = roots.length ? [] : [`no element ${scope}`];
+    for (const root of roots) {
+      for (const line of (root.innerText ?? "").split("\n")) if (re.test(line)) found.push(line.trim());
+      for (const el of [root, ...root.querySelectorAll("[aria-label],[title],[placeholder]")]) {
+        for (const a of ["aria-label", "title", "placeholder"]) { const v = el.getAttribute(a); if (v && re.test(v)) found.push(`${a}="${v}"`); }
+      }
+    }
+    return [...new Set(found)];
+  }, [scope, ENGLISH.source]);
+}
+
 /** Opens the Area picker and types a name. Only the Enter that follows belongs in a measure. */
 async function search(p, text) {
   await reveal(p.page, "input-area-search");
@@ -700,6 +720,42 @@ const sections = {
     });
     check("print-header: the switch and the buttons hide in print, the author line stays", !printHeader.lang && !printHeader.copy && printHeader.author, printHeader);
     await p.ctx.close();
+
+    // french-frame: no English left in the page frame, the Selection bar and the key figures, nor in the pickers.
+    {
+      const left = {};
+      for (const path of ["/", "/?q=7510501", "/?commune=93048"]) {
+        p = await openPage(path, { locale: "fr-FR" });
+        await settle(p.net);
+        for (const scope of ["header", "intro", "selection-bar", "focus-header", "kpis"]) {
+          const found = await frenchSweep(p.page, scope);
+          if (found.length) left[`${path} ${scope}`] = found;
+        }
+        await p.ctx.close();
+      }
+      p = await openPage("/", { locale: "fr-FR" });
+      await settle(p.net);
+      await click(p.page, "button-area");
+      await p.page.waitForSelector('[data-testid="area-picker"]');
+      let found = await frenchSweep(p.page, "area-picker");
+      if (found.length) left["area picker"] = found;
+      await p.page.keyboard.press("Escape");
+      await click(p.page, "button-period");
+      await p.page.waitForSelector('[data-testid="time-control"]');
+      found = await frenchSweep(p.page, "time-control");
+      if (found.length) left["period picker"] = found;
+      await p.ctx.close();
+      p = await openPage("/", { locale: "fr-FR", viewport: { width: 375, height: 800 } });
+      await settle(p.net);
+      await click(p.page, "button-selection");
+      await p.page.waitForSelector("[data-vaul-drawer]");
+      await p.page.waitForTimeout(500);
+      await p.page.evaluate(() => document.querySelector("[data-vaul-drawer]").setAttribute("data-testid", "sheet"));
+      found = await frenchSweep(p.page, "sheet");
+      if (found.length) left["selection sheet"] = found;
+      await p.ctx.close();
+      check("french-frame: no English in the frame, the Selection bar, the key figures and the pickers", Object.keys(left).length === 0, { left });
+    }
   },
 
   /** Each control sends its Umami event, with only the agreed properties and nothing about a single Sale. */

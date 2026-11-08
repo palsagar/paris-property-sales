@@ -4,6 +4,7 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from 'react';
+import { t } from '@/lib/i18n/messages';
 
 export interface ErrorFallbackProps {
   error: Error;
@@ -40,9 +41,9 @@ function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
   return (
     <div className="min-h-[100dvh] w-full flex items-center justify-center bg-background text-foreground p-6" role="alert">
       <div className="max-w-lg w-full text-center">
-        <h1 className="font-display text-[24px] font-bold">Something went wrong</h1>
+        <h1 className="font-display text-[24px] font-bold">{t().errors.title}</h1>
         <p className="mt-2 text-[16px] text-muted-foreground">
-          This part of the page hit an error. Try again, or reload the page.
+          {t().errors.body}
         </p>
         {/* Dev only: messages can carry API responses and other internals. */}
         {import.meta.env.DEV ? (
@@ -55,7 +56,7 @@ function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
           onClick={resetError}
           className="mt-5 inline-flex items-center justify-center h-11 px-5 rounded-lg bg-foreground text-background text-[15px] font-medium hover:opacity-90"
         >
-          Try again
+          {t().errors.tryAgain}
         </button>
       </div>
     </div>

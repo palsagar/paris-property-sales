@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { DEPARTMENT_NAMES, searchScore, searchValue, type Area, type DepartmentId, type RankGroup } from "@/lib/areas";
 import { arrLabel } from "@/lib/fmt";
+import { t } from "@/lib/i18n/messages";
 
 export type QMeta = { id: string; name: string; arr: number };
 export type CommuneMeta = { id: string; name: string; group: RankGroup };
@@ -29,11 +30,12 @@ export function AreaPicker({ quartiers, communes, area, selArr, onSelect, autoFo
     const qOption = (q: QMeta): Option => ({ id: q.id, name: q.name, context: arrLabel(q.arr), area: { kind: "q", id: q.id } });
     const communesOf = (group: RankGroup) => communes.filter((c) => c.group === group).map((c): Option => ({ id: c.id, name: c.name, area: { kind: "commune", id: c.id } }));
     const arrs = [...new Set(quartiers.map((q) => q.arr))].sort((a, b) => a - b);
+    const p = t().picker;
     const out: [string, Option[]][] = [
-      ["Departments", DEPARTMENTS.map(departmentOption)],
-      ...arrs.map((arr): [string, Option[]] => [`Quartiers of the ${arrLabel(arr)}`, quartiers.filter((q) => q.arr === arr).map(qOption)]),
-      ...DEPARTMENTS.map(([id, name]): [string, Option[]] => [`Communes · ${name}`, communesOf(id)]),
-      ["Major towns", communesOf("major")],
+      [p.departments, DEPARTMENTS.map(departmentOption)],
+      ...arrs.map((arr): [string, Option[]] => [p.quartiersOf(arrLabel(arr)), quartiers.filter((q) => q.arr === arr).map(qOption)]),
+      ...DEPARTMENTS.map(([id, name]): [string, Option[]] => [p.communesIn(name), communesOf(id)]),
+      [p.majorTowns, communesOf("major")],
     ];
     return out;
   }, [quartiers, communes]);
@@ -43,12 +45,13 @@ export function AreaPicker({ quartiers, communes, area, selArr, onSelect, autoFo
     const best = (options: Option[]) => Math.max(...options.map((o) => searchScore(searchValue(o.name, o.id), search)));
     return groups.map((g) => [g, best(g[1])] as const).sort((a, b) => b[1] - a[1]).map(([g]) => g);
   }, [groups, search]);
+  const tx = t();
   const selected = area.kind === "department" || area.kind === "q" || area.kind === "commune" ? area.id : undefined;
 
   return (
     <Command filter={searchScore} className="bg-transparent overflow-visible" data-testid="area-picker">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={inputId} className="text-[14px] font-medium">Find a quartier or commune</label>
+        <label htmlFor={inputId} className="text-[14px] font-medium">{tx.picker.find}</label>
         <div className="rounded-lg border border-control bg-background focus-within:ring-2 focus-within:ring-ring [&_[cmdk-input-wrapper]]:border-0">
           <CommandInput id={inputId} value={search} onValueChange={setSearch} autoFocus={autoFocus}
             placeholder="Odéon, Montreuil, Vincennes…" data-testid="input-area-search" className="h-11 text-[16px] md:text-[15px] focus-visible:outline-none" />
@@ -56,14 +59,14 @@ export function AreaPicker({ quartiers, communes, area, selArr, onSelect, autoFo
       </div>
       {search ? (
         <CommandList className="max-h-[min(360px,50dvh)] mt-2 -mx-1">
-          <CommandEmpty>Nothing matches that name. Try a shorter part of it.</CommandEmpty>
+          <CommandEmpty>{tx.picker.nothing}</CommandEmpty>
           {shownGroups.map(([heading, options]) => (
             <CommandGroup key={heading} heading={heading}>
               {options.map((o) => (
                 <CommandItem key={o.id} value={searchValue(o.name, o.id)} onSelect={() => onSelect(o.area, "search")} data-testid={`option-area-${o.id}`}
                   className="min-h-10 text-[15px]">
                   <span className="flex-1">{o.name}{o.context && <span className="text-muted-foreground"> · {o.context}</span>}</span>
-                  {o.id === selected && <Check className="w-4 h-4 text-primary" aria-label="Selected" />}
+                  {o.id === selected && <Check className="w-4 h-4 text-primary" aria-label={tx.picker.selected} />}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -75,27 +78,27 @@ export function AreaPicker({ quartiers, communes, area, selArr, onSelect, autoFo
             <h3 id={`${inputId}-paris`} className="text-[12px] font-semibold tracking-wide text-muted-foreground">PARIS</h3>
             <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Arrondissement">
               <button type="button" onClick={() => onSelect({ kind: "paris" }, "buttons")} aria-pressed={area.kind === "paris"} data-testid="filter-arr-all"
-                className={`col-span-5 ${tileCls(area.kind === "paris")}`}>All Paris</button>
+                className={`col-span-5 ${tileCls(area.kind === "paris")}`}>{tx.fmt.allParis}</button>
               {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => {
                 const on = area.kind === "arr" && area.arr === n;
                 return (
                   <button key={n} type="button" onClick={() => onSelect({ kind: "arr", arr: n }, "buttons")} aria-pressed={on} data-testid={`filter-arr-${n}`}
-                    aria-label={`${arrLabel(n)} arrondissement${!on && selArr === n ? ", holds the selected quartier" : ""}`}
+                    aria-label={`${arrLabel(n)} arrondissement${!on && selArr === n ? tx.picker.holdsQuartier : ""}`}
                     className={`font-num ${tileCls(on, !on && selArr === n)}`}>{arrLabel(n)}</button>
                 );
               })}
             </div>
           </section>
           <section aria-labelledby={`${inputId}-around`} className="flex flex-col gap-2">
-            <h3 id={`${inputId}-around`} className="text-[12px] font-semibold tracking-wide text-muted-foreground">AROUND PARIS</h3>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Department">
+            <h3 id={`${inputId}-around`} className="text-[12px] font-semibold tracking-wide text-muted-foreground">{tx.picker.around}</h3>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label={tx.picker.department}>
               {DEPARTMENTS.map(([id, name]) => {
                 const on = area.kind === "department" && area.id === id;
                 return <button key={id} type="button" onClick={() => onSelect({ kind: "department", id }, "buttons")} aria-pressed={on} data-testid={`filter-dept-${id}`}
                   className={`px-3 ${tileCls(on)}`}>{name}</button>;
               })}
             </div>
-            <p className="text-[13px] text-muted-foreground">Type a name to find any of the 80 quartiers and the communes around Paris, including the major towns.</p>
+            <p className="text-[13px] text-muted-foreground">{tx.picker.hint}</p>
           </section>
         </div>
       )}

@@ -8,6 +8,7 @@ import { areaParams, keepInSameArea } from "@/lib/areas";
 import { timeTrendParams } from "@/lib/selection-queries";
 import type { ViewState } from "@/lib/view-state";
 import { periodProps, track } from "@/lib/analytics";
+import { t as texts } from "@/lib/i18n/messages";
 
 const pillCls = (on: boolean, tall: boolean) =>
   `inline-flex items-center ${tall ? "h-11 px-3.5 text-[15px]" : "h-9 px-3 text-[14px]"} rounded-full border font-medium whitespace-nowrap transition-colors ${on ? "bg-foreground text-background border-foreground" : "bg-card border-border hover:bg-sunken"}`;
@@ -72,10 +73,12 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
   }, [startIdx, endIdx]);
 
   type Preset = "all" | "year" | "last-12-months";
-  const presets: [string, string | undefined, string | undefined, Preset][] = [
-    ["All dates", undefined, undefined, "all"],
-    ["Last 12 months", monthsBefore(datasetTo, 11), datasetTo, "last-12-months"],
-    ...years.map((y) => [y.label, y.from, y.to, "year"] as [string, string, string, Preset]),
+  const tx = texts();
+  // [label, from, to, kind, test id]. The test id is the same in both languages.
+  const presets: [string, string | undefined, string | undefined, Preset, string][] = [
+    [tx.selection.allDates, undefined, undefined, "all", "all-dates"],
+    [tx.selection.last12, monthsBefore(datasetTo, 11), datasetTo, "last-12-months", "last-12-months"],
+    ...years.map((y) => [y.label, y.from, y.to, "year", y.from.slice(0, 4)] as [string, string, string, Preset, string]),
   ];
   const ef = from ?? datasetFrom, et = to ?? datasetTo;
   const chartH = tall ? 56 : 72;
@@ -110,39 +113,39 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
 
   return (
     <div className="flex flex-col gap-4" data-testid="time-control">
-      <div role="group" aria-label="Period presets" className="flex flex-wrap gap-2">
-        {presets.map(([l, f, t, kind]) => {
+      <div role="group" aria-label={tx.period.presets} className="flex flex-wrap gap-2">
+        {presets.map(([l, f, t, kind, id]) => {
           const active = (f ?? undefined) === from && (t === undefined ? to === undefined : t === to);
           const choose = () => {
             if (!active) track("change-period", { via: "preset", preset: kind, ...periodProps(f, t) });
             onChange(f, t);
           };
           return (
-            <button key={l} type="button" onClick={choose} data-testid={`preset-${l.replace(/\s/g, "-").toLowerCase()}`}
+            <button key={id} type="button" onClick={choose} data-testid={`preset-${id}`}
               aria-pressed={active} className={pillCls(active, tall)}>{l}</button>
           );
         })}
       </div>
       <div className="flex flex-col gap-2 pt-3 border-t">
-        <p className="text-[14px] font-medium">Or set your own dates</p>
+        <p className="text-[14px] font-medium">{tx.period.own}</p>
         <div ref={wrapper} className="relative" style={{ height: chartH }} onKeyUp={commitKey}>
           {q.isLoading ? <Skeleton className="w-full h-full" /> : data.length > 1 && chart}
         </div>
         <div className="relative h-4 mx-2 font-num text-[12px] text-muted-foreground" aria-hidden>
           {yearTicks.map(([p, i]) => <span key={p} className="absolute -translate-x-1/2" style={{ left: `${(i / Math.max(1, periods.length - 1)) * 100}%` }}>{p.slice(0, 4)}</span>)}
         </div>
-        <p className="text-[13px] text-muted-foreground">Bars: sales per month. Line: median price per m². Drag a handle, use the arrow keys on it, or pick the months below.</p>
+        <p className="text-[13px] text-muted-foreground">{tx.period.chartDesc}</p>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2.5">
         <div className="flex flex-col gap-1">
-          <label htmlFor={`${ids}-from`} className="text-[13px] text-muted-foreground">From</label>
+          <label htmlFor={`${ids}-from`} className="text-[13px] text-muted-foreground">{tx.period.from}</label>
           <select id={`${ids}-from`} className={selectCls} disabled={periods.length < 2} value={periods[shownS] ?? ""} data-testid="select-from"
             onChange={(e) => { const s = periods.indexOf(e.target.value); if (s >= 0) apply(s, Math.max(s, endIdx), "months"); }}>
             {periods.map((p) => <option key={p} value={p}>{monthLabel(p.slice(0, 7))}</option>)}
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor={`${ids}-to`} className="text-[13px] text-muted-foreground">To</label>
+          <label htmlFor={`${ids}-to`} className="text-[13px] text-muted-foreground">{tx.period.to}</label>
           <select id={`${ids}-to`} className={selectCls} disabled={periods.length < 2} value={periods[shownE] ?? ""} data-testid="select-to"
             onChange={(e) => { const t = periods.indexOf(e.target.value); if (t >= 0) apply(Math.min(startIdx, t), t, "months"); }}>
             {periods.map((p) => <option key={p} value={p}>{monthLabel(p.slice(0, 7))}</option>)}
