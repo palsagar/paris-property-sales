@@ -676,6 +676,25 @@ const sections = {
       kept.url === url0 && !new URL(kept.url).searchParams.has("lang") && /11e/.test(kept.name ?? ""), { url0, ...kept });
     await p.ctx.close();
 
+    p = await openPage("/?arr=11", { locale: "en-GB" });
+    await settle(p.net);
+    const choicesOf = (page) => page.evaluate(() => ({
+      smooth: document.querySelector('[data-testid="toggle-smooth"]')?.getAttribute("data-state"),
+      priceSort: document.querySelector('[data-testid="sort-price"]')?.closest("th")?.getAttribute("aria-sort") ?? null }));
+    const choicesInitial = await choicesOf(p.page);
+    await click(p.page, "toggle-smooth");
+    await click(p.page, "sort-price");
+    await settle(p.net);
+    const choicesBefore = await choicesOf(p.page);
+    await click(p.page, "lang-fr");
+    await p.page.waitForSelector('[data-testid="card-kpi-0"]');
+    await settle(p.net);
+    const choicesAfter = await choicesOf(p.page);
+    check("lang-keeps-panel-choices: a switch keeps the smoothing and the sort of the Sales list",
+      choicesBefore.smooth !== choicesInitial.smooth && choicesBefore.priceSort !== null
+        && choicesAfter.smooth === choicesBefore.smooth && choicesAfter.priceSort === choicesBefore.priceSort, { choicesInitial, choicesBefore, choicesAfter });
+    await p.ctx.close();
+
     {
       const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "fr-FR" });
       const page = await ctx.newPage();

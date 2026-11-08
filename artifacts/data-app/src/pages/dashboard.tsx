@@ -53,13 +53,17 @@ export default function Dashboard() {
 
 // The open event is sent once per visit. It lives outside the page, which a language change redraws from the start.
 let openSent = false;
+// The smoothing and the sort of the Sales list live outside the page for the same reason: they change the data shown,
+// so a language change must keep them.
+let lastChoices: PanelChoices = { smooth: null, sortBy: "date", sortDir: "desc" };
 
 type DatasetProps = { datasetFrom: string; datasetTo: string; releaseMonth: string; years: YearRange[] };
 
 /** Owns the requested view and the panel choices, and shows the dashboard for the view whose data has loaded. */
 function ViewHost(props: DatasetProps) {
   const [view, patch, movedTo] = useViewState(props.datasetFrom, props.datasetTo);
-  const [choices, setChoices] = useState<PanelChoices>({ smooth: null, sortBy: "date", sortDir: "desc" });
+  const [choices, setChoices] = useState<PanelChoices>(lastChoices);
+  lastChoices = choices;
   const { shown, updating } = useShownView(view, choices);
   // The Quartiers and Communes, for the search box and for the names that analytics sends. The map loads the same
   // boundaries, so they are fetched once.
