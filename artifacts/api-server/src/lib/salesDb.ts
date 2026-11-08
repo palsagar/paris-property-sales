@@ -21,3 +21,9 @@ export async function openSalesDb(file: string): Promise<SalesDb> {
     },
   };
 }
+
+export class QueryTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`The query took more than ${ms} ms`);
+  }
+}
