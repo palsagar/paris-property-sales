@@ -181,7 +181,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
     return m == null ? "transparent" : scale.color(m);
   }, [areaMedians, scale]);
 
-  const selectRow = useCallback((id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }, "heatmap"), [rank, selectArea]);
+  // `only`: the heat map's Focus button only selects, so it never clicks off the Area already selected.
+  const selectRow = useCallback((id: string, only = false) => (only ? selectAreaOnly : selectArea)(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }, "heatmap"), [rank, selectArea, selectAreaOnly]);
   // Stable callbacks, so the memoised panels redraw only when their data changes. An event records a change of the
   // requested view: while a view loads, the buttons show the shown view, and a click back to it is still a change.
   const setMode = useCallback((m: MapMode) => { if (requested.current.mapMode !== m) track("change-map-mode", { mode: m }); patch({ mapMode: m }); }, [patch, requested]);
@@ -241,7 +242,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
 
   return (
     <div className="relative z-[1] min-h-[100dvh] bg-background">
-      <a href="#figures" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-foreground focus:text-background">Skip to the figures</a>
+      {/* Moves the focus by hand: following the #figures link would add a history entry, and Back would only remove the hash. */}
+      <a href="#figures" onClick={(e) => { e.preventDefault(); const f = document.getElementById("figures"); f?.focus(); f?.scrollIntoView(); }} className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-foreground focus:text-background">Skip to the figures</a>
       <div className="max-w-[1440px] mx-auto px-4 md:px-8">
         {/* Masthead: one line */}
         <header className="flex items-center justify-between gap-x-6 gap-y-2 border-b-2 border-foreground py-2 md:py-3">

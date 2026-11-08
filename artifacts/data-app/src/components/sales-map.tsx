@@ -58,16 +58,29 @@ function GestureGuard({ onHint }: { onHint: (text: string) => void }) {
   useEffect(() => {
     const el = map.getContainer();
     const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    // A trackpad pinch sends dozens of small wheel events with ctrlKey. Their deltaY adds up, and each
+    // 100 of it (about one mouse wheel notch) is one zoom level, applied at most once per frame.
+    let delta = 0, frame = 0, at = L.point(0, 0);
+    const zoom = () => {
+      frame = 0;
+      const steps = Math.trunc(-delta / 100);
+      if (!steps) return;
+      delta += steps * 100;
+      const z = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), map.getZoom() + steps));
+      if (z !== map.getZoom()) map.setZoomAround(at, z);
+    };
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        map.setZoomAround(map.mouseEventToContainerPoint(e as unknown as MouseEvent), map.getZoom() + (e.deltaY < 0 ? 1 : -1));
+        delta += e.deltaY;
+        at = map.mouseEventToContainerPoint(e as unknown as MouseEvent);
+        if (!frame) frame = requestAnimationFrame(zoom);
       } else onHint(`Hold ${mac ? "⌘" : "Ctrl"} and scroll to zoom the map`);
     };
     const onTouch = (e: TouchEvent) => { if (e.touches.length === 1) onHint("Use two fingers to move the map"); };
     el.addEventListener("wheel", onWheel, { passive: false });
     if (L.Browser.mobile) el.addEventListener("touchmove", onTouch, { passive: true });
-    return () => { el.removeEventListener("wheel", onWheel); el.removeEventListener("touchmove", onTouch); };
+    return () => { el.removeEventListener("wheel", onWheel); el.removeEventListener("touchmove", onTouch); cancelAnimationFrame(frame); };
   }, [map, onHint]);
   return null;
 }
@@ -145,10 +158,14 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
   const styleRef = useRef(styleFn); styleRef.current = styleFn;
   const [hint, setHint] = useState<string | null>(null);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Each tick of a page scroll over the map asks for the hint, so only the first one while it shows sets state.
+  const hintOn = useRef(false);
   const showHint = useRef((text: string) => {
+    if (hintOn.current) return;
+    hintOn.current = true;
     setHint(text);
     clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setHint(null), 1600);
+    hintTimer.current = setTimeout(() => { hintOn.current = false; setHint(null); }, 1600);
   }).current;
   useEffect(() => () => clearTimeout(hintTimer.current), []);
 

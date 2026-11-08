@@ -151,7 +151,8 @@ export const MapPanel = memo(function MapPanel(props: {
         <Segmented label="Map shows" testId="map-mode" value={mode} onChange={setMode} options={[["level", "Price level"], ["change", "Price change"], ["dots", "Sales"]]} />
         {mode !== "dots" && <Segmented label="Map detail" testId="map-level" value={level} onChange={setLevel} options={[["arr", "Arrondissements"], ["quartier", "Quartiers"]]} />}
       </>}>
-      <div className="relative h-[360px] md:h-[clamp(380px,calc(100dvh-320px),560px)] rounded-lg overflow-hidden border">
+      {/* isolate: Leaflet's z-indexes (400 to 1000) stay inside the map, so the sticky Selection bar stays on top of it. */}
+      <div className="relative isolate h-[360px] md:h-[clamp(380px,calc(100dvh-320px),560px)] rounded-lg overflow-hidden border">
         {props.statsError ? <ErrorState onRetry={props.retryStats} /> : (
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
             stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}

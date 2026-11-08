@@ -16,7 +16,7 @@ const stepCls = "inline-flex items-center justify-center w-10 h-10 shrink-0 roun
  */
 export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry, scale, domain, selId, onSelectRow, rank, ptype, travel, onSelectPeriod }: {
   data: AreaTrendPoint[]; rows: { id: string; label: string }[]; loading: boolean; error: boolean; retry: () => void;
-  scale: (v: number) => string; domain: [number, number]; selId?: string; onSelectRow: (id: string) => void;
+  scale: (v: number) => string; domain: [number, number]; selId?: string; onSelectRow: (id: string, only?: boolean) => void;
   rank: RankGroup; ptype: PropertyTypeParameter; travel: string | null; onSelectPeriod: (p: string) => void;
 }) {
   const [rel, setRel] = useState<"level" | "rel">("level");
@@ -110,7 +110,7 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry
             ))}
           </div>
           {pin && (
-            <button type="button" className={`${outlineBtnCls} self-start`} onClick={() => onSelectRow(pin.r)} data-testid="button-heat-focus">
+            <button type="button" className={`${outlineBtnCls} self-start`} onClick={() => onSelectRow(pin.r, true)} data-testid="button-heat-focus">
               Focus the page on {labelOf.get(pin.r)}
             </button>
           )}

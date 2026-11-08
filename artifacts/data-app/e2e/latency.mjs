@@ -23,8 +23,8 @@ const { datasetFrom, datasetTo, years } = await (await fetch(`${BASE}/api/sales/
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 
 /** One page with the counters the checks read: API requests in flight, cache misses, React commits, skeletons added. */
-async function openPage(path = "/", { umami = false } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
+async function openPage(path = "/", { umami = false, viewport = { width: 1440, height: 900 } } = {}) {
+  const ctx = await browser.newContext({ viewport, reducedMotion: process.env.MOTION ? "no-preference" : "reduce" });
   const page = await ctx.newPage();
   await page.route(/arcgisonline|fonts\.(googleapis|gstatic)/, (r) => r.abort());
   if (DIST) {
@@ -499,6 +499,101 @@ const sections = {
     await settle(net);
     st = await page.evaluate(() => ({ blanks: window.__blanks }));
     check("panel state: no blank after Smoothing was switched by hand", st.blanks === 0, { blanks: st.blanks });
+    await p.ctx.close();
+
+    // The sticky Selection bar stays on top of the map when the map scrolls under it, on a desktop and on a phone.
+    for (const [label, viewport] of [["1440 px", { width: 1440, height: 900 }], ["375 px", { width: 375, height: 812 }]]) {
+      p = await openPage("/", { viewport });
+      ({ page, net } = p);
+      await settle(net);
+      if (viewport.width < 768) { await click(page, "compare-tab-map"); await settle(net); }
+      const mapSel = '[data-testid="card-map"] .leaflet-container';
+      // The map's top goes 2 px below the top of the stuck bar, so the bar's middle lies over the map.
+      await page.evaluate((sel) => {
+        const bar = document.querySelector('[data-testid="selection-bar"]');
+        const map = document.querySelector(sel).getBoundingClientRect();
+        window.scrollBy(0, map.top - parseFloat(getComputedStyle(bar).top) - 2);
+      }, mapSel);
+      await page.waitForTimeout(200);
+      const hits = await page.evaluate((sel) => {
+        const bar = document.querySelector('[data-testid="selection-bar"]');
+        const b = bar.getBoundingClientRect(), m = document.querySelector(sel).getBoundingClientRect();
+        const y = b.top + b.height / 2;
+        return [0.1, 0.5, 0.9].map((f) => {
+          const el = document.elementFromPoint(m.left + m.width * f, y);
+          return { onBar: !!el && bar.contains(el), mapUnder: m.top < y && m.bottom > y, cls: el?.className?.toString().slice(0, 40) };
+        });
+      }, mapSel);
+      check(`sticky bar: the map does not cover the Selection bar at ${label}`, hits.every((h) => h.onBar && h.mapUnder), { hits });
+      await p.ctx.close();
+    }
+
+    // Ctrl + wheel zoom: a trackpad pinch sends many small events, which add up; a mouse notch gives one level.
+    p = await openPage("/");
+    ({ page, net } = p);
+    await settle(net);
+    await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    // The zoom level from the DOM: the distance between two Arrondissement labels doubles at each level.
+    const spread = () => page.evaluate(() => {
+      const pts = [...document.querySelectorAll(".map-label")].map((l) => { const r = l.getBoundingClientRect(); return [l.textContent, r.x + r.width / 2, r.y + r.height / 2]; });
+      return Object.fromEntries(pts.map(([t, x, y]) => [t, [x, y]]));
+    });
+    const levels = (a, b) => {
+      const keys = Object.keys(a).filter((k) => b[k]);
+      const d = (s, i, j) => Math.hypot(s[keys[i]][0] - s[keys[j]][0], s[keys[i]][1] - s[keys[j]][1]);
+      return keys.length < 2 ? null : Math.log2(d(b, 0, keys.length - 1) / d(a, 0, keys.length - 1));
+    };
+    const ctrlWheel = (deltaY, count, gapMs) => page.evaluate(async ([deltaY, count, gapMs]) => {
+      const el = document.querySelector('[data-testid="card-map"] .leaflet-container');
+      const r = el.getBoundingClientRect();
+      for (let i = 0; i < count; i++) {
+        el.dispatchEvent(new WheelEvent("wheel", { deltaY, ctrlKey: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true }));
+        await new Promise((res) => setTimeout(res, gapMs));
+      }
+    }, [deltaY, count, gapMs]);
+    let s0 = await spread();
+    await ctrlWheel(-3, 20, 10);
+    await page.waitForTimeout(400);
+    const pinch = levels(s0, await spread());
+    check("pinch zoom: 20 small Ctrl + wheel events zoom in by at most 1 level", pinch !== null && pinch <= 1.05, { levels: pinch && Math.round(pinch * 100) / 100 });
+    // A fresh map, since the pinch above may have reached the maximum zoom.
+    await page.reload({ waitUntil: "networkidle" });
+    await page.locator('[data-testid="card-map"] .leaflet-container').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    s0 = await spread();
+    await ctrlWheel(-100, 1, 0);
+    await page.waitForTimeout(400);
+    const notch = levels(s0, await spread());
+    check("pinch zoom: one Ctrl + wheel notch zooms in by 1 level", notch !== null && Math.abs(notch - 1) < 0.05, { levels: notch && Math.round(notch * 100) / 100 });
+    await p.ctx.close();
+
+    // The heat map's Focus button only selects: it never clicks off the Area already selected.
+    p = await openPage("/?arr=11");
+    ({ page, net } = p);
+    await settle(net);
+    await click(page, "areas-tab-quarters");
+    await settle(net);
+    await page.click('[data-testid="heat-row-11"] + button');
+    await click(page, "button-heat-focus");
+    await settle(net);
+    await page.waitForTimeout(200);
+    const focusArr = new URL(page.url()).searchParams.get("arr");
+    check("heat map: Focus on the selected Area keeps it selected", focusArr === "11", { arr: focusArr });
+    await p.ctx.close();
+
+    // The skip link moves the focus without a new history entry, so Back still goes to the previous Selection.
+    p = await openPage("/?arr=5");
+    ({ page, net } = p);
+    await settle(net);
+    await click(page, "filter-arr-9");
+    await settle(net);
+    const histBefore = await page.evaluate(() => history.length);
+    await page.focus('a[href="#figures"]');
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(200);
+    const skip = await page.evaluate(() => ({ history: history.length, active: document.activeElement?.id }));
+    check("skip link: it focuses the figures and adds no history entry", skip.history === histBefore && skip.active === "figures", { before: histBefore, ...skip });
     await p.ctx.close();
   },
 

@@ -19,7 +19,7 @@ export const AreasCard = memo(function AreasCard({ rank, onRank, stats, trend, h
   rank: RankGroup; onRank: (r: RankGroup) => void;
   stats: AreaStat[]; trend: AreaTrendPoint[]; heatData: AreaTrendPoint[]; rows: { id: string; label: string }[];
   loading: boolean; heatLoading: boolean; fetching: boolean; error: boolean; heatError: boolean; retry: () => void; retryHeat: () => void;
-  scale: StepScale; domain: [number, number]; selId?: string; onSelect: (a: Area) => void; onSelectRow: (id: string) => void;
+  scale: StepScale; domain: [number, number]; selId?: string; onSelect: (a: Area) => void; onSelectRow: (id: string, only?: boolean) => void;
   ptype: PropertyTypeParameter; travel: string | null; onSelectPeriod: (p: string) => void; isDark: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("ranking");
