@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import express, { type Express } from "express";
 import cors from "cors";
@@ -8,7 +7,7 @@ import { ZodError } from "zod";
 import router from "./routes";
 import { responseCache } from "./lib/responseCache";
 import { logger } from "./lib/logger";
-import { umamiTag, withUmami } from "./lib/umami";
+import { loadPage, umamiTag } from "./lib/umami";
 
 const app: Express = express();
 
@@ -46,8 +45,10 @@ if (staticDir) {
   // The page is read once, with the analytics tag when Umami is configured (lib/umami.ts).
   const umami = umamiTag(process.env);
   if (umami.warning) logger.warn(umami.warning);
-  const page = withUmami(readFileSync(path.join(root, "index.html"), "utf8"), umami.tag);
+  const { page, error } = loadPage(path.join(root, "index.html"), umami.tag);
+  if (error) logger.error(error);
   const sendPage = (_req: express.Request, res: express.Response) => {
+    if (page === null) { res.status(404).end(); return; }
     res.set("Cache-Control", "no-cache").type("html").send(page);
   };
   app.get("/index.html", sendPage);

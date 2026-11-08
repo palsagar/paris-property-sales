@@ -507,6 +507,7 @@ const sections = {
       all.push(...got);
       check(`analytics: ${name}`, same(got, want), { got });
     };
+    await expect("a click on Paris while Paris is selected sends nothing", () => click(p.page, "filter-arr-all"), []);
     await expect("an Area button", () => click(p.page, "filter-arr-5"),
       [["select-area", { level: "arrondissement", area: "Paris 5e", code: "5", via: "buttons" }]]);
     // The Sales list first, while the Selection still has many pages.
@@ -519,6 +520,10 @@ const sections = {
       [["change-period", { via: "preset", preset: "last-12-months", ...last12 }]]);
     await expect("a map mode", () => click(p.page, "map-mode-change"), [["change-map-mode", { mode: "change" }]]);
     await expect("a click on the map mode already chosen sends nothing", () => click(p.page, "map-mode-change"), []);
+    await expect("back to the price map", () => click(p.page, "map-mode-level"), [["change-map-mode", { mode: "level" }]]);
+    await p.page.focus('[data-testid="slider-travel"]');
+    await expect("a key that does not move the map's quarter slider sends nothing", () => p.page.keyboard.press("End"), []);
+    await expect("a key that moves the map's quarter slider", () => p.page.keyboard.press("ArrowLeft"), [["time-travel", { via: "slider" }]]);
     await expect("a CSV download", () => click(p.page, "button-csv-trend"), [["export-csv", { panel: "trend" }]]);
     await expect("print", () => click(p.page, "button-pdf"), [["print", null]]);
 
@@ -537,6 +542,16 @@ const sections = {
     const u = new URL(p.page.url()).searchParams;
     check("analytics: the slider sends one event at its release",
       same(slid, [["change-period", { via: "slider", from: u.get("from")?.slice(0, 7), to: u.get("to")?.slice(0, 7) }]]), { got: slid });
+    // Back to the full range: no months, as for the "All dates" preset. The end handle is already at the last month.
+    const start = await handle.boundingBox();
+    const full = await sent(p, async () => {
+      await p.page.mouse.move(start.x + start.width / 2, y);
+      await p.page.mouse.down();
+      await p.page.mouse.move(brush.x - 20, y, { steps: 8 });
+      await p.page.mouse.up();
+    });
+    all.push(...full);
+    check("analytics: a slider dragged back to the full range sends no months", same(full, [["change-period", { via: "slider" }]]) && !new URL(p.page.url()).searchParams.has("from"), { got: full });
 
     // The search box: the event names the Area chosen, never the text typed.
     const typed = "odeo";
@@ -545,6 +560,22 @@ const sections = {
     check("analytics: the search box sends the Area chosen, not the text typed",
       found.length === 1 && found[0][0] === "select-area" && found[0][1].via === "search" && found[0][1].level === "quartier" && !JSON.stringify(found).includes(typed), { got: found });
     all.push(...(await events(p.page)).filter(([n]) => n === "pageview"));
+    await p.ctx.close();
+
+    // A click back to the option on screen, while the first click loads, is kept: the page ends on the last choice.
+    p = await openPage("/", { umami: true });
+    await settle(p.net);
+    await delay(p.page, /\/api\/sales\/trend\?/, 1500);
+    const raced = await sent(p, async () => {
+      await click(p.page, "gran-month");
+      await p.page.waitForTimeout(200);
+      await click(p.page, "gran-quarter");
+    });
+    await p.page.waitForTimeout(300);
+    const granNow = { url: new URL(p.page.url()).searchParams.get("gran"), quarter: await p.page.getAttribute('[data-testid="gran-quarter"]', "aria-pressed") };
+    check("analytics: a click back to the option on screen while the first click loads is kept",
+      granNow.url === null && granNow.quarter === "true" && same(raced, [["change-granularity", { gran: "month" }], ["change-granularity", { gran: "quarter" }]]), { ...granNow, got: raced });
+    all.push(...raced);
     await p.ctx.close();
 
     // A link that carries settings, and a dot.

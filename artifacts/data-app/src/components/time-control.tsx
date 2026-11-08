@@ -36,8 +36,9 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
     pending.current = null;
     setDraft(null);
     if (r.data !== data) return;
-    if (r.s !== startIdx || r.e !== endIdx) track("change-period", { via: "slider", ...periodProps(periods[r.s], periods[r.e]) });
-    if (r.s === 0 && r.e === periods.length - 1) onChange(undefined, undefined);
+    const full = r.s === 0 && r.e === periods.length - 1;
+    if (r.s !== startIdx || r.e !== endIdx) track("change-period", { via: "slider", ...(full ? {} : periodProps(periods[r.s], periods[r.e])) });
+    if (full) onChange(undefined, undefined);
     else onChange(periods[r.s], endOfMonth(periods[r.e]));
   };
   const commitRef = useRef(commit);

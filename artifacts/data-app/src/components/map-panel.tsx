@@ -17,8 +17,6 @@ import { pointParams, quartierStatParams, quartierTrendParams } from "@/lib/sele
 import type { MapLevel, MapMode } from "@/lib/view-state";
 import { track } from "@/lib/analytics";
 
-const SLIDER_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
-
 export const MapPanel = memo(function MapPanel(props: {
   isDark: boolean; ptype: PropertyTypeParameter; from?: string; to?: string; datasetFrom: string; datasetTo: string;
   area: Area; selArr?: number; areaParams: ReturnType<typeof areaParams>;
@@ -67,7 +65,9 @@ export const MapPanel = memo(function MapPanel(props: {
   }, [stats]);
   const divScale = useMemo(() => makeDivScale(maxChange), [maxChange]);
 
-  // Play / pause through quarters. The slider's event fires when a drag or a key press ends, not on each step.
+  // Play / pause through quarters. The slider's event fires when a drag or a key press that moved it ends, not on each step.
+  const travelMoved = useRef(false);
+  const endTravelMove = () => { if (travelMoved.current) track("time-travel", { via: "slider" }); travelMoved.current = false; };
   const [playing, setPlaying] = useState(false);
   const stateRef = useRef({ periods, travel }); stateRef.current = { periods, travel };
   const setTravelRef = useRef(setTravel); setTravelRef.current = setTravel;
@@ -183,8 +183,8 @@ export const MapPanel = memo(function MapPanel(props: {
           </button>
           <div className="flex-1">
             <input type="range" min={0} max={Math.max(0, periods.length - 1)} value={travelOn ? periods.indexOf(travel!) : periods.length - 1}
-              onChange={(e) => { setPlaying(false); setTravel(periods[Number(e.target.value)]); }}
-              onPointerUp={() => track("time-travel", { via: "slider" })} onKeyUp={(e) => { if (SLIDER_KEYS.has(e.key)) track("time-travel", { via: "slider" }); }} className="w-full accent-[hsl(var(--primary))]" data-testid="slider-travel" aria-label="Quarter shown on the map" />
+              onChange={(e) => { travelMoved.current = true; setPlaying(false); setTravel(periods[Number(e.target.value)]); }}
+              onPointerUp={endTravelMove} onKeyUp={endTravelMove} className="w-full accent-[hsl(var(--primary))]" data-testid="slider-travel" aria-label="Quarter shown on the map" />
             <div className="flex justify-between text-[12px] text-muted-foreground font-num"><span>{labels.get(periods[0] ?? "")}</span><span>{labels.get(periods[periods.length - 1] ?? "")}</span></div>
           </div>
           <div className="w-[124px] text-right">

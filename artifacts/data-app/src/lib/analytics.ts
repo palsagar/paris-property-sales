@@ -55,7 +55,8 @@ type Send = (u: Umami) => void;
 const umami = (): Umami | undefined => (globalThis as { umami?: Umami }).umami;
 const run = (u: Umami, send: Send) => { try { send(u); } catch { /* analytics never breaks the page */ } };
 
-// The script loads with `async`, so the first events can come before it. They wait, up to a limit, and go out when it loads.
+// The script loads with `async`, so the first events can come before it. They wait and go out when it loads. A blocked
+// script may fail before the first event, when no listener is there to clear the queue, so the limit bounds what stays.
 const MAX_WAITING = 50;
 const waiting: Send[] = [];
 let watched: EventTarget | null = null;

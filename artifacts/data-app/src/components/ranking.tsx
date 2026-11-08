@@ -45,7 +45,7 @@ export const Ranking = memo(function Ranking({ stats, trend, loading, fetching, 
   return (
     <ChartCard testId="ranking" title={rank === "paris" ? "Arrondissements by price per m²" : "Communes by price per m²"} isDark={isDark} loading={loading} fetching={fetching}
       csv={stats} csvName={`ranking-${rank}.csv`} desc="Bar: median price per m². Dotted line: the middle half of sales. Then the number of sales, the change over the period and the quarterly trend."
-      right={<Segmented label="Sort" testId="rank-sort" value={sort} onChange={(v) => { track("sort-ranking", { by: v === "level" ? "price" : "change" }); setSort(v as "level" | "change"); }} options={[["level", "By price"], ["change", "By change"]]} />}>
+      right={<Segmented label="Sort" testId="rank-sort" value={sort} onChange={(v) => { if (v !== sort) track("sort-ranking", { by: v === "level" ? "price" : "change" }); setSort(v as "level" | "change"); }} options={[["level", "By price"], ["change", "By change"]]} />}>
       <RankSwitch value={rank} onChange={onRank} testId="rank-switch" />
       {loading ? <div className="space-y-2">{Array.from({ length: 16 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}</div> :
         error ? <ErrorState onRetry={retry} /> : (

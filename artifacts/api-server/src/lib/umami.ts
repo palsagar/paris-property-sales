@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 /**
  * The Umami analytics tag. The server adds it to index.html only when UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set,
  * so local builds, tests and forks of the repository send nothing. The dashboard sends the page view itself
@@ -22,7 +24,7 @@ function isHttpUrl(v: string): boolean {
 export function umamiTag(env: Record<string, string | undefined>): { tag: string; warning?: string } {
   const src = env["UMAMI_SCRIPT_URL"]?.trim() ?? "";
   const id = env["UMAMI_WEBSITE_ID"]?.trim() ?? "";
-  const domains = env["UMAMI_DOMAINS"]?.trim() ?? "";
+  const domains = (env["UMAMI_DOMAINS"] ?? "").split(",").map((d) => d.trim()).filter(Boolean).join(",");
   if (!src && !id) return { tag: "" };
   if (!src) return { tag: "", warning: "UMAMI_WEBSITE_ID is set without UMAMI_SCRIPT_URL, so the site sends no analytics." };
   if (!id) return { tag: "", warning: "UMAMI_SCRIPT_URL is set without UMAMI_WEBSITE_ID, so the site sends no analytics." };
@@ -35,7 +37,20 @@ export function umamiTag(env: Record<string, string | undefined>): { tag: string
   };
 }
 
+/**
+ * index.html with the tag, read once at startup. A missing page gives null and an error instead of an exception,
+ * so a broken dashboard build does not stop the API.
+ */
+export function loadPage(file: string, tag: string): { page: string | null; error?: string } {
+  try {
+    return { page: withUmami(readFileSync(file, "utf8"), tag) };
+  } catch (e) {
+    return { page: null, error: `Cannot read ${file}, so the server serves only the API: ${(e as Error).message}` };
+  }
+}
+
 /** The page with the tag at the end of its head. */
 export function withUmami(html: string, tag: string): string {
-  return tag ? html.replace("</head>", `${tag}</head>`) : html;
+  // A function, so that a "$" in the tag is copied as it is and not read as a replacement pattern.
+  return tag ? html.replace("</head>", () => `${tag}</head>`) : html;
 }

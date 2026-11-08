@@ -41,7 +41,7 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, fetching, er
     <ChartCard testId="heatmap" title="Price per m² by area and quarter" isDark={isDark} loading={loading} fetching={fetching}
       csv={data} csvName={`heatmap-${rank}-quarter.csv`}
       desc="Each cell is the median price per m² for one quarter. Click a row to select the area. Click a year mark above a column to show that quarter on the map."
-      right={<Segmented label="Colour by" testId="heat-mode" value={rel} onChange={(v) => { track("change-heatmap-colour", { by: v === "level" ? "price" : "change" }); setRel(v as "level" | "rel"); }} options={[["level", "Price level"], ["rel", "Change since first quarter"]]} />}>
+      right={<Segmented label="Colour by" testId="heat-mode" value={rel} onChange={(v) => { if (v !== rel) track("change-heatmap-colour", { by: v === "level" ? "price" : "change" }); setRel(v as "level" | "rel"); }} options={[["level", "Price level"], ["rel", "Change since first quarter"]]} />}>
       <RankSwitch value={rank} onChange={onRank} testId="heat-rank-switch" />
       {loading ? <Skeleton className="w-full h-[440px]" /> : error ? <ErrorState onRetry={retry} /> : periods.length === 0 ? (
         <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">No sales in this period. Pick a longer one.</div>

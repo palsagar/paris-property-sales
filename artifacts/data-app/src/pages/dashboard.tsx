@@ -23,7 +23,7 @@ import { Ranking } from "@/components/ranking";
 import { Heatmap } from "@/components/heatmap";
 import { Distributions, RoomsChart } from "@/components/distributions";
 import { Transactions } from "@/components/transactions";
-import type { QMeta } from "@/components/area-picker";
+import type { CommuneMeta, QMeta } from "@/components/area-picker";
 import { FilterBar } from "@/components/filter-bar";
 import { RefreshControl } from "@/components/refresh-control";
 
@@ -53,13 +53,19 @@ function ViewHost(props: DatasetProps) {
   const [view, patch, movedTo] = useViewState(props.datasetFrom, props.datasetTo);
   const [choices, setChoices] = useState<PanelChoices>({ smooth: null, sortBy: "date", sortDir: "desc" });
   const { shown, updating } = useShownView(view, choices);
-  // The names of the Quartiers and Communes, for analytics. The panels load the same boundaries, so they are fetched once.
+  // The Quartiers and Communes, for the search box and for the names that analytics sends. The map loads the same
+  // boundaries, so they are fetched once.
   const qB = useGetQuartierBoundaries();
   const communeB = useGetCommuneBoundaries();
-  const names = useMemo(() => new Map([...(qB.data?.features ?? []), ...(communeB.data?.features ?? [])].map((f) => {
-    const p = (f as { properties: { id: string; name: string } }).properties;
-    return [String(p.id), p.name];
-  })), [qB.data, communeB.data]);
+  const quartiers: QMeta[] = useMemo(() => (qB.data?.features ?? []).map((f) => {
+    const p = (f as { properties: { id: string; name: string; arr: number } }).properties;
+    return { id: String(p.id), name: p.name, arr: p.arr };
+  }).sort((a, b) => a.arr - b.arr || a.name.localeCompare(b.name)), [qB.data]);
+  const communes: CommuneMeta[] = useMemo(() => (communeB.data?.features ?? []).map((f) => {
+    const { id, name, group } = (f as { properties: { id: string; name: string; group: RankGroup } }).properties;
+    return { id, name, group };
+  }).sort((a, b) => a.name.localeCompare(b.name, "fr")), [communeB.data]);
+  const names = useMemo(() => new Map([...quartiers, ...communes].map((x) => [x.id, x.name])), [quartiers, communes]);
   const viewRef = useRef(view);
   viewRef.current = view;
   const namesRef = useRef(names);
@@ -70,7 +76,7 @@ function ViewHost(props: DatasetProps) {
   updatingRef.current = updating;
   const select = useCallback((a: Area, via: AreaVia, clickOff: boolean) => {
     const next = areaChange(viewRef.current.area, a, clickOff).area;
-    if (next) track("select-area", { ...areaProps(next, namesRef.current), via });
+    if (next && JSON.stringify(next) !== JSON.stringify(viewRef.current.area)) track("select-area", { ...areaProps(next, namesRef.current), via });
     patch((s) => areaChange(s.area, a, clickOff));
   }, [patch]);
   const selectArea = useCallback((a: Area, via: AreaVia) => select(a, via, !updatingRef.current), [select]);
@@ -89,14 +95,15 @@ function ViewHost(props: DatasetProps) {
   return (
     <RequestedView.Provider value={requested}>
       <PanelChoicesContext.Provider value={panelChoices}>
-        <DashboardView {...props} view={shown} patch={patch} selectArea={selectArea} selectAreaOnly={selectAreaOnly} movedTo={movedTo} />
+        <DashboardView {...props} view={shown} requested={viewRef} patch={patch} selectArea={selectArea} selectAreaOnly={selectAreaOnly} movedTo={movedTo}
+          quartiers={quartiers} communes={communes} />
       </PanelChoicesContext.Provider>
     </RequestedView.Provider>
   );
 }
 
-const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, releaseMonth, years, view, patch, selectArea, selectAreaOnly, movedTo }: DatasetProps & {
-  view: ViewState; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; selectAreaOnly: (a: Area, via: AreaVia) => void; movedTo: { from?: string; to?: string } | null;
+const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, releaseMonth, years, view, requested, patch, selectArea, selectAreaOnly, movedTo, quartiers, communes }: DatasetProps & {
+  view: ViewState; requested: { readonly current: ViewState }; quartiers: QMeta[]; communes: CommuneMeta[]; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; selectAreaOnly: (a: Area, via: AreaVia) => void; movedTo: { from?: string; to?: string } | null;
 }) {
   const { ptype, area, from, to, mapMode, mapLevel, rank } = view;
   const [isDark, setIsDark] = useState(false);
@@ -105,19 +112,11 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   useEffect(() => { document.documentElement.classList.toggle("dark", isDark); }, [isDark]);
   useEffect(() => { setTravel(null); }, [from, to, ptype, mapLevel]);
 
-  // Boundaries (also provide quartier names for the picker)
+  // Boundaries. ViewHost turns the Quartier and Commune boundaries into the lists of names.
   const arrB = useGetArrondissementBoundaries();
   const qB = useGetQuartierBoundaries();
-  const quartiers: QMeta[] = useMemo(() => (qB.data?.features ?? []).map((f) => {
-    const p = (f as { properties: { id: string; name: string; arr: number } }).properties;
-    return { id: String(p.id), name: p.name, arr: p.arr };
-  }).sort((a, b) => a.arr - b.arr || a.name.localeCompare(b.name)), [qB.data]);
   const qById = useMemo(() => new Map(quartiers.map((q) => [q.id, q])), [quartiers]);
   const communeB = useGetCommuneBoundaries();
-  const communes = useMemo(() => (communeB.data?.features ?? []).map((f) => {
-    const { id, name, group } = (f as { properties: { id: string; name: string; group: RankGroup } }).properties;
-    return { id, name, group };
-  }).sort((a, b) => a.name.localeCompare(b.name, "fr")), [communeB.data]);
 
   // The Selection keeps its identity when only the map, the trend's granularity or the ranking's group changes,
   // so the panels that read only the Selection do not redraw.
@@ -178,12 +177,12 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   }, [areaMedians, scale]);
 
   const selectRow = useCallback((id: string) => selectArea(rank === "paris" ? { kind: "arr", arr: Number(id) } : { kind: "commune", id }, "heatmap"), [rank, selectArea]);
-  // Stable callbacks, so the memoised panels redraw only when their data changes. The Segmented buttons that call
-  // them skip a click on the option already chosen, so each event records a change.
-  const setMode = useCallback((m: MapMode) => { track("change-map-mode", { mode: m }); patch({ mapMode: m }); }, [patch]);
-  const setLevel = useCallback((l: MapLevel) => { track("change-map-level", { level: l }); patch({ mapLevel: l }); }, [patch]);
-  const setRank = useCallback((r: RankGroup) => { track("change-ranking-group", { group: r }); patch({ rank: r }); }, [patch]);
-  const setGran = useCallback((g: GranularityParameter) => { track("change-granularity", { gran: g }); patch({ gran: g }); }, [patch]);
+  // Stable callbacks, so the memoised panels redraw only when their data changes. An event records a change of the
+  // requested view: while a view loads, the buttons show the shown view, and a click back to it is still a change.
+  const setMode = useCallback((m: MapMode) => { if (requested.current.mapMode !== m) track("change-map-mode", { mode: m }); patch({ mapMode: m }); }, [patch, requested]);
+  const setLevel = useCallback((l: MapLevel) => { if (requested.current.mapLevel !== l) track("change-map-level", { level: l }); patch({ mapLevel: l }); }, [patch, requested]);
+  const setRank = useCallback((r: RankGroup) => { if (requested.current.rank !== r) track("change-ranking-group", { group: r }); patch({ rank: r }); }, [patch, requested]);
+  const setGran = useCallback((g: GranularityParameter) => { if (requested.current.gran !== g) track("change-granularity", { gran: g }); patch({ gran: g }); }, [patch, requested]);
   const selectFeature = useCallback((p: MapFeature) => selectArea(featureArea(p), "map"), [selectArea]);
   const selectDot = useCallback((a: Area) => selectAreaOnly(a, "dot"), [selectAreaOnly]);
   const selectFromRanking = useCallback((a: Area) => selectArea(a, "ranking"), [selectArea]);
