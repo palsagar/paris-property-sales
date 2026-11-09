@@ -212,6 +212,7 @@ export const fr: Messages = {
     sinceFirst: (change: string) => ` · ${change} depuis le premier trimestre`,
     few: " · moins de 10 ventes",
     point: "Pointez une case, ou touchez-la, pour lire ses chiffres.",
+    grid: "Prix médian au m² par secteur et par trimestre. Passez d'une case à l'autre avec les flèches du clavier.",
     show: (quarter: string) => `Afficher ${quarter} sur la carte`,
     select: (area: string) => `Choisir ${area}`,
     focus: (area: string) => `Centrer la page sur ${area}`,

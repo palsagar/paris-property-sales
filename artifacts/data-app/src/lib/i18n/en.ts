@@ -196,6 +196,7 @@ export const en = {
     sinceFirst: (change: string) => ` · ${change} since the first quarter`,
     few: " · fewer than 10 sales",
     point: "Point at a cell, or tap it, to read its figures.",
+    grid: "Median price per m² by area and quarter. Move between the cells with the arrow keys.",
     show: (quarter: string) => `Show ${quarter} on the map`,
     select: (area: string) => `Select ${area}`,
     focus: (area: string) => `Focus the page on ${area}`,

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { AreaTrendPoint, PropertyTypeParameter } from "@workspace/api-client-react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,6 +55,29 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry
   const labelW = rank === "paris" ? "40px" : "minmax(72px,120px)";
   const h = t().heatmap;
 
+  // The grid is one Tab stop: the year marks (row 0), the row names (column 0) and the cells take the arrow keys, and
+  // only the last one focused is in the Tab order. Column 0 of row 0 is empty.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [cur, setCur] = useState<[number, number]>([1, 1]);
+  const cy = Math.min(cur[0], rows.length), cx = Math.min(cur[1], periods.length);
+  const rove = (y: number, x: number) => ({ "data-hy": y, "data-hx": x, tabIndex: y === cy && x === cx ? 0 : -1 });
+  const onGridKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const el = e.target as HTMLElement;
+    let y = Number(el.dataset.hy), x = Number(el.dataset.hx);
+    if (Number.isNaN(x) || Number.isNaN(y)) return;
+    switch (e.key) {
+      case "ArrowLeft": x--; break;
+      case "ArrowRight": x++; break;
+      case "ArrowUp": y--; break;
+      case "ArrowDown": y++; break;
+      case "Home": x = y === 0 ? 1 : 0; break;
+      case "End": x = periods.length; break;
+      default: return;
+    }
+    e.preventDefault();
+    gridRef.current?.querySelector<HTMLElement>(`[data-hy="${y}"][data-hx="${x}"]`)?.focus();
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -81,20 +104,21 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry
             </div>
             <button type="button" className={stepCls} onClick={() => step(1)} disabled={!pin || periods.indexOf(pin.c) >= periods.length - 1} aria-label={h.next}><ChevronRight className="w-[18px] h-[18px]" aria-hidden /></button>
           </div>
-          <div className="grid gap-[2px]" style={{ gridTemplateColumns: `${labelW} repeat(${periods.length}, minmax(0, 1fr))` }} onMouseLeave={() => setHover(null)}>
+          <div ref={gridRef} role="group" aria-label={h.grid} className="grid gap-[2px]" style={{ gridTemplateColumns: `${labelW} repeat(${periods.length}, minmax(0, 1fr))` }}
+            onMouseLeave={() => setHover(null)} onKeyDown={onGridKey}>
             <span />
-            {periods.map((p) => (
-              <button key={p} type="button" onClick={() => onSelectPeriod(p)} data-testid={`heat-col-${p}`}
+            {periods.map((p, j) => (
+              <button key={p} type="button" onClick={() => onSelectPeriod(p)} data-testid={`heat-col-${p}`} {...rove(0, j + 1)} onFocus={() => setCur([0, j + 1])}
                 className={`no-tap text-[12px] font-num h-5 rounded-sm transition-colors overflow-visible whitespace-nowrap ${travel === p ? "bg-primary text-primary-foreground" : shown?.c === p ? "bg-sunken text-foreground" : "text-muted-foreground hover:bg-sunken"}`}
                 aria-label={h.show(labels.get(p) ?? "")} title={h.show(labels.get(p) ?? "")}>
                 {p.slice(5, 7) === "01" ? `'${p.slice(2, 4)}` : ""}
               </button>
             ))}
-            {rows.map(({ id, label }) => (
+            {rows.map(({ id, label }, i) => (
               <div key={id} className="contents">
-                <button type="button" onClick={() => onSelectRow(id)} data-testid={`heat-row-${id}`} title={h.select(label)}
+                <button type="button" onClick={() => onSelectRow(id)} data-testid={`heat-row-${id}`} title={h.select(label)} {...rove(i + 1, 0)} onFocus={() => setCur([i + 1, 0])}
                   className={`no-tap text-[12px] font-num text-right pr-1.5 rounded-sm truncate transition-colors ${selId === id ? "text-primary font-semibold" : shown?.r === id ? "text-foreground" : "text-muted-foreground"} hover:text-primary`}>{label}</button>
-                {periods.map((p) => {
+                {periods.map((p, j) => {
                   const r = cell.get(`${id}|${p}`);
                   const f = first.get(id);
                   const m = r?.medianPricePerSqm;
@@ -102,7 +126,7 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry
                   const dim = shown && shown.r !== id && shown.c !== p;
                   const isPin = pin?.r === id && pin.c === p;
                   return (
-                    <button key={p} type="button" onMouseEnter={() => setHover({ r: id, c: p })} onFocus={() => setPinned({ r: id, c: p })} onClick={() => setPinned({ r: id, c: p })}
+                    <button key={p} type="button" {...rove(i + 1, j + 1)} onMouseEnter={() => setHover({ r: id, c: p })} onFocus={() => { setCur([i + 1, j + 1]); setPinned({ r: id, c: p }); }} onClick={() => setPinned({ r: id, c: p })}
                       className={`no-tap h-4 sm:h-[18px] rounded-[2px] transition-opacity duration-150 ${isPin ? "ring-2 ring-foreground ring-offset-1 ring-offset-card" : selId === id ? "ring-1 ring-primary" : ""} ${r && r.count < 10 ? "outline-1 outline-dashed outline-foreground/50" : ""}`}
                       style={{ background: color, opacity: dim ? 0.55 : 1 }}
                       aria-label={`${label}, ${labels.get(p)}${r && m == null ? `: ${tooFew()}` : ""}`} />
