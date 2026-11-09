@@ -1,6 +1,9 @@
-import app from "./app";
+import { createApp } from "./app";
+import router from "./routes";
 import { logger } from "./lib/logger";
 import { prewarm } from "./lib/prewarm";
+
+const app = createApp(router);
 
 const rawPort = process.env["PORT"];
 
