@@ -78,6 +78,8 @@ export function AreaPicker({ quartiers, communes, arrNames, area, selArr, onSele
         </CommandList>
       ) : (
         <div className="mt-4 flex flex-col gap-4">
+          {/* The search field points at the list with aria-controls, so an empty list stays in the page while the tiles show. */}
+          <CommandList className="hidden" />
           <section aria-labelledby={`${inputId}-paris`} className="flex flex-col gap-2">
             <h3 id={`${inputId}-paris`} className="text-[12px] font-semibold tracking-wide text-muted-foreground">PARIS</h3>
             <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Arrondissement">
