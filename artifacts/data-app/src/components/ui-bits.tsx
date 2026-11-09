@@ -166,7 +166,7 @@ export function SwitchField({ checked, onCheckedChange, label, disabled, testId,
   return (
     <span className={`inline-flex items-center gap-2 min-h-10 print:hidden ${disabled ? "opacity-45" : ""} ${className}`}>
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} data-testid={testId}
-        className="data-[state=checked]:bg-foreground data-[state=unchecked]:bg-control/50" />
+        className="no-tap tap-area data-[state=checked]:bg-foreground data-[state=unchecked]:bg-control/50" />
       <label htmlFor={id} className="text-[14px] cursor-pointer select-none">{label}</label>
     </span>
   );

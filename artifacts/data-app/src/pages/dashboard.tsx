@@ -286,7 +286,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
             <p className="text-[13px] md:text-[14px] text-muted-foreground" data-testid="text-coverage">{tx.page.dataTo(longMonthLabel(datasetTo))}<span className="hidden md:inline">{tx.page.release(longMonthLabel(releaseMonth))}</span></p>
           </div>
           {/* Laptop: the author line above the switch and the buttons. Phone: the switch beside "More", the author line below. */}
-          <div className="shrink-0 flex flex-col-reverse md:flex-col items-end gap-1.5 print:flex-col">
+          <div className="shrink-0 flex flex-col-reverse md:flex-col items-end gap-1.5 pointer-coarse:gap-4 print:flex-col">
             <AuthorLinks />
             <div className="flex items-center gap-2 print:hidden">
               <Segmented testId="lang" label={t().header.langLabel} value={lang} options={[["en", "EN"], ["fr", "FR"]]} onChange={switchLang} />

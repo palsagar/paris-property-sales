@@ -524,6 +524,9 @@ body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index
 /* Touch targets */
 @media (pointer: coarse) {
   button:not(.no-tap), a:not(.no-tap), [role="button"]:not(.no-tap), select { min-height: 44px; min-width: 44px; }
+  /* A control that must keep its drawn size, such as a switch or a link in a line of text, gets an invisible 44 px target. */
+  .tap-area { position: relative; }
+  .tap-area::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   input[type="range"] { min-height: 44px; }
   /* 16px stops iOS from zooming into a field on focus. */
   input, select, textarea { font-size: 16px; }

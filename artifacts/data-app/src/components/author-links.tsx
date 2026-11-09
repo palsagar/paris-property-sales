@@ -1,7 +1,7 @@
 import { track } from "@/lib/analytics";
 import { t } from "@/lib/i18n/messages";
 
-const linkCls = "underline underline-offset-2 decoration-foreground/30 hover:text-foreground";
+const linkCls = "no-tap tap-area underline underline-offset-2 decoration-foreground/30 hover:text-foreground";
 
 /** The author line at the top right. Plain links: the page makes no request to GitHub, and shows no star count. */
 export function AuthorLinks() {

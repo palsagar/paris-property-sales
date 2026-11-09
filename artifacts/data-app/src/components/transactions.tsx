@@ -101,8 +101,8 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
                     <p className="text-[16px] font-semibold leading-snug">{streetName(t.address)}</p>
                     <p className="font-num text-[15px] font-medium text-right whitespace-nowrap">{eur(t.price)}</p>
                     <p className="text-[14px] text-muted-foreground">
-                      {t.quartierName ? <button type="button" onClick={() => onSelectQuartierName(t.quartierName!)} className="no-tap text-primary underline underline-offset-2">{t.quartierName}</button>
-                        : showArea ? <button type="button" onClick={() => onSelectArea(a.area)} className="no-tap text-primary underline underline-offset-2">{a.label}</button> : null}
+                      {t.quartierName ? <button type="button" onClick={() => onSelectQuartierName(t.quartierName!)} className="no-tap tap-area text-primary underline underline-offset-2">{t.quartierName}</button>
+                        : showArea ? <button type="button" onClick={() => onSelectArea(a.area)} className="no-tap tap-area text-primary underline underline-offset-2">{a.label}</button> : null}
                       {(t.quartierName || showArea) && " · "}{dateLabel(t.date)}
                     </p>
                     <p className="font-num text-[13px] text-muted-foreground text-right whitespace-nowrap inline-flex items-center justify-end gap-1.5">
