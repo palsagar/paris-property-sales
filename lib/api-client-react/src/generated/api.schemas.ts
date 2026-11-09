@@ -105,6 +105,8 @@ export interface DistributionBin {
 
 export interface Distribution {
   bins: DistributionBin[];
+  /** The Sales above the last bin. The bins stop at the 99th percentile, so the chart shows these in one open-ended bar. */
+  above: number;
   /**
      * Null when fewer than 5 Sales
      * @nullable

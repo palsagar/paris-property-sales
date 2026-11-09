@@ -89,7 +89,7 @@ test("no Sales gives zero counts, no statistics and empty lists", async () => {
   );
   assert.deepEqual(
     await distribution(db, f, "price", 45),
-    { bins: [], median: null, mean: null, p10: null, p25: null, p75: null, p90: null },
+    { bins: [], above: 0, median: null, mean: null, p10: null, p25: null, p75: null, p90: null },
   );
   assert.deepEqual(await salesByRooms(db, f), []);
   assert.deepEqual(await areaStats(db, f, "arrondissement", null), []);
@@ -101,8 +101,9 @@ test("distribution bins follow the old calculation", async () => {
   assert.deepEqual(d.bins[0], { from: 100000, to: 110000, count: 1 });
   assert.equal(d.bins[10]!.count, 1);
   assert.equal(d.bins[30]!.count, 1);
-  // 500,000 is above the 99th percentile, so no bin counts it.
+  // 500,000 is above the 99th percentile, so no bin counts it and `above` does.
   assert.equal(d.bins.reduce((n, b) => n + b.count, 0), 4);
+  assert.equal(d.above, 1);
   assert.deepEqual([d.median, d.mean, d.p25, d.p75], [300000, 300000, 200000, 400000]);
 });
 
@@ -316,8 +317,9 @@ test("distribution on Price per m²", async () => {
   assert.deepEqual(d.bins[0], { from: 6000, to: 6500, count: 1 });
   // 10000 falls in bin (10000 - 6000) / 500 = 8, which holds three Sales.
   assert.deepEqual(d.bins[8], { from: 10000, to: 10500, count: 3 });
-  // 20000 is above the 99th percentile, so no bin counts it.
+  // 20000 is above the 99th percentile, so no bin counts it and `above` does.
   assert.equal(d.bins.reduce((n, b) => n + b.count, 0), 4);
+  assert.equal(d.above, 1);
   assert.equal(d.mean, 11200); // (6000 + 30000 + 20000) / 5
   assert.equal(d.median, 10000);
   assert.equal(d.p25, 10000); // position 1

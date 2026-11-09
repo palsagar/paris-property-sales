@@ -100,6 +100,7 @@ export const GetPriceDistributionResponse = zod.object({
   "to": zod.number(),
   "count": zod.number().int()
 })),
+  "above": zod.number().int().describe('The Sales above the last bin. The bins stop at the 99th percentile, so the chart shows these in one open-ended bar.'),
   "median": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "mean": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "p10": zod.number().nullable().describe('Null when fewer than 5 Sales'),
@@ -137,6 +138,7 @@ export const GetPricePerSqmDistributionResponse = zod.object({
   "to": zod.number(),
   "count": zod.number().int()
 })),
+  "above": zod.number().int().describe('The Sales above the last bin. The bins stop at the 99th percentile, so the chart shows these in one open-ended bar.'),
   "median": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "mean": zod.number().nullable().describe('Null when fewer than 5 Sales'),
   "p10": zod.number().nullable().describe('Null when fewer than 5 Sales'),
