@@ -49,7 +49,7 @@ export const en = {
     distTitle: "What sold, and for how much",
     distDesc: (sales: string) => `${sales ? `The spread of the ${sales} in the Selection. ` : ""}Darker bars hold the middle half.`,
     copied: "Link copied",
-    copiedDesc: "It opens this exact view: area, type, period and panels.",
+    copiedDesc: "It opens the same area, property type, period and map.",
     copyFailed: "The link could not be copied",
     copyFailedDesc: "Copy it from the address bar instead.",
     aboutTitle: "About the data",

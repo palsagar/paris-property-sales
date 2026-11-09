@@ -67,7 +67,7 @@ export const fr: Messages = {
     distTitle: "Ce qui s'est vendu, et à quel prix",
     distDesc: (sales: string) => `${sales ? `La répartition des ${sales} de la Sélection. ` : ""}Les barres foncées contiennent la moitié centrale.`,
     copied: "Lien copié",
-    copiedDesc: "Il ouvre exactement cette vue : secteur, type, période et panneaux.",
+    copiedDesc: "Il ouvre le même secteur, le même type de bien, la même période et la même carte.",
     copyFailed: "Le lien n'a pas pu être copié",
     copyFailedDesc: "Copiez-le depuis la barre d'adresse.",
     aboutTitle: "À propos des données",
