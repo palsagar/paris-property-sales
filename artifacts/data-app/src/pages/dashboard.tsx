@@ -134,6 +134,11 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
 
   // Boundaries. ViewHost turns the Quartier and Commune boundaries into the lists of names.
   const arrB = useGetArrondissementBoundaries();
+  // Each Arrondissement's own name, such as Popincourt, for the search box.
+  const arrNames = useMemo(() => new Map((arrB.data?.features ?? []).map((f) => {
+    const p = (f as { properties: { arr: number; name: string } }).properties;
+    return [p.arr, p.name] as const;
+  })), [arrB.data]);
   const qB = useGetQuartierBoundaries();
   const qById = useMemo(() => new Map(quartiers.map((q) => [q.id, q])), [quartiers]);
   const communeB = useGetCommuneBoundaries();
@@ -308,7 +313,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           </p>
         </section>
 
-        <SelectionBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById}
+        <SelectionBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById} arrNames={arrNames}
           count={summary.data?.count} />
         {movedTo && from === movedTo.from && to === movedTo.to && (
           <p className="mt-3 text-[14px] text-muted-foreground print:hidden" data-testid="period-moved-notice" role="status">

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { areaChange, areaParams, featureArea, featureId, featureState, groupOfArea, keepInSameArea, pointArea, saleArea, searchScore, searchValue } from "./areas";
+import { areaChange, areaParams, featureArea, featureId, featureState, groupOfArea, keepInSameArea, keepInSameSelection, pointArea, saleArea, searchScore, searchValue, arrSearchTerms, arrPostcode } from "./areas";
 
 test("areaParams gives the request parameter of each kind", () => {
   assert.deepEqual(areaParams({ kind: "paris" }), {});
@@ -83,6 +83,26 @@ test("keepInSameArea keeps the previous data only while the Area stays the same"
   assert.equal(keepInSameArea({ arrondissement: 5 })("old", query({ quartier: "7510501" })), undefined);
   assert.equal(keepInSameArea({ department: "92" })("old", query({ department: "93" })), undefined);
   assert.equal(keepInSameArea(commune)(undefined, undefined), undefined);
+});
+
+test("keepInSameSelection keeps the previous data only while the whole Selection stays the same", () => {
+  const query = (params: object) => ({ queryKey: ["/api/sales/trend", params] });
+  const f = { propertyType: "all", arrondissement: 11, from: "2024-01-01" };
+  assert.equal(keepInSameSelection(f)("old", query({ ...f, granularity: "month" })), "old");
+  assert.equal(keepInSameSelection(f)("old", query({ ...f, propertyType: "Maison" })), undefined);
+  assert.equal(keepInSameSelection(f)("old", query({ ...f, from: undefined })), undefined);
+  assert.equal(keepInSameSelection(f)("old", query({ ...f, arrondissement: 12 })), undefined);
+});
+
+test("an Arrondissement is found by its ordinal, number, postcode and name, and ranks first for its number", () => {
+  const arr = (n: number, name: string) => searchValue(`${n === 1 ? "1er" : `${n}e`} arrondissement`, arrPostcode(n), arrSearchTerms(n, name));
+  const a11 = arr(11, "Popincourt");
+  for (const typed of ["11e", "11th", "75011", "popincourt", "11"]) assert.ok(searchScore(a11, typed) > 0, typed);
+  assert.equal(searchScore(arr(10, "Entrepôt"), "11"), 0);
+  assert.equal(searchScore(arr(16, "Passy"), "75116"), 1);
+  assert.equal(searchScore(arr(1, "Louvre"), "1st"), 1);
+  // A Quartier of the 10e has an id that holds "11", but the 11e starts with it, so it scores higher.
+  assert.ok(searchScore(a11, "11") > searchScore(searchValue("Hôpital-Saint-Louis", "7511003"), "11"));
 });
 
 test("searchScore needs every typed word in the name, and takes no loose fuzzy match", () => {

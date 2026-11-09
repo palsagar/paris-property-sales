@@ -41,9 +41,9 @@ export function periodLabel(from: string | undefined, to: string | undefined, da
  * requested view, so a choice shows at once, while the panels below keep the shown view until its data has loaded.
  * On a laptop, Area and Period open popovers. On a phone, one button opens a sheet with all three.
  */
-export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom, datasetTo, years, isDark, quartiers, communes, qById, count }: {
+export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom, datasetTo, years, isDark, quartiers, communes, qById, arrNames, count }: {
   chartView: Pick<ViewState, "ptype" | "area">; datasetFrom: string; datasetTo: string; years: YearRange[]; isDark: boolean;
-  quartiers: QMeta[]; communes: CommuneMeta[]; qById: Map<string, QMeta>;
+  quartiers: QMeta[]; communes: CommuneMeta[]; qById: Map<string, QMeta>; arrNames: Map<number, string>;
   /** Sales in the shown Selection, once loaded. */
   count?: number;
 }) {
@@ -71,7 +71,7 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
             <FieldButton icon={<MapPin className="w-[18px] h-[18px]" />} label={tx.selection.area} value={name} className="w-[min(300px,32vw)]" data-testid="button-area" aria-haspopup="dialog" />
           </PopoverTrigger>
           <PopoverContent align="start" sideOffset={8} className="w-[440px] p-4 rounded-xl data-[state=closed]:animate-none" aria-label={tx.selection.chooseArea}>
-            <AreaPicker quartiers={quartiers} communes={communes} area={area} selArr={selArr} autoFocus
+            <AreaPicker quartiers={quartiers} communes={communes} arrNames={arrNames} area={area} selArr={selArr} autoFocus
               onSelect={(a, via) => { selectArea(a, via); setAreaOpen(false); }} />
           </PopoverContent>
         </Popover>
@@ -116,7 +116,7 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
             <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-6 flex flex-col gap-7" data-vaul-no-drag>
               <fieldset className="flex flex-col gap-2">
                 <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">{tx.selection.areaLegend}</legend>
-                <AreaPicker quartiers={quartiers} communes={communes} area={area} selArr={selArr} onSelect={(a, via) => selectArea(a, via)} />
+                <AreaPicker quartiers={quartiers} communes={communes} arrNames={arrNames} area={area} selArr={selArr} onSelect={(a, via) => selectArea(a, via)} />
               </fieldset>
               <fieldset>
                 <legend className="text-[13px] font-semibold tracking-wide text-muted-foreground mb-2">{tx.selection.propertyLegend}</legend>
