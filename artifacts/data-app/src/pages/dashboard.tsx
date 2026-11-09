@@ -377,7 +377,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           <section aria-labelledby="dist-title" className="pt-12 md:pt-14">
             <div className="flex flex-col gap-1 mb-4">
               <h2 id="dist-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">{tx.page.distTitle}</h2>
-              <p className="text-[16px] text-muted-foreground">{tx.page.distDesc(summary.data ? tx.sales(num(summary.data.count), summary.data.count) : "")}</p>
+              <p className="text-[16px] text-muted-foreground">{tx.page.distDesc(summary.data?.count ? tx.sales(num(summary.data.count), summary.data.count) : "")}</p>
             </div>
             <div className="flex flex-wrap gap-4">
               <Distributions filters={filters} houseShare={ptype === "all" ? summary.data?.houseShare : null} isDark={isDark} />

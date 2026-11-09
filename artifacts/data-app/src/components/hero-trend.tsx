@@ -166,6 +166,9 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
         <>
           {charts}
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[13px] text-muted-foreground">
+      ) : data.length === 1 ? (
+        // One point draws no line: say why, instead of a lone dot under a wide bar.
+        <div className="flex items-center justify-center text-center text-muted-foreground text-sm px-4" style={{ height: PLOT_H + STRIP_H }} data-testid="trend-one-point">{tr.onePoint(gran)}</div>
             <span className="inline-flex items-center gap-1.5"><span className="w-4 h-0.5" style={{ background: c.accent }} />{tr.medianSqm}</span>
             {showBand && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted" style={{ borderColor: c.accent }} />{tr.bandLegend}</span>}
             {hasArea && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed" style={{ borderColor: c.second }} />{allParis}</span>}

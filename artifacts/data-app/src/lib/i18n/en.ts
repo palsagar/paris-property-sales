@@ -1,4 +1,7 @@
 import type { Area } from "../areas";
+
+/** "the first 6 months", or "the first month" for a Change window of one month. */
+const months = (n: number, which: "first" | "last") => (n === 1 ? `the ${which} month` : `the ${which} ${n} months`);
 /** The English texts. fr.ts has the same shape, so the type check finds a missing French text. */
 export const en = {
   header: {
@@ -53,7 +56,7 @@ export const en = {
     notValuation: "The figures describe past Sales. They are not a valuation of any home.",
     source: (from: string, to: string) => `They come from Demandes de valeurs foncières (DVF), published by the DGFiP, and cover residential sales in Paris and 135 Communes around it from ${from} to ${to}. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20\u00a0000 to 20\u00a0000\u00a0000\u00a0EUR, has 9 to 300\u00a0m² of built surface and has a price per m² of 1\u00a0000 to 35\u00a0000\u00a0EUR.`,
     excluded: (n: string) => `${n} residential sales in the whole dataset are left out by these rules: sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².`,
-    changeNote: (months: number) => `A change compares the median of the first ${months} months of the Period with the median of the last ${months} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.`,
+    changeNote: (n: number) => `${n > 0 ? `A change compares the median of ${months(n, "first")} of the Period with the median of ${months(n, "last")}. ` : "A Period of one month has no change. "}Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.`,
     sourcesTitle: "Sources",
     sources: ["DVF open data (DGFiP)", "Paris OpenData boundaries", "Etalab Contours administratifs (ODbL)"],
     releaseNote: (month: string) => `${month} release. Basemap tiles © Esri.`,
@@ -115,10 +118,10 @@ export const en = {
     changeLabel: (change: string) => `Change ${change}. How it is measured`,
     notAvailable: "not available",
     na: "n/a",
-    changeTip: (n: number, start: string, end: string) => `Median of the first ${n} months of the Period (${start}) against the median of the last ${n} months (${end}), in nominal euros.`,
+    changeTip: (n: number, start: string, end: string) => `Median of ${months(n, "first")} of the Period (${start}) against the median of ${months(n, "last")} (${end}), in nominal euros.`,
     noChange: " One of the two windows has too few sales to compute a change.",
     medianSqm: "Median price per m²",
-    firstLast: (start: string, n: number, end: string) => `${start} in the first ${n} months, ${end} in the last ${n}`,
+    firstLast: (start: string, n: number, end: string) => `${start} in ${months(n, "first")}, ${end} in ${n === 1 ? "the last" : `the last ${n}`}`,
     overPeriod: "over the period",
     allParis: "All Paris: ",
     salesRecorded: "Sales recorded",
@@ -138,7 +141,7 @@ export const en = {
     notFoundBody: "Did you forget to add the page to the router?",
   },
   trend: {
-    takeaway: (area: string, end: string, n: number, start: string, change: string) => `In ${area}, the median was ${end} in the last ${n} months of the Period, against ${start} in the first ${n}: ${change}.`,
+    takeaway: (area: string, end: string, n: number, start: string, change: string) => `In ${area}, the median was ${end} in ${months(n, "last")} of the Period, against ${start} in ${n === 1 ? "the first" : `the first ${n}`}: ${change}.`,
     parisMoved: (change: string) => ` All Paris moved by ${change}.`,
     noSales: "No sales",
     medianSqm: "Median per m²",
@@ -160,6 +163,7 @@ export const en = {
     band: "Middle half of sales",
     empty: "No sales match this selection. Try a longer period or a larger area.",
     bandLegend: "P25 and P75, the middle half of sales",
+    onePoint: (gran: "month" | "quarter" | "year") => `This Period fits in one ${gran}, so there is no trend to draw. Choose a longer Period${gran === "month" ? "" : " or a shorter time step"}.`,
     count: "Number of sales",
     lowPeriods: (n: number) => `${n} period${n > 1 ? "s" : ""} with fewer than 10 sales`,
   },

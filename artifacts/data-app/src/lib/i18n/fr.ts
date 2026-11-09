@@ -19,6 +19,8 @@ const OF_DEPARTMENT: Record<string, string> = {
 /** « au Pré-Saint-Gervais », « aux Lilas », « à La Garenne-Colombes », « à Montreuil ». */
 const communeIn = (name: string) => (name.startsWith("Le ") ? `au ${name.slice(3)}` : name.startsWith("Les ") ? `aux ${name.slice(4)}` : `à ${name}`);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** « les 6 premiers mois », ou « le premier mois » pour une fenêtre de comparaison d'un mois. */
+const months = (n: number, which: "premier" | "dernier") => (n === 1 ? `le ${which} mois` : `les ${n} ${which}s mois`);
 
 /** Les textes en français. Les termes viennent de CONTEXT.md (_French_). */
 export const fr: Messages = {
@@ -70,9 +72,9 @@ export const fr: Messages = {
     copyFailedDesc: "Copiez-le depuis la barre d'adresse.",
     aboutTitle: "À propos des données",
     notValuation: "Les chiffres décrivent des ventes passées. Ils ne sont pas une estimation d'un logement.",
-    source: (range: string) => `Ils viennent des Demandes de valeurs foncières (DVF), publiées par la DGFiP, et couvrent les ventes de logements à Paris et dans 135 communes alentour, de ${range}. Les prix sont en euros courants, sans correction de l'inflation. Une vente porte sur un seul appartement ou une seule maison, coûte de 20 000 à 20 000 000 EUR, a de 9 à 300 m² de surface bâtie et un prix de 1 000 à 35 000 EUR/m².`,
-    excluded: (n: string) => `${n} ventes de logements de l'ensemble des données sont écartées par ces règles : ventes de plusieurs biens à la fois, locaux commerciaux et valeurs aberrantes, qui fausseraient le prix au m².`,
-    changeNote: (months: number) => `Une évolution compare la médiane des ${months} premiers mois de la période avec celle des ${months} derniers mois. Les petits secteurs et les périodes courtes donnent des chiffres instables : les périodes de moins de 10 ventes sont signalées. Une médiane calculée sur moins de 5 ventes n'est pas affichée.`,
+    source: (from: string, to: string) => `Ils viennent des Demandes de valeurs foncières (DVF), publiées par la DGFiP, et couvrent les ventes de logements à Paris et dans 135 communes alentour, de ${from} à ${to}. Les prix sont en euros courants, sans correction de l'inflation. Une vente porte sur un seul appartement ou une seule maison, coûte de 20\u00a0000 à 20\u00a0000\u00a0000\u00a0EUR, a de 9 à 300\u00a0m² de surface bâtie et un prix au m² de 1\u00a0000 à 35\u00a0000\u00a0EUR.`,
+    excluded: (n: string) => `${n} ventes de logements de l'ensemble des données sont écartées par ces règles : ventes de plusieurs biens à la fois, locaux commerciaux et valeurs aberrantes, qui fausseraient le prix au m².`,
+    changeNote: (n: number) => `${n > 0 ? `Une évolution compare la médiane ${n === 1 ? "du premier mois" : `des ${n} premiers mois`} de la période avec celle ${n === 1 ? "du dernier mois" : `des ${n} derniers mois`}. ` : "Une période d'un mois n'a pas d'évolution. "}Les petits secteurs et les périodes courtes donnent des chiffres instables : les périodes de moins de 10 ventes sont signalées. Une médiane calculée sur moins de 5 ventes n'est pas affichée.`,
     sourcesTitle: "Sources des données",
     sources: ["Données ouvertes DVF (DGFiP)", "Contours Paris OpenData", "Contours administratifs Etalab (ODbL)"],
     releaseNote: (month: string) => `Publication DVF : ${month}. Fond de carte © Esri.`,
@@ -132,10 +134,10 @@ export const fr: Messages = {
     changeLabel: (change: string) => `Évolution ${change}. Comment elle est mesurée`,
     notAvailable: "non disponible",
     na: "n.d.",
-    changeTip: (n: number, start: string, end: string) => `Médiane des ${n} premiers mois de la période (${start}) comparée à la médiane des ${n} derniers mois (${end}), en euros courants.`,
+    changeTip: (n: number, start: string, end: string) => `Médiane ${n === 1 ? "du premier mois" : `des ${n} premiers mois`} de la période (${start}) comparée à la médiane ${n === 1 ? "du dernier mois" : `des ${n} derniers mois`} (${end}), en euros courants.`,
     noChange: " L'une des deux fenêtres de comparaison a trop peu de ventes pour calculer une évolution.",
     medianSqm: "Prix médian au m²",
-    firstLast: (start: string, n: number, end: string) => `${start} les ${n} premiers mois, ${end} les ${n} derniers`,
+    firstLast: (start: string, n: number, end: string) => `${start} ${months(n, "premier")}, ${end} ${n === 1 ? "le dernier" : `les ${n} derniers`}`,
     overPeriod: "sur la période",
     allParis: "Tout Paris : ",
     salesRecorded: "Ventes enregistrées",
@@ -155,7 +157,7 @@ export const fr: Messages = {
     notFoundBody: "Avez-vous oublié d'ajouter la page au routeur ?",
   },
   trend: {
-    takeaway: (area: string, end: string, n: number, start: string, change: string) => `${cap(area)}, la médiane était de ${end} les ${n} derniers mois de la période, contre ${start} les ${n} premiers : ${change}.`,
+    takeaway: (area: string, end: string, n: number, start: string, change: string) => `${cap(area)}, la médiane était de ${end} ${months(n, "dernier")} de la période, contre ${start} ${n === 1 ? "le premier" : `les ${n} premiers`} : ${change}.`,
     parisMoved: (change: string) => ` Tout Paris a évolué de ${change}.`,
     noSales: "Aucune vente",
     medianSqm: "Médiane au m²",
@@ -177,6 +179,7 @@ export const fr: Messages = {
     band: "Moitié centrale des ventes",
     empty: "Aucune vente ne correspond à cette sélection. Essayez une période plus longue ou un secteur plus grand.",
     bandLegend: "P25 et P75, la moitié centrale des ventes",
+    onePoint: (gran: "month" | "quarter" | "year") => `Cette période tient dans ${{ month: "un seul mois", quarter: "un seul trimestre", year: "une seule année" }[gran]} : il n'y a pas de tendance à tracer. Choisissez une période plus longue${gran === "month" ? "" : " ou un pas de temps plus court"}.`,
     count: "Nombre de ventes",
     lowPeriods: (n: number) => `${n} ${plural(n, "période", "périodes")} de moins de 10 ventes`,
   },
