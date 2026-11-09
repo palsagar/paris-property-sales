@@ -43,7 +43,7 @@ The site is one long page with a centred column at most 1440 px wide. The page a
 5. **Compare areas.** The map and the areas card, side by side on a wide screen. On a phone they are two tabs, Map and List.
 6. **Price trend**, full width.
 7. **What sold, and for how much.** The two histograms and the rooms table.
-8. **Sales list**, a table of individual Sales. On a phone, one card per Sale.
+8. **Sales list**, a table of individual Sales. Below 1024 px, one card per Sale.
 9. **Footer.** "About the data" (it starts with "The figures describe past Sales. They are not a valuation of any home."), the inclusion rules and the excluded count, how the Change is measured, and the sources.
 
 A "Skip to the figures" link is the first thing a keyboard reaches. It jumps to the selected Area.
@@ -83,7 +83,7 @@ Four behaviours shape the feel of the page:
 Each panel sits on a flat card: 12 px corners, a 1 px border, and no shadow. The card header holds a serif title (18–19 px), a short description, the panel's own controls on the right, and a small CSV download button. Most panels also start with a one-sentence takeaway, for example "In all of Paris, the median was 9 800 EUR/m² in the last 12 months of the Period, against 10 829 in the first 12: -9.5%."
 
 **Key figures**
-- **The lead card** is the median price per m², in a large serif figure in the bordeaux primary colour, with its Change chip (▲ rise or ▼ fall) and the start and end figures. Its tooltip explains how the Change is measured.
+- **The lead card** is the median price per m², in a large serif figure in the bordeaux primary colour, with its Change chip (▲ rise or ▼ fall) and the start and end figures. Its tooltip explains how the Change is measured. It opens on hover, on focus, and on a tap or a click.
 - **Beside an Area,** the lead card adds "All Paris: 12 212 EUR/m², +4.6%" for the same property type and Period.
 - **Four smaller cards:** Sales recorded (with the total value, "Worth 84.55 Md EUR in total"), Median price, Median surface ("Built surface") and Price range.
 - **House share:** a note appears once, and only from 1% of houses, because a house's price includes its land.
@@ -101,7 +101,7 @@ Each panel sits on a flat card: 12 px corners, a 1 px border, and no shadow. The
 - **Time travel (Price level mode only):** a row under the map has a Play button, a slider through the quarters, a readout ("Whole range" or "4 quarters ending here"), and "Back to range average". Playback steps every 0.7 s.
 
 **Areas card.** One card with two tabs, "Ranking" and "Quarter by quarter", and one Group menu: Paris, Hauts-de-Seine, Seine-Saint-Denis, Val-de-Marne or Major towns.
-- **Ranking.** Rows are the Arrondissements of Paris, or the Communes of one Department or of the Major towns. It sorts "By price" or "By change". Each row has its rank, name, the value in its own column, a horizontal bar in the price colour (with a dotted line for the middle half of Sales), the number of Sales, a Change chip and a small quarterly sparkline. The house-share column shows only when the share says something; in Paris it is about 0% everywhere. A click selects the Area. When an Area is selected, the other rows fade. On a phone the list does not scroll inside its box.
+- **Ranking.** Rows are the Arrondissements of Paris, or the Communes of one Department or of the Major towns. It sorts "By price" or "By change". Each row has its rank, name, the value in its own column, a horizontal bar in the price colour (with a dotted line for the middle half of Sales), the number of Sales, a Change chip and a small quarterly sparkline. The house-share column shows only when the share says something; in Paris it is about 0% everywhere. A row of Communes with the house-share column has no sparkline, so the row fits the card. A click selects the Area. When an Area is selected, the other rows fade. The 20 Arrondissements always show in full. On a laptop a long group of Communes scrolls inside its box; on a phone the list does not.
 - **Quarter by quarter (heat map).** One row per Area of the group, one column per quarter. A cell's colour is the price level, or the Change since the first quarter. It fits a 375 px screen without sideways scrolling. Hovering, focusing or tapping a cell shows its figures in a readout above the grid, with ◀ ▶ buttons to step through the quarters. A cell does not select its Area: the row name and the "Focus the page on …" button do that. A click on a year mark sends that quarter to the map. Cells with fewer than 10 Sales have a dashed outline. "Colour by" switches between Price level and Change.
 
 **Price trend**
@@ -121,7 +121,7 @@ Each panel sits on a flat card: 12 px corners, a 1 px border, and no shadow. The
   - The Quartier is a link that selects it.
   - The Type is a pill.
   - The Price / m² has a small square in the price colour.
-- **On a phone:** one card per Sale, with a sort menu.
+- **On a phone or a tablet (below 1024 px):** one card per Sale, with a sort menu. From 1024 px, when the table is wider than its box, a fade on its right edge shows that it scrolls.
 - **Pages:** 15 rows per page, with "1–15 of n" and previous and next buttons.
 - **What a Sale shows:** only its street and a position rounded to about 100 m, never a house number. The list's description says so.
 
@@ -156,7 +156,7 @@ Each panel sits on a flat card: 12 px corners, a 1 px border, and no shadow. The
 | Fall chip (background / text) | `#e3ebf7` / `#1f3f75` | `#1a2638` / `#b9d0f5` |
 | Rise chip (background / text) | `#f8e1e1` / `#8e1b2b` | `#3a1c22` / `#f2a3ad` |
 
-- **The price scale** has 9 steps of the Magma palette, from pale yellow (#fddea0, the cheapest) to deep purple (#251255, the most expensive). The thresholds are quantiles, so each step holds a similar share of the Areas. One scale is shared by the map, the ranking, the heat map, the dots and the colour marks in the Sales list. Paris and the Communes weigh equally in the thresholds.
+- **The price scale** has 9 steps of the Magma palette, from pale yellow (#fddea0, the cheapest) to deep purple (#251255, the most expensive). In dark mode it runs from pale yellow (#fcf4b6) to magenta (#b73779), so every step keeps at least 3:1 against the dark card. The thresholds are quantiles, so each step holds a similar share of the Areas. One scale is shared by the map, the ranking, the heat map, the dots and the colour marks in the Sales list. Paris and the Communes weigh equally in the thresholds.
 - **The Change scale** is diverging: red for rises, blue for falls, and pale in the middle.
 
 **Shape and depth**
@@ -192,17 +192,19 @@ Each panel sits on a flat card: 12 px corners, a 1 px border, and no shadow. The
 
 ## 7. Responsive behaviour
 
-- **Phones (below 768 px):** the Selection bar is one button that opens a sheet. The masthead's actions are in one "More" menu. The map and the areas card are two tabs. The Sales list shows one card per Sale. The heat map fits the screen. There is no sideways scroll at 375 px. On touch screens, controls are at least 44 px.
+- **Phones (below 768 px):** the Selection bar is one button that opens a sheet. The masthead's actions are in one "More" menu. The map and the areas card are two tabs. The Sales list shows one card per Sale. The heat map fits the screen. There is no sideways scroll at 375 px. On touch screens, controls are at least 44 px; a control that keeps its drawn size, such as a switch or a link in a line of text, gets an invisible 44 px target.
 - **Tablets and laptops (768–1279 px):** the Selection bar shows the Area and Period fields, the property type and the status line, and the map and the areas card are stacked.
 - **Large screens:** the map and the areas card sit side by side.
 
 ## 8. Accessibility
 
 - **Keyboard order:** the first Tab reaches "Skip to the figures", then the masthead, then the Selection bar.
-- **Buttons:** every toggle and segmented button reports whether it is pressed, and tabs report which one is selected. Icon buttons have labels. A navy focus ring appears for keyboard users.
-- **Popovers and the sheet:** Esc closes them.
-- **Period:** the brush works with the arrow keys and keeps its focus. The From and To month menus set the dates without dragging (WCAG 2.5.7). The quarter slider is a standard range input.
-- **Heat map:** Tab moves into the cells, and focus shows a cell's figures in the readout.
+- **Buttons:** every toggle and segmented button reports whether it is pressed. The view switches (Ranking / Quarter by quarter, Map / List) are segmented buttons, not tabs. Icon buttons have labels. A navy focus ring appears for keyboard users.
+- **Popovers and the sheet:** Esc closes them. The phone sheet takes the focus when it opens, keeps Tab inside, and hides the page behind it from screen readers.
+- **Period:** the brush works with the arrow keys and keeps its focus. Its handles are named "Start of the Period" and "End of the Period" and announce their month. The From and To month menus set the dates without dragging (WCAG 2.5.7). The quarter slider is a standard range input.
+- **Heat map:** the grid is one Tab stop. The arrow keys, Home and End move between the year marks, the row names and the cells, and focus shows a cell's figures in the readout.
+- **Focus after a change:** a breadcrumb or "Back to all of Paris" moves the focus to the new Area's heading. The sticky Selection bar keeps the page's scroll padding equal to its own height, and it does not stick on a screen under 500 px tall.
+- **Charts and map:** each chart is one image with a short text alternative. The map is a named region, and its Arrondissement labels are hidden from screen readers.
 - **Sales list:** sortable columns report their sort order.
 - **Zoom:** pinch zoom is allowed (WCAG 1.4.4).
 - **Not keyboard reachable:** the map's areas and dots, which are drawn on a canvas. The ranking and the Area picker reach the same Areas.
