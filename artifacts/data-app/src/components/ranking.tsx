@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from "react";
 import type { AreaStat, AreaTrendPoint } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeltaChip, ErrorState, Segmented, Sparkline, useChartColors } from "@/components/ui-bits";
-import { num, sqm, arrLabel, eur, tooFew, houseShareWarning, houseShareLabel, sharePct } from "@/lib/fmt";
+import { num, sqm, arrLabel, eur, pct, tooFew, houseShareWarning, houseShareLabel, sharePct } from "@/lib/fmt";
 import type { Area, RankGroup } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
 import type { PropertyTypeParameter } from "@workspace/api-client-react";
@@ -18,7 +18,7 @@ export const statArea = (s: AreaStat): Area => (s.arrondissement != null ? { kin
 
 /**
  * The ranking of the Areas of one group, the "Ranking" tab of the Areas card (areas-card.tsx). Each row selects its
- * Area. On a laptop the list scrolls inside the card when the group is long; on a phone the page scrolls instead.
+ * Area. On a laptop a group of Communes scrolls inside the card; Paris and every list on a phone show in full.
  */
 export const Ranking = memo(function Ranking({ stats, trend, loading, error, retry, scale, selId, onSelect, ptype, isDark }: {
   stats: AreaStat[]; trend: AreaTrendPoint[]; loading: boolean; error: boolean; retry: () => void;
@@ -41,13 +41,15 @@ export const Ranking = memo(function Ranking({ stats, trend, loading, error, ret
   // In Paris the house share is close to 0% everywhere, so the column would only add noise.
   const showShare = ptype === "all" && stats.some((s) => (s.houseShare ?? 0) >= 5);
   // Paris rows hold "6e"; Commune rows hold a town's name. Whole class names, so Tailwind finds them in the source.
+  // A Commune row with the Houses column has no room for the sparkline as well: the Quarter by quarter tab shows the quarters.
   const isParis = stats.some((s) => s.arrondissement != null);
+  const showSpark = isParis || !showShare;
   const cols = isParis
     ? (showShare
       ? "grid-cols-[22px_36px_52px_minmax(48px,1fr)_64px] sm:grid-cols-[22px_36px_52px_minmax(60px,1fr)_52px_40px_68px_56px]"
       : "grid-cols-[22px_36px_52px_minmax(48px,1fr)_64px] sm:grid-cols-[22px_36px_52px_minmax(60px,1fr)_52px_68px_56px]")
     : (showShare
-      ? "grid-cols-[22px_minmax(72px,112px)_52px_minmax(40px,1fr)_64px] sm:grid-cols-[22px_minmax(96px,140px)_52px_minmax(60px,1fr)_52px_40px_68px_56px]"
+      ? "grid-cols-[22px_minmax(72px,112px)_52px_minmax(40px,1fr)_64px] sm:grid-cols-[22px_minmax(96px,140px)_52px_minmax(48px,1fr)_52px_40px_68px]"
       : "grid-cols-[22px_minmax(72px,112px)_52px_minmax(40px,1fr)_64px] sm:grid-cols-[22px_minmax(96px,140px)_52px_minmax(60px,1fr)_52px_68px_56px]");
 
   const r = t().ranking;
@@ -65,10 +67,11 @@ export const Ranking = memo(function Ranking({ stats, trend, loading, error, ret
             <div className={`grid ${cols} items-center gap-2 px-1.5 pb-1 text-[12px] text-muted-foreground`} aria-hidden>
               <span className="text-right">#</span><span>{r.area}</span><span className="text-right">EUR/m²</span><span />
               <span className="hidden sm:block text-right">{r.sales}</span>
-              {showShare && <span className="hidden sm:block text-right">{r.houses}</span>}<span>{r.change}</span><span className="hidden sm:block">{r.quarters}</span>
+              {showShare && <span className="hidden sm:block text-right">{r.houses}</span>}<span>{r.change}</span>{showSpark && <span className="hidden sm:block">{r.quarters}</span>}
             </div>
-            {/* The print rules in index.css reset only unprefixed overflow classes, so print lifts this md: cap here, or rows go missing. */}
-            <div className="md:max-h-[640px] md:overflow-y-auto print:max-h-none print:overflow-visible">
+            {/* The 20 Arrondissements always show in full. A longer group of Communes scrolls inside the card on a laptop.
+                The print rules in index.css reset only unprefixed overflow classes, so print lifts this md: cap here, or rows go missing. */}
+            <div className={isParis ? "" : "md:max-h-[640px] md:overflow-y-auto print:max-h-none print:overflow-visible"}>
               {rows.map((s, i) => {
                 const sel = selId === s.id;
                 const vals = (spark.get(s.id) ?? []).map((p) => p.medianPricePerSqm).filter((v): v is number => v != null);
@@ -77,8 +80,8 @@ export const Ranking = memo(function Ranking({ stats, trend, loading, error, ret
                 const label = s.arrondissement != null ? arrLabel(s.arrondissement) : s.name;
                 return (
                   <button key={s.id} type="button" onClick={() => onSelect(statArea(s))} data-testid={`row-rank-${s.id}`} aria-pressed={sel}
-                    aria-label={r.rowLabel(sel, s.name, m == null ? tooFew() : r.figures(sqm(m), eur(s.medianPrice ?? 0)), t().sales(num(s.count), s.count))}
-                    className={`no-tap w-full grid ${cols} items-center gap-2 px-1.5 min-h-9 rounded-md text-left transition-colors ${sel ? "bg-sunken font-semibold ring-1 ring-foreground/30" : selId ? "text-muted-foreground hover:text-foreground hover:bg-sunken/70" : "hover:bg-sunken/70"}`}>
+                    aria-label={r.rowLabel(label, s.name, m == null ? tooFew() : r.figures(sqm(m), eur(s.medianPrice ?? 0)), t().sales(num(s.count), s.count), s.changePct == null ? t().kpis.notAvailable : pct(s.changePct))}
+                    className={`w-full grid ${cols} items-center gap-2 px-1.5 min-h-9 rounded-md text-left transition-colors ${sel ? "bg-sunken font-semibold ring-1 ring-foreground/30" : selId ? "text-muted-foreground hover:text-foreground hover:bg-sunken/70" : "hover:bg-sunken/70"}`}>
                     <span className="font-num text-[12px] text-muted-foreground text-right">{i + 1}</span>
                     <span className="text-[14px] truncate" title={s.name}>{label}</span>
                     <span className="font-num text-[13px] text-right whitespace-nowrap">{m == null ? "–" : num(m)}</span>
@@ -91,7 +94,7 @@ export const Ranking = memo(function Ranking({ stats, trend, loading, error, ret
                     <span className="hidden sm:block font-num text-[12px] text-muted-foreground text-right whitespace-nowrap font-normal">{num(s.count)}</span>
                     {showShare && <span className={`hidden sm:block font-num text-[12px] text-right ${warn ? "text-primary font-semibold" : "text-muted-foreground font-normal"}`} title={warn ?? undefined}>{s.houseShare == null ? null : sharePct(s.houseShare)}</span>}
                     <span><DeltaChip value={s.changePct} size="xs" /></span>
-                    <span className="hidden sm:block"><Sparkline values={vals} color={sel ? c.accent : c.tick} w={56} /></span>
+                    {showSpark && <span className="hidden sm:block"><Sparkline values={vals} color={sel ? c.accent : c.tick} w={56} /></span>}
                   </button>
                 );
               })}

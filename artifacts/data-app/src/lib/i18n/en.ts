@@ -210,7 +210,8 @@ export const en = {
     houses: "Houses",
     change: "Change",
     quarters: "Quarters",
-    rowLabel: (selected: boolean, name: string, figures: string, sales: string) => `${selected ? "Selected: " : ""}${name}. ${figures}, ${sales}`,
+    // The visible label first, such as "6e", so a voice command that says what it sees finds the row.
+    rowLabel: (label: string, name: string, figures: string, sales: string, change: string) => `${label === name ? name : `${label}, ${name}`}. ${figures}, ${sales}, change ${change}`,
     figures: (sqm: string, price: string) => `Median ${sqm}, median price ${price}`,
     housesNote: "Houses: their share of the sales. A share above 10% is in bold, because a house's price includes its land and the median is harder to compare.",
     parisTitle: "Arrondissements of Paris",

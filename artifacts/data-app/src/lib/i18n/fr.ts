@@ -226,7 +226,7 @@ export const fr: Messages = {
     houses: "Maisons",
     change: "Évolution",
     quarters: "Trimestres",
-    rowLabel: (selected: boolean, name: string, figures: string, sales: string) => `${selected ? "Sélectionné : " : ""}${name}. ${figures}, ${sales}`,
+    rowLabel: (label: string, name: string, figures: string, sales: string, change: string) => `${label === name ? name : `${label}, ${name}`}. ${figures}, ${sales}, évolution ${change}`,
     figures: (sqm: string, price: string) => `Médiane ${sqm}, prix médian ${price}`,
     housesNote: "Maisons : leur part des ventes. Une part au-dessus de 10 % est en gras, car le prix d'une maison comprend son terrain et la médiane se compare moins bien.",
     parisTitle: "Arrondissements de Paris",
