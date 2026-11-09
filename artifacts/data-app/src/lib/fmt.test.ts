@@ -72,16 +72,31 @@ test("dates and labels in French", async () => {
   }
 });
 
-test("numbers and money do not change with the language", async () => {
-  const { pct, arrLabel } = await import("./fmt");
+test("both languages group thousands with a space; decimals and percent signs follow the language", async () => {
+  const { pct, arrLabel, eurShort, kShort, sharePct } = await import("./fmt");
   const { setLang } = await import("./i18n/language");
   for (const l of ["en", "fr"] as const) {
     setLang(l);
     assert.equal(eur(12054), "12 054 EUR");
-    assert.equal(pct(3.44), "+3.4%");
     assert.equal(arrLabel(1), "1er");
   }
   setLang("en");
+  assert.deepEqual([pct(3.44), pct(-9.5), pct(-0.04), pct(12, 0)], ["+3.4%", "\u22129.5%", "0.0%", "+12%"]);
+  assert.deepEqual([eurShort(84.55e9), eurShort(1.2e6), kShort(3500, 1)], ["84.55 Md EUR", "1.2 M EUR", "3.5k"]);
+  setLang("fr");
+  try {
+    assert.deepEqual([pct(3.44), pct(-9.5), pct(0, 0)], ["+3,4\u202f%", "\u22129,5\u202f%", "0\u202f%"]);
+    assert.deepEqual([eurShort(84.55e9), eurShort(1.2e6), kShort(3500, 1), sharePct(0.44)], ["84,55 Md EUR", "1,2 M EUR", "3,5k", "moins de 1\u202f%"]);
+  } finally {
+    setLang("en");
+  }
+});
+
+test("a small share of houses above zero never reads 0%", async () => {
+  const { sharePct, sharePctShort } = await import("./fmt");
+  assert.deepEqual([sharePctShort(0), sharePctShort(0.44), sharePctShort(0.6), sharePctShort(30.4)], ["0%", "<1%", "1%", "30%"]);
+  assert.deepEqual([sharePct(0), sharePct(0.44), sharePct(0.6), sharePct(30.4)], ["0%", "under 1%", "1%", "30%"]);
+  assert.equal(houseShareLabel(0.44), "under 1% houses");
 });
 
 test("in French, a Quartier reads 'dans le quartier', a Commune 'à'", async () => {
@@ -111,7 +126,7 @@ test("in French, a Commune whose name starts with Le or Les reads 'au' or 'aux'"
     assert.equal(inArea("L'Haÿ-les-Roses", "commune"), "à L'Haÿ-les-Roses");
     assert.equal(
       t().trend.takeaway(inArea("Le Pré-Saint-Gervais", "commune"), "9 000 €/m²", 6, "8 000 €/m²", "+12 %"),
-      "Au Pré-Saint-Gervais, la médiane était de 9 000 €/m² les 6 derniers mois de la période, contre 8 000 €/m² les 6 premiers : +12 %.",
+      "Au Pré-Saint-Gervais, la médiane était de 9 000 €/m² les 6 derniers mois de la période, contre 8 000 €/m² les 6 premiers\u00a0: +12 %.",
     );
   } finally {
     setLang("en");

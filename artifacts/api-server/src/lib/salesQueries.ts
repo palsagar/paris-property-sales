@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import type { SalesDb, SqlParams } from "./salesDb";
 import {
   bucketInfo,
@@ -19,6 +20,17 @@ export interface SaleFilter {
   commune?: string;
   from?: string;
   to?: string;
+}
+
+/**
+ * A request names at most one Area. Two, such as arrondissement=1&department=92, would select no Sale at all, so
+ * the route answers 400 instead of an empty result. The app's error handler turns the ZodError into that 400.
+ */
+export function checkOneArea(f: SaleFilter): void {
+  const named = (["arrondissement", "quartier", "department", "commune"] as const).filter((k) => f[k] !== undefined);
+  if (named.length > 1) {
+    throw new ZodError([{ code: "custom", path: named, message: `Name at most one Area, not ${named.join(" and ")}` }]);
+  }
 }
 
 /**
@@ -125,6 +137,7 @@ export async function distribution(
   targetBins: number,
 ): Promise<{
   bins: { from: number; to: number; count: number }[];
+  above: number;
   median: number | null; mean: number | null;
   p10: number | null; p25: number | null; p75: number | null; p90: number | null;
 }> {
@@ -142,9 +155,9 @@ export async function distribution(
     where.params,
   );
   if (!s || s.n < MIN_SALES) {
-    return { bins: [], median: null, mean: null, p10: null, p25: null, p75: null, p90: null };
+    return { bins: [], above: 0, median: null, mean: null, p10: null, p25: null, p75: null, p90: null };
   }
-  // The chart range stops at the 99th percentile, as before.
+  // The chart range stops at the 99th percentile, as before. `above` counts the Sales past it.
   const start0 = s.min!;
   const step = niceStep((s.p99! - start0) / targetBins);
   const start = Math.floor(start0 / step) * step;
@@ -154,6 +167,7 @@ export async function distribution(
     to: Math.round(start + (i + 1) * step),
     count: 0,
   }));
+  let above = 0;
   if (bins.length > 0) {
     const rows = await db.query<{ idx: number; n: number }>(
       `SELECT floor((v - $start::DOUBLE) / $step::DOUBLE)::INTEGER AS idx, count(*)::INTEGER AS n
@@ -162,9 +176,10 @@ export async function distribution(
     );
     for (const r of rows) {
       if (r.idx >= 0 && r.idx < binCount) bins[r.idx]!.count = r.n;
+      else if (r.idx >= binCount) above += r.n;
     }
   }
-  return { bins, median: s.p50!, mean: s.mean!, p10: s.p10!, p25: s.p25!, p75: s.p75!, p90: s.p90! };
+  return { bins, above, median: s.p50!, mean: s.mean!, p10: s.p10!, p25: s.p25!, p75: s.p75!, p90: s.p90! };
 }
 
 export async function salesByRooms(db: SalesDb, f: SaleFilter) {

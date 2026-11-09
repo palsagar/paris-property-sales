@@ -16,7 +16,7 @@ function leaves(o: Node, path = ""): [string, string, "string" | "function"][] {
 }
 
 // The words that CONTEXT.md keeps the same in both languages, the switch labels and the author's name.
-const SAME = /^(DVF|Mutation|Arrondissement|Quartier|Commune|EN|FR|Sagar Pal|Language · Langue|)$/;
+const SAME = /^(DVF|Paris|2 arrondissement|Mutation|Arrondissement|Quartier|Commune|EN|FR|Sagar Pal|Language · Langue|)$/;
 
 test("French is complete", () => {
   const f = new Map(leaves(fr).map(([p, , k]) => [p, k]));
@@ -30,4 +30,8 @@ test("French is not English", () => {
 
 test("French avoids banlieue, zone and transaction", () => {
   for (const [p, v] of leaves(fr)) assert.doesNotMatch(v, /\b(banlieue|zone|transaction)s?\b/i, `fr.${p}`);
+});
+
+test("French puts a no-break space, never a plain one, before : ; ? ! and %", () => {
+  for (const [p, v] of leaves(fr)) assert.doesNotMatch(v, / [:;?!%]/, `fr.${p} has a plain space before a sign: "${v}"`);
 });

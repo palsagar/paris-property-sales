@@ -1,14 +1,15 @@
-import { memo, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { useListTransactions, getListTransactionsQueryKey, type ListTransactionsSortBy } from "@workspace/api-client-react";
 import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, outlineBtnCls } from "@/components/ui-bits";
 import { eur, sqm, num, dateLabel, inArea } from "@/lib/fmt";
-import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
+import { keepInSameSelection, saleArea, type Area } from "@/lib/areas";
 import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
 import { track } from "@/lib/analytics";
 import { t } from "@/lib/i18n/messages";
+import { streetName } from "@/lib/street";
 
 /** The orders a phone offers in one menu, instead of tapping column heads. */
 const SORTS: [string, ListTransactionsSortBy, "asc" | "desc"][] = [
@@ -50,7 +51,7 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
     setChoices((c) => ({ ...c, sortBy: by, sortDir: dir }));
   };
   const p = transactionParams(view, choices, page * PAGE);
-  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameArea(filters) } });
+  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameSelection(filters) } });
   const totalPages = tx.data ? Math.max(1, Math.ceil(tx.data.total / PAGE)) : 1;
   const sortKey = `${sortBy}-${sortDir}`;
   const sortTo = (key: string) => {
@@ -65,14 +66,27 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
   const cols = columns().filter((col) => col.key !== "area" || showArea);
   const pageLabel = tx.data && tx.data.total > 0 ? l.range(num(page * PAGE + 1), num(Math.min((page + 1) * PAGE, tx.data.total)), num(tx.data.total)) : "";
   const typeOf = (type: string) => (type === "Maison" ? l.house : l.apartment);
+  const prevRef = useRef<HTMLButtonElement>(null), nextRef = useRef<HTMLButtonElement>(null);
+  // Below about 1100 px the table is wider than its box. A fade on the right edge shows that it scrolls, until its end.
+  const [more, setMore] = useState(false);
+  const observer = useRef<ResizeObserver | null>(null);
+  const tableBox = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    if (!el) return;
+    const check = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    el.onscroll = check;
+    observer.current = new ResizeObserver(check);
+    observer.current.observe(el);
+    if (el.firstElementChild) observer.current.observe(el.firstElementChild);
+  }, []);
 
   return (
     <ChartCard testId="transactions" title={l.title(inArea(areaName, view.area.kind))} isDark={isDark} loading={tx.isLoading} fetching={tx.isFetching}
       desc={l.desc(tx.data ? t().sales(num(tx.data.total), tx.data.total) : "", scopeLabel)} csv={tx.data?.items} csvName="transactions.csv">
       {tx.isError ? <ErrorState onRetry={() => tx.refetch()} /> : (
         <>
-          {/* Phone: one card per Sale, sorted from a menu. */}
-          <div className={`md:hidden transition-opacity ${tx.isFetching && !tx.isLoading ? "opacity-60" : ""}`}>
+          {/* Phone and tablet: one card per Sale, sorted from a menu. */}
+          <div className={`lg:hidden print:hidden transition-opacity ${tx.isFetching && !tx.isLoading ? "opacity-60" : ""}`}>
             <div className="flex items-center gap-2.5 mb-1">
               <label htmlFor="sales-sort" className="text-[15px] font-medium whitespace-nowrap">{l.sortBy}</label>
               <select id="sales-sort" value={sortKey} onChange={(e) => sortTo(e.target.value)} data-testid="select-sort-sales"
@@ -84,11 +98,11 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
               {tx.isLoading ? Array.from({ length: 6 }).map((_, i) => <li key={i} className="py-3 border-t"><Skeleton className="h-14 w-full" /></li>)
                 : tx.data?.items.length ? tx.data.items.map((t) => { const a = saleArea(t); return (
                   <li key={t.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 py-3 border-t" data-testid={`card-tx-${t.id}`}>
-                    <p className="text-[16px] font-semibold leading-snug">{t.address}</p>
+                    <p className="text-[16px] font-semibold leading-snug">{streetName(t.address)}</p>
                     <p className="font-num text-[15px] font-medium text-right whitespace-nowrap">{eur(t.price)}</p>
                     <p className="text-[14px] text-muted-foreground">
-                      {t.quartierName ? <button type="button" onClick={() => onSelectQuartierName(t.quartierName!)} className="no-tap text-primary underline underline-offset-2">{t.quartierName}</button>
-                        : showArea ? <button type="button" onClick={() => onSelectArea(a.area)} className="no-tap text-primary underline underline-offset-2">{a.label}</button> : null}
+                      {t.quartierName ? <button type="button" onClick={() => onSelectQuartierName(t.quartierName!)} className="no-tap tap-area text-primary underline underline-offset-2">{t.quartierName}</button>
+                        : showArea ? <button type="button" onClick={() => onSelectArea(a.area)} className="no-tap tap-area text-primary underline underline-offset-2">{a.label}</button> : null}
                       {(t.quartierName || showArea) && " · "}{dateLabel(t.date)}
                     </p>
                     <p className="font-num text-[13px] text-muted-foreground text-right whitespace-nowrap inline-flex items-center justify-end gap-1.5">
@@ -100,7 +114,8 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
             </ul>
           </div>
           {/* Laptop: the table. */}
-          <div className={`hidden md:block overflow-x-auto rounded-lg border transition-opacity ${tx.isFetching && !tx.isLoading ? "opacity-60" : ""}`}>
+          <div className="relative hidden lg:block print:block">
+          <div ref={tableBox} className={`overflow-x-auto rounded-lg border transition-opacity ${tx.isFetching && !tx.isLoading ? "opacity-60" : ""}`}>
             <table className="w-full text-sm">
               <thead className="bg-muted/60">
                 <tr>
@@ -122,7 +137,7 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
                 )) : tx.data?.items.length ? tx.data.items.map((t) => { const a = saleArea(t); return (
                   <tr key={t.id} className="border-t hover:bg-muted/40 transition-colors" data-testid={`row-tx-${t.id}`}>
                     <td className="px-3 py-2.5 whitespace-nowrap font-num text-[14px]">{dateLabel(t.date)}</td>
-                    <td className="px-3 py-2 max-w-[280px] truncate" title={t.address}>{t.address}</td>
+                    <td className="px-3 py-2 max-w-[280px] truncate" title={streetName(t.address)}>{streetName(t.address)}</td>
                     {showArea && <td className="px-3 py-2">
                       <button onClick={() => onSelectArea(a.area)} className="inline-flex items-center gap-1.5 hover:underline text-left">
                         <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: areaColor(a.id) }} aria-hidden />{a.label}
@@ -145,11 +160,14 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
               </tbody>
             </table>
           </div>
+          {more && <div className="pointer-events-none absolute inset-y-px right-px w-12 rounded-r-lg bg-gradient-to-l from-card to-transparent" aria-hidden data-testid="table-more" />}
+          </div>
+          {/* A button that turns disabled at the first or the last page would drop the focus, so it moves to the other one. */}
           <nav aria-label={l.pages} className="flex items-center justify-between gap-2 mt-3 text-[14px] print:hidden">
-            <button disabled={page === 0} onClick={() => { track("page-sales", { page }); setPage((x) => x - 1); }} data-testid="button-prev" aria-label={l.previousPage} className={outlineBtnCls}>
+            <button ref={prevRef} disabled={page === 0} onClick={() => { track("page-sales", { page }); setPage((x) => x - 1); if (page === 1) nextRef.current?.focus(); }} data-testid="button-prev" aria-label={l.previousPage} className={outlineBtnCls}>
               <ChevronLeft className="w-4 h-4" aria-hidden /><span className="hidden sm:inline">{l.previous}</span></button>
             <span className="font-num text-muted-foreground" aria-live="polite">{pageLabel}<span className="hidden sm:inline" data-testid="text-page">{l.page(page + 1, num(totalPages))}</span></span>
-            <button disabled={page + 1 >= totalPages} onClick={() => { track("page-sales", { page: page + 2 }); setPage((x) => x + 1); }} data-testid="button-next" aria-label={l.nextPage} className={outlineBtnCls}>
+            <button ref={nextRef} disabled={page + 1 >= totalPages} onClick={() => { track("page-sales", { page: page + 2 }); setPage((x) => x + 1); if (page + 2 >= totalPages) prevRef.current?.focus(); }} data-testid="button-next" aria-label={l.nextPage} className={outlineBtnCls}>
               <span className="hidden sm:inline">{l.next}</span><ChevronRight className="w-4 h-4" aria-hidden /></button>
           </nav>
         </>

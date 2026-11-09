@@ -1,15 +1,34 @@
 import { interpolateRdBu } from "d3-scale-chromatic";
 import type { GranularityParameter } from "@workspace/api-client-react";
 import { t } from "./i18n/messages";
+import { getLang } from "./i18n/language";
 import type { Area } from "./areas";
 
-const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
-export const num = (n: number) => nf.format(Math.round(n)).replace(/[\u202f\u00a0]/g, " ");
+const MINUS = "\u2212";
+/** French puts a narrow no-break space before "%". Engines differ on which space they give, so this sets it. */
+const percentText = (f: Intl.NumberFormat, v: number) =>
+  f.formatToParts(v).map((p) => (p.type === "minusSign" ? MINUS : p.type === "literal" && /\s/.test(p.value) ? "\u202f" : p.value)).join("");
+const locale = () => (getLang() === "fr" ? "fr-FR" : "en-GB");
+const formats = new Map<string, Intl.NumberFormat>();
+function format(key: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const k = `${locale()} ${key}`;
+  let f = formats.get(k);
+  if (!f) formats.set(k, (f = new Intl.NumberFormat(locale(), options)));
+  return f;
+}
+/**
+ * A number in the page's language: a decimal point in English, a comma in French, and a typographic minus sign.
+ * Both languages group thousands with a space, as in "12 345" (docs/design-brief.md); keep() makes it a no-break space.
+ */
+export const fixed = (n: number, digits = 0) =>
+  format(`fixed${digits}`, { minimumFractionDigits: digits, maximumFractionDigits: digits }).formatToParts(n)
+    .map((p) => (p.type === "group" ? " " : p.type === "minusSign" ? MINUS : p.value)).join("");
+export const num = (n: number) => fixed(Math.round(n));
 export const eur = (n: number) => `${num(n)} EUR`;
 export function eurShort(n: number) {
   const a = Math.abs(n);
-  if (a >= 1e9) return `${(n / 1e9).toFixed(2)} Md EUR`;
-  if (a >= 1e6) return `${(n / 1e6).toFixed(a >= 1e7 ? 0 : 1)} M EUR`;
+  if (a >= 1e9) return `${fixed(n / 1e9, 2)} Md EUR`;
+  if (a >= 1e6) return `${fixed(n / 1e6, a >= 1e7 ? 0 : 1)} M EUR`;
   if (a >= 1e3) return `${Math.round(n / 1e3)} k EUR`;
   return eur(n);
 }
@@ -20,12 +39,22 @@ export const sqmOrTooFew = (n: number | null | undefined) => orTooFew(n, sqm);
 
 /** Houses above this share of the Sales (in percent) get a warning. */
 const HOUSE_SHARE_LIMIT = 10;
-export const houseShareLabel = (share: number | null | undefined) => (share == null ? null : t().fmt.houseShare(Math.round(share)));
+/** A share in percent, rounded. A share above 0 that rounds to 0 reads "under 1%", so a few houses never read as none. */
+export const sharePct = (share: number) => {
+  const f = format("share", { style: "percent", maximumFractionDigits: 0 });
+  return share > 0 && share < 0.5 ? t().ui.under(percentText(f, 0.01)) : percentText(f, Math.round(share) / 100);
+};
+/** The same share for a narrow column: "<1%" in place of "under 1%". */
+export const sharePctShort = (share: number) =>
+  share > 0 && share < 0.5 ? `<${percentText(format("share", { style: "percent", maximumFractionDigits: 0 }), 0.01)}` : sharePct(share);
+export const houseShareLabel = (share: number | null | undefined) => (share == null ? null : t().fmt.houseShare(sharePct(share)));
 export const houseShareWarning = (share: number | null | undefined) =>
   share == null || share <= HOUSE_SHARE_LIMIT
     ? null
-    : t().fmt.houseShareWarning(Math.round(share));
-export const kShort = (n: number) => (Math.abs(n) >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : Math.abs(n) >= 1e3 ? `${Math.round(n / 1e3)}k` : `${Math.round(n)}`);
+    : t().fmt.houseShareWarning(sharePct(share));
+/** A short axis or legend value: "950", "3.5k", "12k", "1.4M". Thousands keep one decimal when `digits` asks for it. */
+export const kShort = (n: number, digits = 0) =>
+  Math.abs(n) >= 1e6 ? `${fixed(n / 1e6, 1)}M` : Math.abs(n) >= 1e3 ? `${fixed(n / 1e3, digits)}k` : num(n);
 
 export const arrLabel = (n: number) => (n === 1 ? "1er" : `${n}e`);
 /** Joins a figure to its digits and unit with no-break spaces, so "12 054 EUR" never breaks across two lines. */
@@ -66,7 +95,9 @@ export function bucketLabel(period: string, gran: GranularityParameter): string 
   return String(y);
 }
 
-export const pct = (n: number, d = 1) => `${n > 0 ? "+" : n < 0 ? "-" : ""}${Math.abs(n).toFixed(d)}%`;
+/** A Change with its sign: "+3.4%" in English, "+3,4 %" in French (with a narrow no-break space). */
+export const pct = (n: number, d = 1) =>
+  percentText(format(`pct${d}`, { style: "percent", minimumFractionDigits: d, maximumFractionDigits: d, signDisplay: "exceptZero" }), n / 100);
 
 /** Diverging: rises -> bordeaux-red, falls -> blue. */
 export function makeDivScale(maxAbs: number) {
@@ -89,4 +120,4 @@ export function monthsBetween(a: string, b: string) {
   const [y2, m2] = b.split("-").map(Number);
   return (y2 - y1) * 12 + (m2 - m1) + 1;
 }
-export const rangeLabel = (from: string, to: string) => `${monthLabel(from.slice(0, 7))} - ${monthLabel(to.slice(0, 7))}`;
+export const rangeLabel = (from: string, to: string) => `${monthLabel(from.slice(0, 7))} – ${monthLabel(to.slice(0, 7))}`;

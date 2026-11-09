@@ -5,17 +5,22 @@ import type { Area } from "./areas";
 import { selectionQueries, type PanelChoices } from "./selection-queries";
 import { viewQuery, type ViewState } from "./view-state";
 
-// A request that never answers must not freeze the page: after this wait it swaps, and that panel shows its loading state.
+// A slow or failing request must not freeze the page: after this wait it swaps, and that panel shows its loading
+// state, then its error.
 const MAX_WAIT_MS = 3000;
 
 /**
  * The page keeps two views. The requested view drives the filter buttons and the URL at once. The shown view drives
  * every panel and heading. It changes when all the data of the requested view is loaded, so the page swaps in
- * one redraw and never shows one Area's figures under another Area's name. It changes after MAX_WAIT_MS at the latest.
+ * one redraw and never shows one Area's figures under another Area's name. A slow view swaps after MAX_WAIT_MS,
+ * and a request that fails shows its error in its own panel. A view whose requests wait for the network because the
+ * browser is offline does not swap: `failed` is true, the page keeps the shown view with its own figures and offers
+ * `retry`. It swaps by itself when the requests succeed, for example when the connection comes back.
  */
-export function useShownView(view: ViewState, choices: PanelChoices): { shown: ViewState; updating: boolean } {
+export function useShownView(view: ViewState, choices: PanelChoices): { shown: ViewState; updating: boolean; failed: boolean } {
   const qc = useQueryClient();
   const [shown, setShown] = useState(view);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
   const choicesRef = useRef(choices);
   choicesRef.current = choices;
   const key = viewQuery(view);
@@ -24,22 +29,31 @@ export function useShownView(view: ViewState, choices: PanelChoices): { shown: V
   useEffect(() => {
     let live = true;
     const next = viewRef.current;
-    // prefetchQuery never rejects, so a failed request still lets the page switch, and that panel shows its error.
-    // Older requests are not cancelled: they fill the cache for a Visitor who comes back.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const waited = new Promise<void>((done) => { timer = setTimeout(done, MAX_WAIT_MS); });
-    Promise.race([Promise.all(selectionQueries(next, choicesRef.current).map((o) => qc.prefetchQuery(o))), waited]).then(() => {
-      if (live) setShown((s) => (viewQuery(s) === key ? s : next));
+    const queries = selectionQueries(next, choicesRef.current);
+    // A request with no data that waits for the network: React Query pauses requests while the browser is offline.
+    const stuck = () => queries.some((o) => {
+      const st = qc.getQueryState(o.queryKey);
+      return !!st && st.data === undefined && st.fetchStatus === "paused";
     });
+    const settle = () => {
+      if (!live) return;
+      if (stuck()) { setFailedKey(key); return; }
+      setFailedKey(null);
+      setShown((s) => (viewQuery(s) === key ? s : next));
+    };
+    // prefetchQuery never rejects. Older requests are not cancelled: they fill the cache for a Visitor who comes back.
+    const timer = setTimeout(settle, MAX_WAIT_MS);
+    Promise.all(queries.map((o) => qc.prefetchQuery(o))).then(() => { clearTimeout(timer); settle(); });
     return () => { live = false; clearTimeout(timer); };
   }, [key, qc]);
-  return { shown, updating: viewQuery(shown) !== key };
+  const failed = failedKey === key && viewQuery(shown) !== key;
+  return { shown, updating: viewQuery(shown) !== key && !failed, failed };
 }
 
 export type Patch = (p: Partial<ViewState> | ((s: ViewState) => Partial<ViewState>)) => void;
 
 /** The requested view, for the controls that must answer a click at once. */
-export const RequestedView = createContext<{ view: ViewState; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; updating: boolean } | null>(null);
+export const RequestedView = createContext<{ view: ViewState; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; updating: boolean; failed: boolean } | null>(null);
 
 export function useRequestedView() {
   const v = useContext(RequestedView);

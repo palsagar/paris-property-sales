@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import type { StepScale } from "@/lib/colour-scale";
 import { track } from "@/lib/analytics";
 import { csvSafe } from "@/lib/escape";
+import { pct } from "@/lib/fmt";
 import { t, t as texts } from "@/lib/i18n/messages";
 
 export type ChartColors = {
@@ -123,17 +124,17 @@ export function ErrorState({ onRetry }: { onRetry: () => void }) {
 }
 
 /**
- * One choice among a few options. The same style everywhere: a sunken track, the chosen option inked.
+ * One choice among a few options. The same style everywhere: a sunken track, the chosen option inked. It also switches
+ * between two views of a panel: a group of pressed buttons needs no tab panels or arrow keys, unlike tabs.
  * `stretch` makes the options share the width (phones); `tall` makes them 44 px.
  */
-export function Segmented<T extends string>({ value, options, onChange, testId, label, stretch = false, tall = false, className = "", role = "group" }: {
-  value: T; options: [T, string][]; onChange: (v: T) => void; testId: string; label?: string; stretch?: boolean; tall?: boolean; className?: string; role?: "group" | "tablist";
+export function Segmented<T extends string>({ value, options, onChange, testId, label, stretch = false, tall = false, className = "" }: {
+  value: T; options: [T, string][]; onChange: (v: T) => void; testId: string; label?: string; stretch?: boolean; tall?: boolean; className?: string;
 }) {
   return (
-    <div className={`${stretch ? "flex" : "inline-flex"} gap-0.5 rounded-[10px] bg-sunken p-[3px] print:hidden ${className}`} role={role} aria-label={label}>
+    <div className={`${stretch ? "flex" : "inline-flex"} gap-0.5 rounded-[10px] bg-sunken p-[3px] print:hidden ${className}`} role="group" aria-label={label}>
       {options.map(([v, l]) => (
-        <button key={v} type="button" onClick={() => onChange(v)} data-testid={`${testId}-${v}`}
-          {...(role === "tablist" ? { role: "tab", "aria-selected": value === v } : { "aria-pressed": value === v })}
+        <button key={v} type="button" onClick={() => onChange(v)} data-testid={`${testId}-${v}`} aria-pressed={value === v}
           className={`${stretch ? "flex-1 min-w-0" : ""} ${tall ? "h-11 text-[15px]" : "h-[34px] text-[14px]"} px-3 rounded-[7px] font-medium whitespace-nowrap transition-colors ${value === v ? "bg-foreground text-background" : "text-foreground hover:bg-foreground/[0.06]"}`}>{l}</button>
       ))}
     </div>
@@ -165,7 +166,7 @@ export function SwitchField({ checked, onCheckedChange, label, disabled, testId,
   return (
     <span className={`inline-flex items-center gap-2 min-h-10 print:hidden ${disabled ? "opacity-45" : ""} ${className}`}>
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} data-testid={testId}
-        className="data-[state=checked]:bg-foreground data-[state=unchecked]:bg-control/50" />
+        className="no-tap tap-area data-[state=checked]:bg-foreground data-[state=unchecked]:bg-control/50" />
       <label htmlFor={id} className="text-[14px] cursor-pointer select-none">{label}</label>
     </span>
   );
@@ -209,13 +210,13 @@ export function StepLegend({ title, scale, fmt, className = "w-full" }: { title:
 
 /** A Change: arrow, sign and colour, so it never relies on colour alone. Blue for a fall, red for a rise. */
 export function DeltaChip({ value, size = "sm" }: { value: number | null | undefined; size?: "sm" | "xs" }) {
-  if (value == null || !isFinite(value)) return <span className="text-[12px] text-muted-foreground">n/a</span>;
+  if (value == null || !isFinite(value)) return <span className="text-[12px] text-muted-foreground">{t().kpis.na}</span>;
   const up = value > 0.05, down = value < -0.05;
   const cls = up ? "bg-rise-bg text-rise" : down ? "bg-fall-bg text-fall" : "bg-sunken text-muted-foreground";
   return (
     <span className={`inline-flex items-center gap-1 rounded font-num font-medium whitespace-nowrap ${size === "xs" ? "text-[12px] h-5 px-1.5" : "text-[13px] h-6 px-2"} ${cls}`}>
       {(up || down) && <span aria-hidden>{up ? "▲" : "▼"}</span>}
-      {`${value > 0 ? "+" : value < 0 ? "-" : ""}${Math.abs(value).toFixed(1)}%`}
+      {pct(value)}
     </span>
   );
 }

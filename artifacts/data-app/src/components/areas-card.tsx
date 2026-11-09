@@ -32,7 +32,7 @@ export const AreasCard = memo(function AreasCard({ rank, onRank, stats, trend, h
       csv={tab === "ranking" ? stats : heatData} csvName={tab === "ranking" ? `ranking-${rank}.csv` : `heatmap-${rank}-quarter.csv`}
       desc={tab === "ranking" ? r.rankingDesc : r.quartersDesc}
       controls={<>
-        <Segmented role="tablist" label={r.view} testId="areas-tab" value={tab}
+        <Segmented label={r.view} testId="areas-tab" value={tab}
           onChange={(v) => { if (v !== tab) track("change-compare-view", { view: v }); setTab(v); }}
           options={[["ranking", r.ranking], ["quarters", r.byQuarter]]} />
         <span className="flex items-center gap-2 sm:ml-auto">

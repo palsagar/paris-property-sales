@@ -38,6 +38,7 @@ import {
 import {
   areaStats,
   areaTrendPoints,
+  checkOneArea,
   distribution,
   saleAreaName,
   salePoints,
@@ -62,6 +63,7 @@ interface RangeQuery {
 }
 
 function toFilter(q: RangeQuery): SaleFilter {
+  checkOneArea(q);
   return {
     propertyType: q.propertyType,
     arrondissement: q.arrondissement,

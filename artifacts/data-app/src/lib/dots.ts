@@ -3,6 +3,7 @@ import { pointArea, type Area } from "./areas";
 import { escapeHtml } from "./escape";
 import { eur, num, sqm } from "./fmt";
 import { t } from "./i18n/messages";
+import { streetName } from "./street";
 import type { MapLevel } from "./view-state";
 
 /** The Sales at one rounded position in one Area, drawn as one dot. */
@@ -67,10 +68,10 @@ export function dotTooltip(dot: SaleDot, areaName: string): string {
   const name = escapeHtml(areaName);
   if (dot.sales.length === 1) {
     const p = dot.sales[0]!;
-    return `<div class="pt-title">${escapeHtml(p.address)}</div><div class="pt-sub">${name}</div><div>${t().dots.one(typeLabel(p.type), num(p.surface), escapeHtml(p.date.slice(0, 10)))}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`;
+    return `<div class="pt-title">${escapeHtml(streetName(p.address))}</div><div class="pt-sub">${name}</div><div>${t().dots.one(typeLabel(p.type), num(p.surface), escapeHtml(p.date.slice(0, 10)))}</div><div class="pt-num">${eur(p.price)}, <b>${sqm(p.pricePerSqm)}</b></div>`;
   }
   const rows = dot.sales.slice(0, ROWS).map((p) =>
-    `<div class="pt-row">${t().dots.row(escapeHtml(p.date.slice(0, 10)), escapeHtml(p.address), typeLabel(p.type), num(p.surface), `<span class="pt-num">${eur(p.price)}</span>`)}</div>`);
+    `<div class="pt-row">${t().dots.row(escapeHtml(p.date.slice(0, 10)), escapeHtml(streetName(p.address)), typeLabel(p.type), num(p.surface), `<span class="pt-num">${eur(p.price)}</span>`)}</div>`);
   const rest = dot.sales.length - ROWS;
   return `<div class="pt-title">${name}</div><div class="pt-sub">${t().dots.near(num(dot.sales.length))}</div><div class="pt-rows">${rows.join("")}</div>` +
     (rest > 0 ? `<div class="pt-sub">${t().dots.more(num(rest))}</div>` : "");

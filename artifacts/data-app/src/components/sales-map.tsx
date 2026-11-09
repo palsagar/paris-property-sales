@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON, useMap, ZoomControl } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { GeoFeatureCollection } from "@workspace/api-client-react";
@@ -88,22 +88,50 @@ function GestureGuard({ onHint }: { onHint: (text: string) => void }) {
   return null;
 }
 
-/** The number of each Arrondissement, written on the map where its shape is wide enough to hold it. */
+/** The map container's name, so a screen reader announces a map and not its labels. */
+function MapName({ label }: { label: string }) {
+  const map = useMap();
+  useEffect(() => {
+    const el = map.getContainer();
+    el.setAttribute("role", "region");
+    el.setAttribute("aria-label", label);
+  }, [map, label]);
+  return null;
+}
+
+/**
+ * The number of each Arrondissement, written at the centre of its shape where the shape is wide enough to hold it.
+ * The widest shapes go first, and a label that would touch one already written is left out, so "11e" and "20e" never
+ * run together. The labels repeat what the tooltips and the ranking say, so screen readers skip them.
+ */
 function ArrLabels({ bounds }: { bounds: GeoFeatureCollection }) {
   const map = useMap();
   useEffect(() => {
     const items = ((bounds.features ?? []) as unknown as GeoJSON.Feature[])
       .filter((f) => (f.properties as MapFeature).id === undefined)
       .map((f) => {
-        const b = L.geoJSON(f as never).getBounds();
-        const t = L.tooltip({ permanent: true, direction: "center", className: "map-label", interactive: false })
-          .setLatLng(b.getCenter()).setContent(arrLabel((f.properties as MapFeature).arr as number));
-        return { t, b };
+        const shape = L.geoJSON(f as never).getLayers()[0] as L.Polygon;
+        const b = shape.getBounds();
+        const text = arrLabel((f.properties as MapFeature).arr as number);
+        // The centre of the outer ring's area, which sits inside a long shape such as the 11e, unlike its box's centre.
+        const rings = shape.getLatLngs() as L.LatLng[][] | L.LatLng[][][];
+        const outer = (Array.isArray(rings[0]![0]) ? (rings as L.LatLng[][][])[0]![0] : (rings as L.LatLng[][])[0])!;
+        const at = L.PolyUtil.polygonCenter(outer, map.options.crs ?? L.CRS.EPSG3857);
+        const t = L.tooltip({ permanent: true, direction: "center", className: "map-label", interactive: false }).setLatLng(at).setContent(text);
+        // About 7.5 px a character at 12 px, and a little room around it.
+        return { t, b, at, w: text.length * 7.5 + 6, h: 18 };
       });
+    const widthOf = (b: L.LatLngBounds) => map.latLngToLayerPoint(b.getNorthEast()).x - map.latLngToLayerPoint(b.getSouthWest()).x;
     const fit = () => {
-      for (const { t, b } of items) {
-        const w = map.latLngToLayerPoint(b.getNorthEast()).x - map.latLngToLayerPoint(b.getSouthWest()).x;
-        if (w >= 34) { if (!map.hasLayer(t)) t.addTo(map); } else t.remove();
+      const placed: { x: number; y: number; w: number; h: number }[] = [];
+      for (const it of [...items].sort((a, b) => widthOf(b.b) - widthOf(a.b))) {
+        const p = map.latLngToLayerPoint(it.at);
+        const box = { x: p.x - it.w / 2, y: p.y - it.h / 2, w: it.w, h: it.h };
+        const clear = widthOf(it.b) >= 34 && !placed.some((o) => box.x < o.x + o.w && o.x < box.x + box.w && box.y < o.y + o.h && o.y < box.y + box.h);
+        if (clear) {
+          placed.push(box);
+          if (!map.hasLayer(it.t)) { it.t.addTo(map); it.t.getElement()?.setAttribute("aria-hidden", "true"); }
+        } else it.t.remove();
       }
     };
     fit();
@@ -113,12 +141,24 @@ function ArrLabels({ bounds }: { bounds: GeoFeatureCollection }) {
   return null;
 }
 
-function FlyTo({ feature }: { feature: object | null }) {
+// Notre-Dame, the centre of Paris.
+const PARIS_CENTRE = L.latLng(48.853, 2.349);
+
+/**
+ * Frames the focused Area with its surroundings, so a Visitor can still place it in Paris: a small Area stops at zoom
+ * 13, where a Quartier shows with the centre of Paris around it, and the frame of a Commune (`wide`) reaches to the
+ * centre of Paris.
+ */
+function FlyTo({ feature, wide }: { feature: object | null; wide: boolean }) {
   const map = useMap();
   const first = useRef(true);
   useEffect(() => {
     const still = reduceMotion();
-    if (feature) { const b = L.geoJSON(feature as never).getBounds(); if (still) map.fitBounds(b, { padding: [30, 30], maxZoom: 15, animate: false }); else map.flyToBounds(b, { padding: [30, 30], duration: 0.8, maxZoom: 15 }); }
+    if (feature) {
+      const b = L.geoJSON(feature as never).getBounds();
+      if (wide) b.extend(PARIS_CENTRE);
+      if (still) map.fitBounds(b, { padding: [30, 30], maxZoom: 13, animate: false }); else map.flyToBounds(b, { padding: [30, 30], duration: 0.8, maxZoom: 13 });
+    }
     else if (!first.current) { if (still) map.setView(HOME.center, HOME.zoom, { animate: false }); else map.flyTo(HOME.center, HOME.zoom, { duration: 0.8 }); }
     first.current = false;
   }, [feature, map]);
@@ -129,8 +169,10 @@ function FlyTo({ feature }: { feature: object | null }) {
  * The GeoJSON layer is created once per (level, theme, interactivity); colour and
  * selection changes only call setStyle, so animation ticks never rebuild the map.
  */
-export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, onSelect, styleKey, dots, pointScale, dotName, onSelectDot, focusFeature, outlineOnly, labels = false }: {
+export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, onSelect, styleKey, dots, pointScale, dotName, onSelectDot, focusFeature, focusWide, outline, outlineOnly, labels = false }: {
   level: "arr" | "quartier"; bounds?: GeoFeatureCollection; isDark: boolean; labels?: boolean;
+  /** `focusWide`: frame the focused Area together with the centre of Paris (a Commune). `outline`: a shape the drawn level does not hold, such as a Quartier on the Arrondissement map. */
+  focusWide: boolean; outline: object | null;
   fillFor: (id: string) => string | null; tooltipFor: (id: string, p: MapFeature) => string;
   stateOf: (p: MapFeature) => { selected: boolean; focus: boolean }; onSelect: (p: MapFeature) => void; styleKey: string;
   dots?: SaleDot[]; pointScale: (v: number) => string; dotName: (d: SaleDot) => string; onSelectDot: (d: SaleDot) => void; focusFeature: object | null; outlineOnly: boolean;
@@ -187,12 +229,15 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
   return (
     <div className="relative h-full w-full">
     <MapContainer zoomAnimation={!reduceMotion()} fadeAnimation={!reduceMotion()} center={HOME.center} zoom={HOME.zoom} minZoom={9} maxZoom={18} preferCanvas
-      scrollWheelZoom={false} dragging={!L.Browser.mobile} className="h-full w-full">
+      scrollWheelZoom={false} dragging={!L.Browser.mobile} zoomControl={false} className="h-full w-full">
+      {/* Leaflet's own zoom buttons, with their titles in the page's language. */}
+      <ZoomControl position="topleft" zoomInTitle={t().map.zoomIn} zoomOutTitle={t().map.zoomOut} />
       <AutoResize />
       <GestureGuard onHint={showHint} />
       <TileLayer key={isDark ? "d" : "l"} attribution={t().map.tiles} maxNativeZoom={16}
         url={`https://server.arcgisonline.com/ArcGIS/rest/services/${isDark ? "Canvas/World_Dark_Gray_Base" : "Canvas/World_Light_Gray_Base"}/MapServer/tile/{z}/{y}/{x}`} />
-      <FlyTo feature={focusFeature} />
+      <MapName label={t().map.label} />
+      <FlyTo feature={focusFeature} wide={focusWide} />
       {bounds && (
         <GeoJSON
           key={`${level}-${isDark}-${outlineOnly}`}
@@ -210,6 +255,8 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
           }}
         />
       )}
+      {outline && <GeoJSON key={JSON.stringify((outline as { properties?: unknown }).properties)} data={outline as never} interactive={false}
+        style={{ color: line, weight: 2.5, fill: false, dashArray: "6 4" }} />}
       {dots && bounds && <PointsLayer dots={dots} scale={pointScale} nameOf={dotNameRef} onSelect={onDotRef} />}
       {labels && bounds && level === "arr" && <ArrLabels bounds={bounds} />}
     </MapContainer>

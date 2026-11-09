@@ -10,12 +10,12 @@ import {
 import { Sun, Moon, Printer, X, Link2, MoreHorizontal } from "lucide-react";
 import { useViewState, viewQuery, type MapLevel, type MapMode, type ViewState } from "@/lib/view-state";
 import { areaProps, openProps, track, type AreaVia } from "@/lib/analytics";
-import { areaChange, areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
+import { areaChange, areaParams, featureArea, groupOfArea, keepInSameSelection, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
 import { useTheme } from "@/hooks/use-theme";
 import { toast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
-import { arrLabel, rangeLabel, longMonthLabel, num, keep, yearRangeLabel } from "@/lib/fmt";
+import { arrLabel, rangeLabel, longMonthLabel, monthLabel, num, keep, yearRangeLabel } from "@/lib/fmt";
 import { areaStatParams, areaTrendParams, heatParams, parisSummaryParams, summaryParams, type PanelChoices } from "@/lib/selection-queries";
 import { PanelChoicesContext, RequestedView, useShownView, type Patch } from "@/lib/shown-view";
 import { FetchDot, Segmented, iconBtnCls, outlineBtnCls } from "@/components/ui-bits";
@@ -61,10 +61,10 @@ type DatasetProps = { datasetFrom: string; datasetTo: string; releaseMonth: stri
 
 /** Owns the requested view and the panel choices, and shows the dashboard for the view whose data has loaded. */
 function ViewHost(props: DatasetProps) {
-  const [view, patch, movedTo] = useViewState(props.datasetFrom, props.datasetTo);
+  const [view, patch, movedTo, correct] = useViewState(props.datasetFrom, props.datasetTo);
   const [choices, setChoices] = useState<PanelChoices>(lastChoices);
   lastChoices = choices;
-  const { shown, updating } = useShownView(view, choices);
+  const { shown, updating, failed } = useShownView(view, choices);
   // The Quartiers and Communes, for the search box and for the names that analytics sends. The map loads the same
   // boundaries, so they are fetched once.
   const qB = useGetQuartierBoundaries();
@@ -78,6 +78,13 @@ function ViewHost(props: DatasetProps) {
     return { id, name, group };
   }).sort((a, b) => a.name.localeCompare(b.name, "fr")), [communeB.data]);
   const names = useMemo(() => new Map([...quartiers, ...communes].map((x) => [x.id, x.name])), [quartiers, communes]);
+  // A link to a Quartier or Commune that does not exist shows All Paris, and the address bar drops the bad id.
+  useEffect(() => {
+    const a = view.area;
+    if ((a.kind === "q" && qB.data && !quartiers.some((q) => q.id === a.id)) || (a.kind === "commune" && communeB.data && !communes.some((c) => c.id === a.id))) {
+      correct({ area: { kind: "paris" }, rank: "paris" });
+    }
+  }, [view.area, qB.data, communeB.data, quartiers, communes, correct]);
   const viewRef = useRef(view);
   viewRef.current = view;
   const namesRef = useRef(names);
@@ -101,7 +108,7 @@ function ViewHost(props: DatasetProps) {
     openSent = true;
     if (viewQuery(firstView.current) !== "") track("open", openProps(firstView.current, names));
   }, [nameLoading, names]);
-  const requested = useMemo(() => ({ view, patch, selectArea, updating }), [view, patch, selectArea, updating]);
+  const requested = useMemo(() => ({ view, patch, selectArea, updating, failed }), [view, patch, selectArea, updating, failed]);
   const panelChoices = useMemo(() => ({ choices, setChoices }), [choices]);
   return (
     <RequestedView.Provider value={requested}>
@@ -127,6 +134,11 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
 
   // Boundaries. ViewHost turns the Quartier and Commune boundaries into the lists of names.
   const arrB = useGetArrondissementBoundaries();
+  // Each Arrondissement's own name, such as Popincourt, for the search box.
+  const arrNames = useMemo(() => new Map((arrB.data?.features ?? []).map((f) => {
+    const p = (f as { properties: { arr: number; name: string } }).properties;
+    return [p.arr, p.name] as const;
+  })), [arrB.data]);
   const qB = useGetQuartierBoundaries();
   const qById = useMemo(() => new Map(quartiers.map((q) => [q.id, q])), [quartiers]);
   const communeB = useGetCommuneBoundaries();
@@ -139,7 +151,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const areaP = useMemo(() => areaParams(area), [area]);
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
 
-  const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
   // All Paris for the same type and Period, beside an Area's figures. selectionQueries loads it with the Selection.
   const parisP = useMemo(() => parisSummaryParams(selection), [selection]);
   const parisSummary = useGetSalesSummary(parisP, { query: { queryKey: getGetSalesSummaryQueryKey(parisP), enabled: area.kind !== "paris" } });
@@ -183,8 +195,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
       ...stats.map((s) => s.medianPricePerSqm),
       ...trend.filter((r) => r.count >= 10).map((r) => r.medianPricePerSqm),
     ].filter((v): v is number => v != null);
-    return makeStepScale(quantileThresholds(figures(arrStats, arrTrend), figures(communeStats, communeTrend)));
-  }, [arrStats, arrTrend, communeStats, communeTrend]);
+    return makeStepScale(quantileThresholds(figures(arrStats, arrTrend), figures(communeStats, communeTrend)), isDark);
+  }, [arrStats, arrTrend, communeStats, communeTrend, isDark]);
   const domain = useMemo<[number, number]>(() => [scale.thresholds[0] ?? 0, scale.thresholds[scale.thresholds.length - 1] ?? 0], [scale]);
   const areaMedians = useMemo(() => new Map([...arrStats, ...communeStats].map((s) => [s.id, s.medianPricePerSqm])), [arrStats, communeStats]);
   const areaColor = useCallback((id: string) => {
@@ -252,6 +264,18 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const switchLang = (l: Lang) => { if (l === lang) return; track("change-language", { to: l }); changeLang(l); };
   const flipTheme = () => { track("toggle-dark-mode", { on: !isDark }); toggleTheme(); };
   const showCompare = (v: "map" | "list") => { if (v !== compareTab) track("change-compare-view", { view: v }); setCompareTab(v); };
+  // A breadcrumb and "Back to all of Paris" disappear with the Area they leave, so the focus moves to the new Area's
+  // heading once it shows, and a screen reader reads its name.
+  // The flag holds the Area that the click asked for, so it applies only to that navigation: if another Area shows
+  // first (the click never loaded), the flag is cleared without moving the focus.
+  const focusHeading = useRef<string | null>(null);
+  const goBack = (a: Area, via: AreaVia, only: boolean) => { focusHeading.current = JSON.stringify(a); (only ? selectAreaOnly : selectArea)(a, via); };
+  useEffect(() => {
+    const wanted = focusHeading.current;
+    if (wanted === null) return;
+    focusHeading.current = null;
+    if (wanted === JSON.stringify(area)) document.getElementById("text-area-name")?.focus();
+  }, [area]);
 
   return (
     <div className="relative z-[1] min-h-[100dvh] bg-background">
@@ -265,7 +289,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
             <p className="text-[13px] md:text-[14px] text-muted-foreground" data-testid="text-coverage">{tx.page.dataTo(longMonthLabel(datasetTo))}<span className="hidden md:inline">{tx.page.release(longMonthLabel(releaseMonth))}</span></p>
           </div>
           {/* Laptop: the author line above the switch and the buttons. Phone: the switch beside "More", the author line below. */}
-          <div className="shrink-0 flex flex-col-reverse md:flex-col items-end gap-1.5 print:flex-col">
+          <div className="shrink-0 flex flex-col-reverse md:flex-col items-end gap-1.5 pointer-coarse:gap-4 print:flex-col">
             <AuthorLinks />
             <div className="flex items-center gap-2 print:hidden">
               <Segmented testId="lang" label={t().header.langLabel} value={lang} options={[["en", "EN"], ["fr", "FR"]]} onChange={switchLang} />
@@ -293,17 +317,17 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
         </header>
 
         {/* Intro: scrolls away, the Selection bar below stays pinned */}
-        <section className="pt-5 pb-5 md:pt-9 md:pb-7 flex flex-col gap-2.5" data-testid="intro">
-          <h1 className="font-display font-bold text-[26px] md:text-[40px] leading-[1.12] max-w-[20em] text-balance" data-testid="text-headline">{tx.page.headline(longMonthLabel(datasetFrom))}</h1>
+        <section aria-labelledby="text-headline" className="pt-5 pb-5 md:pt-9 md:pb-7 flex flex-col gap-2.5" data-testid="intro">
+          <h1 id="text-headline" className="font-display font-bold text-[26px] md:text-[40px] leading-[1.12] max-w-[20em] text-balance" data-testid="text-headline">{tx.page.headline(longMonthLabel(datasetFrom))}</h1>
           <p className="text-[16px] md:text-[18px] leading-relaxed text-muted-foreground max-w-[66ch] text-pretty">
             {tx.page.lede(longMonthLabel(datasetFrom), longMonthLabel(datasetTo))}
             <span className="hidden md:inline">{tx.page.hint}</span>
           </p>
         </section>
 
-        <SelectionBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById}
+        <SelectionBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById} arrNames={arrNames}
           count={summary.data?.count} />
-        {movedTo && from === movedTo.from && to === movedTo.to && (
+        {movedTo && ef === movedTo.from && et === movedTo.to && (
           <p className="mt-3 text-[14px] text-muted-foreground print:hidden" data-testid="period-moved-notice" role="status">
             {tx.page.moved(rangeLabel(ef, et))}
           </p>
@@ -320,18 +344,18 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
                       {crumbs.map((c, i) => (
                         <li key={c.label} className="flex items-center gap-1.5">
                           {i > 0 && <span aria-hidden className="text-control">/</span>}
-                          {c.area ? <button type="button" onClick={() => selectAreaOnly(c.area!, "back-link")} className="text-primary underline underline-offset-[3px] hover:opacity-80" data-testid={`crumb-${i}`}>{c.label}</button>
+                          {c.area ? <button type="button" onClick={() => goBack(c.area!, "back-link", true)} className="text-primary underline underline-offset-[3px] hover:opacity-80" data-testid={`crumb-${i}`}>{c.label}</button>
                             : <span aria-current="page" className="text-muted-foreground">{c.label}</span>}
                         </li>
                       ))}
                     </ol>
                   </nav>
                 )}
-                <h2 id="text-area-name" className="font-display font-bold text-[30px] md:text-[36px] leading-[1.1]" data-testid="text-area-name">{areaName}</h2>
+                <h2 id="text-area-name" tabIndex={-1} className="font-display font-bold text-[30px] md:text-[36px] leading-[1.1]" data-testid="text-area-name">{areaName}</h2>
                 <p className="text-[16px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{areaKicker && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
               </div>
               {area.kind !== "paris" && (
-                <button type="button" onClick={() => selectArea({ kind: "paris" }, "back-link")} data-testid="button-clear-area" className={`${outlineBtnCls} print:hidden`}>
+                <button type="button" onClick={() => goBack({ kind: "paris" }, "back-link", false)} data-testid="button-clear-area" className={`${outlineBtnCls} print:hidden`}>
                   <X className="w-4 h-4" aria-hidden />{tx.page.backToParis}
                 </button>
               )}
@@ -347,7 +371,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
               <h2 id="compare-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">{tx.page.compareTitle}</h2>
               <p className="text-[16px] text-muted-foreground">{tx.page.compareDesc}</p>
             </div>
-            <Segmented role="tablist" label={tx.page.compareView} testId="compare-tab" value={compareTab} onChange={showCompare} stretch tall className="md:hidden mb-3"
+            <Segmented label={tx.page.compareView} testId="compare-tab" value={compareTab} onChange={showCompare} stretch tall className="md:hidden mb-3"
               options={[["map", tx.page.map], ["list", tx.page.list]]} />
             <div className="flex flex-wrap gap-4 items-start">
               <div className={`flex-[999_1_560px] min-w-0 ${compareTab === "map" ? "" : "hidden md:block"}`}>
@@ -377,7 +401,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           <section aria-labelledby="dist-title" className="pt-12 md:pt-14">
             <div className="flex flex-col gap-1 mb-4">
               <h2 id="dist-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">{tx.page.distTitle}</h2>
-              <p className="text-[16px] text-muted-foreground">{tx.page.distDesc(summary.data ? tx.sales(num(summary.data.count), summary.data.count) : "")}</p>
+              <p className="text-[16px] text-muted-foreground">{tx.page.distDesc(summary.data?.count ? tx.sales(num(summary.data.count), summary.data.count) : "")}</p>
             </div>
             <div className="flex flex-wrap gap-4">
               <Distributions filters={filters} houseShare={ptype === "all" ? summary.data?.houseShare : null} isDark={isDark} />
@@ -397,7 +421,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           <section aria-labelledby="about-title" className="flex-[2_1_480px] max-w-[72ch] flex flex-col gap-2.5 text-[15px] leading-relaxed">
             <h2 id="about-title" className="font-display font-semibold text-[19px]">{tx.page.aboutTitle}</h2>
             <p className="font-medium">{tx.page.notValuation}</p>
-            <p>{tx.page.source(rangeLabel(datasetFrom, datasetTo))}</p>
+            <p>{tx.page.source(monthLabel(datasetFrom.slice(0, 7)), monthLabel(datasetTo.slice(0, 7)))}</p>
             {noteSummary.current && <p>{tx.page.excluded(num(noteSummary.current.excludedCount))}</p>}
             <p className="text-muted-foreground">{tx.page.changeNote(noteSummary.current?.changeWindowMonths ?? 3)}</p>
           </section>

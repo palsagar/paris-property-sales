@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import type { PropertyTypeParameter, SalesSummary } from "@workspace/api-client-react";
 import { Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,15 +12,40 @@ const priceRange = (min: number, max: number) => keep(`${eurShort(min).replace(/
 
 const cardCls = "rounded-xl border bg-card min-w-0";
 
-function Small({ label, value, sub, testId, note }: { label: string; value: string; sub: ReactNode; testId: number; note?: string | null }) {
+/**
+ * One of the four small cards. From 1280 px the five cards share one row: the smaller bases leave room for the
+ * price range (`wide`), which stays on one line.
+ */
+function Small({ label, value, sub, testId, note, wide = false }: { label: string; value: string; sub: ReactNode; testId: number; note?: string | null; wide?: boolean }) {
   const isTooFew = value === tooFew();
   return (
-    <article className={`${cardCls} flex-[1_1_200px] p-4 sm:p-5 flex flex-col gap-1.5`} data-testid={`card-kpi-${testId}`}>
+    <article className={`${cardCls} ${wide ? "flex-[1_1_200px] xl:flex-[1_1_256px]" : "flex-[1_1_200px] xl:flex-[1_1_190px]"} p-4 sm:p-5 flex flex-col gap-1.5`} data-testid={`card-kpi-${testId}`}>
       <h3 className="text-[14px] font-medium text-muted-foreground leading-snug">{label}</h3>
-      <p className={`font-display font-bold text-[22px] xl:text-[26px] leading-tight ${isTooFew ? "text-muted-foreground" : "text-primary"}`} data-testid={`text-kpi-${testId}`}>{keep(value)}</p>
+      <p className={`font-display font-bold text-[22px] xl:text-[26px] leading-tight ${wide ? "whitespace-nowrap" : ""} ${isTooFew ? "text-muted-foreground" : "text-primary"}`} data-testid={`text-kpi-${testId}`}>{keep(value)}</p>
       <div className="text-[13px] sm:text-[14px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">{sub}</div>
       {note && <p className="text-[13px] text-muted-foreground" data-testid={`text-house-share-${testId}`}>{note}</p>}
     </article>
+  );
+}
+
+/**
+ * A Change chip whose tooltip says how the Change is measured. A Radix tooltip opens on hover and focus but closes on
+ * a tap, so a tap or a click opens it here as well; a tap elsewhere, Esc or leaving the chip closes it.
+ */
+function ChangeTip({ label, children, tip }: { label: string; children: ReactNode; tip: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Tooltip open={open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-1.5 rounded" aria-label={label}
+          // preventDefault stops the Radix handlers, which close the tooltip on a press.
+          onPointerDown={(e) => { if (e.pointerType !== "mouse") e.preventDefault(); }}
+          onClick={(e) => { e.preventDefault(); setOpen(true); }}>
+          {children}<Info className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[280px] text-[13px] leading-snug">{tip}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -48,22 +73,15 @@ export const Kpis = memo(function Kpis({ s, paris, ptype, loading, fetching, err
     );
   }
   const changeTip = (start: number | null, end: number | null, fmt: (v: number) => string, change: number | null) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" className="no-tap inline-flex items-center gap-1.5 rounded" aria-label={k.changeLabel(change == null ? k.notAvailable : pct(change))}>
-          <DeltaChip value={change} /><Info className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[280px] text-[13px] leading-snug">
-        {k.changeTip(n, start != null ? fmt(start) : k.na, end != null ? fmt(end) : k.na)}
-        {change == null && k.noChange}
-      </TooltipContent>
-    </Tooltip>
+    <ChangeTip label={k.changeLabel(change == null ? k.notAvailable : pct(change))}
+      tip={<>{k.changeTip(n, start != null ? fmt(start) : k.na, end != null ? fmt(end) : k.na)}{change == null && k.noChange}</>}>
+      <DeltaChip value={change} />
+    </ChangeTip>
   );
   return (
     <div className={`flex flex-col gap-2 transition-opacity ${fetching ? "opacity-70" : ""}`} data-testid="kpis">
       <div className="flex flex-wrap gap-3 sm:gap-4">
-        <article className={`${cardCls} flex-[2_1_360px] p-4 sm:px-6 sm:py-5 flex flex-col gap-2.5`} data-testid="card-kpi-2">
+        <article className={`${cardCls} flex-[2_1_360px] xl:flex-[2_1_320px] p-4 sm:px-6 sm:py-5 flex flex-col gap-2.5`} data-testid="card-kpi-2">
           <h3 className="text-[14px] font-medium text-muted-foreground">{k.medianSqm}</h3>
           <p className={`font-display font-bold text-[40px] sm:text-[48px] leading-none ${s.medianPricePerSqm == null ? "text-muted-foreground text-[28px] sm:text-[32px]" : "text-primary"}`} data-testid="text-kpi-2">
             {s.medianPricePerSqm == null ? tooFew() : <>{num(s.medianPricePerSqm)} <span className="text-[18px] sm:text-[22px]">EUR/m²</span></>}
@@ -87,7 +105,7 @@ export const Kpis = memo(function Kpis({ s, paris, ptype, loading, fetching, err
         <Small testId={1} label={k.medianPrice} value={orTooFew(s.medianPrice, eur)}
           sub={<>{changeTip(s.startMedianPrice, s.endMedianPrice, eurShort, s.priceChangePct)}<span>{k.overPeriod}</span></>} />
         <Small testId={4} label={k.medianSurface} value={orTooFew(s.medianSurface, (v) => `${num(v)} m²`)} sub={k.builtSurface} />
-        <Small testId={5} label={k.priceRange} value={s.count === 0 ? k.noSales : priceRange(s.minPrice, s.maxPrice)} sub={k.cheapestDearest} />
+        <Small testId={5} wide label={k.priceRange} value={s.count === 0 ? k.noSales : priceRange(s.minPrice, s.maxPrice)} sub={k.cheapestDearest} />
       </div>
       {warning && <p className="text-[14px] text-muted-foreground" data-testid="text-house-share-warning">{warning}</p>}
     </div>

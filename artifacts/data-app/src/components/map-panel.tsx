@@ -9,7 +9,7 @@ import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend, outlineBtnCls } from "@/components/ui-bits";
-import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, tooFew, houseShareLabel, houseShareWarning, bucketLabel } from "@/lib/fmt";
+import { eur, sqm, num, arrLabel, pct, kShort, makeDivScale, rangeLabel, tooFew, houseShareLabel, houseShareWarning, bucketLabel } from "@/lib/fmt";
 import { groupDots, type SaleDot } from "@/lib/dots";
 import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
@@ -158,11 +158,13 @@ export const MapPanel = memo(function MapPanel(props: {
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
             stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}
             onSelect={props.onSelect} outlineOnly={mode === "dots"} labels={mode !== "dots" && level === "arr"}
-            dots={mode === "dots" ? dots ?? [] : undefined} pointScale={scale.color} dotName={dotName} onSelectDot={selectDot} focusFeature={focusFeature} />
+            dots={mode === "dots" ? dots ?? [] : undefined} pointScale={scale.color} dotName={dotName} onSelectDot={selectDot} focusFeature={focusFeature}
+            focusWide={area.kind === "commune"} outline={area.kind === "q" && (level === "arr" || mode === "dots") ? focusFeature : null} />
         )}
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
         {mode === "dots" && items && total > items.length && (
-          <div className="absolute left-3 top-3 z-[400] rounded-lg bg-card border px-3 py-2 text-[13px] max-w-[260px] shadow-md" data-testid="text-dots-cap">
+          // Right of Leaflet's zoom buttons (10 px from the edge, 34 px wide, 44 px on a touch screen), so they do not cover its first words.
+          <div className="absolute left-[54px] pointer-coarse:left-[64px] right-3 top-3 z-[400] w-fit rounded-lg bg-card border px-3 py-2 text-[13px] max-w-[260px] shadow-md" data-testid="text-dots-cap">
             {mt.cap(num(items.length), num(total))}
           </div>
         )}
@@ -170,10 +172,10 @@ export const MapPanel = memo(function MapPanel(props: {
       {/* The legend sits under the map, not on it: the map keeps its area and the thresholds can be read at 12 px. */}
       <div className="mt-3">
         {mode === "change" ? (
-          <GradientLegend title={<>{mt.changeLegend}{rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} className="w-full sm:max-w-[420px]" />
+          <GradientLegend title={<>{mt.changeLegend}{rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => pct(n, 0)} className="w-full sm:max-w-[420px]" />
         ) : (
           <StepLegend title={<>{mt.levelLegend}<span className="font-semibold text-foreground">{travelLabel ? mt.fourQuarters(travelLabel) : mode === "dots" ? mt.perDot : rangeLabel(ef, et)}</span>{mt.ninth}</>}
-            scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
+            scale={scale} fmt={(n) => kShort(n, 1)} />
         )}
         {mode === "dots" && items && total <= items.length && <div className="text-[13px] mt-1 text-muted-foreground font-num">{mt.plotted(num(total))}</div>}
       </div>

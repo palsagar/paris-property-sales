@@ -36,6 +36,18 @@ export function keepInSameArea(a: ReturnType<typeof areaParams>) {
   };
 }
 
+/**
+ * The `placeholderData` option of a panel that shows the Selection's figures under the Selection's labels. It keeps
+ * the previous data only while the whole Selection stays the same, for example while the Sales list loads a new sort
+ * or the trend a new time step. A slow new Selection then shows the panel's loading state, never the old figures.
+ */
+export function keepInSameSelection(f: ReturnType<typeof areaParams> & { propertyType: string; from?: string; to?: string }) {
+  return <T,>(previous: T | undefined, query?: { queryKey: readonly unknown[] }): T | undefined => {
+    const p = (query?.queryKey[1] ?? {}) as Partial<typeof f>;
+    return keepInSameArea(f)(previous, query) !== undefined && p.propertyType === f.propertyType && p.from === f.from && p.to === f.to ? previous : undefined;
+  };
+}
+
 /** The group a Commune code belongs to, from its first two characters. */
 const groupOfCommune = (id: string): RankGroup => {
   const d = id.slice(0, 2);
@@ -117,10 +129,21 @@ const OLD_NAMES: Record<string, string> = { "93066": "Pierrefitte-sur-Seine" };
 
 const plain = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-/** The text the search box matches against: the name, the name without accents, the id and any old name. */
-export function searchValue(name: string, id: string): string {
-  return [name, plain(name), id, OLD_NAMES[id] ?? ""].join(" ").toLowerCase();
+/** The text the search box matches against: the name, the name without accents, the id, any old name and `extra`. */
+export function searchValue(name: string, id: string, extra = ""): string {
+  return [name, plain(name), id, OLD_NAMES[id] ?? "", extra, plain(extra)].join(" ").toLowerCase();
 }
+
+const ORDINAL_END: Record<number, string> = { 1: "st", 2: "nd", 3: "rd" };
+/**
+ * The other ways a Visitor may type an Arrondissement: its number, "11th", "11eme", its postcode and its own name
+ * (Popincourt). The 16e has two postcodes. The postcode is the option's id, so it is not repeated here.
+ */
+export function arrSearchTerms(n: number, name?: string): string {
+  const en = `${n}${n < 11 || n > 13 ? ORDINAL_END[n % 10] ?? "th" : "th"}`;
+  return [String(n), en, n === 1 ? "1ere 1re" : `${n}eme`, n === 16 ? "75116" : "", name ?? ""].join(" ");
+}
+export const arrPostcode = (n: number) => `750${String(n).padStart(2, "0")}`;
 
 /** The usual French short forms of a typed word. */
 const SHORT_FORMS: Record<string, string> = { st: "saint", ste: "sainte" };

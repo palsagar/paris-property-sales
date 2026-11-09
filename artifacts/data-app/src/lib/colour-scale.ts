@@ -36,9 +36,14 @@ export function quantileThresholds(paris: number[], communes: number[], steps = 
   return out;
 }
 
-export function makeStepScale(thresholds: number[]): StepScale {
+/**
+ * Light mode runs Magma from pale yellow to deep purple. On the dark card the purple end would vanish (1.1:1), so dark
+ * mode stops at magenta: every step keeps at least 3:1 against the card, and the cheapest step stays pale yellow.
+ */
+export function makeStepScale(thresholds: number[], isDark = false): StepScale {
   const n = thresholds.length + 1;
-  const colors = Array.from({ length: n }, (_, i) => interpolateMagma(0.93 - 0.78 * (n === 1 ? 0.5 : i / (n - 1))));
+  const [hi, lo] = isDark ? [0.98, 0.5] : [0.93, 0.15];
+  const colors = Array.from({ length: n }, (_, i) => interpolateMagma(hi - (hi - lo) * (n === 1 ? 0.5 : i / (n - 1))));
   // A value equal to a threshold takes the higher step.
   const index = (v: number) => thresholds.filter((t) => v >= t).length;
   return { color: (v) => colors[index(v)], index, thresholds, colors };

@@ -519,18 +519,25 @@ body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index
 
 /* Focus: visible, instant */
 :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; transition: none !important; }
+/* The Area search draws its ring on its wrapper (area-picker.tsx), so the field itself draws none. */
+[cmdk-input]:focus-visible { outline: none; }
 .leaflet-container :focus-visible { outline-offset: 0; }
 
 /* Touch targets */
 @media (pointer: coarse) {
   button:not(.no-tap), a:not(.no-tap), [role="button"]:not(.no-tap), select { min-height: 44px; min-width: 44px; }
+  /* A control that must keep its drawn size, such as a switch or a link in a line of text, gets an invisible 44 px target. */
+  .tap-area { position: relative; }
+  .tap-area::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
   input[type="range"] { min-height: 44px; }
   /* 16px stops iOS from zooming into a field on focus. */
   input, select, textarea { font-size: 16px; }
 }
 button, a, select, input[type="range"] { touch-action: manipulation; }
-/* Sticky Selection bar: keep a focused control or an anchor target clear of it. */
-html { scroll-padding-top: 88px; }
+/* Sticky Selection bar: keep a focused control or an anchor target clear of it. selection-bar.tsx measures the bar. */
+html { scroll-padding-top: calc(var(--selection-bar-h, 80px) + 8px); }
+/* On a short screen the bar is not sticky (selection-bar.tsx), so nothing covers the top. */
+@media (max-height: 500px) { html { scroll-padding-top: 0; } }
 /* The thin line under the Selection bar while a new Selection loads. */
 @keyframes progress-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .progress-line { animation: progress-slide 1.1s cubic-bezier(.4,0,.2,1) infinite; }

@@ -1,4 +1,7 @@
 import type { Area } from "../areas";
+
+/** "the first 6 months", or "the first month" for a Change window of one month. */
+const months = (n: number, which: "first" | "last") => (n === 1 ? `the ${which} month` : `the ${which} ${n} months`);
 /** The English texts. fr.ts has the same shape, so the type check finds a missing French text. */
 export const en = {
   header: {
@@ -46,14 +49,14 @@ export const en = {
     distTitle: "What sold, and for how much",
     distDesc: (sales: string) => `${sales ? `The spread of the ${sales} in the Selection. ` : ""}Darker bars hold the middle half.`,
     copied: "Link copied",
-    copiedDesc: "It opens this exact view: area, type, period and panels.",
+    copiedDesc: "It opens the same area, property type, period and map.",
     copyFailed: "The link could not be copied",
     copyFailedDesc: "Copy it from the address bar instead.",
     aboutTitle: "About the data",
     notValuation: "The figures describe past Sales. They are not a valuation of any home.",
-    source: (range: string) => `They come from Demandes de valeurs foncières (DVF), published by the DGFiP, and cover residential sales in Paris and 135 Communes around it from ${range}. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface and has a price of 1,000 to 35,000 EUR/m².`,
+    source: (from: string, to: string) => `They come from Demandes de valeurs foncières (DVF), published by the DGFiP, and cover residential sales in Paris and 135 Communes around it from ${from} to ${to}. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20\u00a0000 to 20\u00a0000\u00a0000\u00a0EUR, has 9 to 300\u00a0m² of built surface and has a price per m² of 1\u00a0000 to 35\u00a0000\u00a0EUR.`,
     excluded: (n: string) => `${n} residential sales in the whole dataset are left out by these rules: sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².`,
-    changeNote: (months: number) => `A change compares the median of the first ${months} months of the Period with the median of the last ${months} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.`,
+    changeNote: (n: number) => `${n > 0 ? `A change compares the median of ${months(n, "first")} of the Period with the median of ${months(n, "last")}. ` : "A Period of one month has no change. "}Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.`,
     sourcesTitle: "Sources",
     sources: ["DVF open data (DGFiP)", "Paris OpenData boundaries", "Etalab Contours administratifs (ODbL)"],
     releaseNote: (month: string) => `${month} release. Basemap tiles © Esri.`,
@@ -69,6 +72,7 @@ export const en = {
   /** "1 234 sales". */
   sales: (n: string, count: number) => `${n} ${count === 1 ? "sale" : "sales"}`,
   selection: {
+    region: "Selection",
     area: "Area",
     propertyType: "Property type",
     period: "Period",
@@ -76,6 +80,7 @@ export const en = {
     choosePeriod: "Choose a period",
     updating: "Updating",
     updatingDots: "Updating…",
+    failed: "You are offline, so the figures for this choice did not load. The page still shows the previous Selection. The new choice loads when your connection returns.",
     inSelection: "sales in this Selection",
     change: "Change",
     sheetTitle: "Choose what to show",
@@ -91,17 +96,19 @@ export const en = {
     last12: "Last 12 months",
   },
   picker: {
+    paris: "Paris",
+    arrondissement: (arr: string) => `${arr} arrondissement`,
     departments: "Departments",
     quartiersOf: (arr: string) => `Quartiers of the ${arr}`,
     communesIn: (department: string) => `Communes · ${department}`,
     majorTowns: "Major towns",
-    find: "Find a quartier or commune",
+    find: "Find an area",
     nothing: "Nothing matches that name. Try a shorter part of it.",
     selected: "Selected",
     holdsQuartier: ", holds the selected quartier",
     around: "AROUND PARIS",
     department: "Department",
-    hint: "Type a name to find any of the 80 quartiers and the communes around Paris, including the major towns.",
+    hint: "Type a name, a number or a postcode to find an arrondissement, any of the 80 quartiers or a commune around Paris, including the major towns.",
   },
   period: {
     presets: "Period presets",
@@ -109,16 +116,18 @@ export const en = {
     chartDesc: "Bars: sales per month. Line: median price per m². Drag a handle, use the arrow keys on it, or pick the months below.",
     from: "From",
     to: "To",
+    startHandle: "Start of the Period",
+    endHandle: "End of the Period",
   },
   kpis: {
     notLoaded: "The key figures did not load.",
     changeLabel: (change: string) => `Change ${change}. How it is measured`,
     notAvailable: "not available",
     na: "n/a",
-    changeTip: (n: number, start: string, end: string) => `Median of the first ${n} months of the Period (${start}) against the median of the last ${n} months (${end}), in nominal euros.`,
+    changeTip: (n: number, start: string, end: string) => `Median of ${months(n, "first")} of the Period (${start}) against the median of ${months(n, "last")} (${end}), in nominal euros.`,
     noChange: " One of the two windows has too few sales to compute a change.",
     medianSqm: "Median price per m²",
-    firstLast: (start: string, n: number, end: string) => `${start} in the first ${n} months, ${end} in the last ${n}`,
+    firstLast: (start: string, n: number, end: string) => `${start} in ${months(n, "first")}, ${end} in ${n === 1 ? "the last" : `the last ${n}`}`,
     overPeriod: "over the period",
     allParis: "All Paris: ",
     salesRecorded: "Sales recorded",
@@ -138,7 +147,8 @@ export const en = {
     notFoundBody: "Did you forget to add the page to the router?",
   },
   trend: {
-    takeaway: (area: string, end: string, n: number, start: string, change: string) => `In ${area}, the median was ${end} in the last ${n} months of the Period, against ${start} in the first ${n}: ${change}.`,
+    chartAlt: (from: string, to: string) => `Chart of the median price per m², from ${from} to ${to}, with the number of sales in each period under it.`,
+    takeaway: (area: string, end: string, n: number, start: string, change: string) => `In ${area}, the median was ${end} in ${months(n, "last")} of the Period, against ${start} in ${n === 1 ? "the first" : `the first ${n}`}: ${change}.`,
     parisMoved: (change: string) => ` All Paris moved by ${change}.`,
     noSales: "No sales",
     medianSqm: "Median per m²",
@@ -159,13 +169,17 @@ export const en = {
     smoothing: "Smoothing",
     band: "Middle half of sales",
     empty: "No sales match this selection. Try a longer period or a larger area.",
+    onePoint: (gran: "month" | "quarter" | "year") => `This Period fits in one ${gran}, so there is no trend to draw. Choose a longer Period${gran === "month" ? "" : " or a shorter time step"}.`,
     bandLegend: "P25 and P75, the middle half of sales",
     count: "Number of sales",
     lowPeriods: (n: number) => `${n} period${n > 1 ? "s" : ""} with fewer than 10 sales`,
   },
   distributions: {
+    chartAlt: "Bar chart of the number of sales in each price band. The figures under it give the percentiles.",
     median: "Median",
     mean: (v: string, share: string) => `The mean is ${v}. Darker bars hold the middle half of sales, between P25 and P75.${share ? ` This selection is ${share}.` : ""}`,
+    above: (sales: string, edge: string) => ` The last bar holds the ${sales} above ${edge}.`,
+    orMore: (edge: string) => `${edge} or more`,
     pricesTitle: "Sale prices",
     pricesDesc: "Number of sales in each price bracket.",
     half: (lo: string, hi: string) => `Half of the sales were between ${lo} and ${hi}.`,
@@ -186,6 +200,7 @@ export const en = {
     sinceFirst: (change: string) => ` · ${change} since the first quarter`,
     few: " · fewer than 10 sales",
     point: "Point at a cell, or tap it, to read its figures.",
+    grid: "Median price per m² by area and quarter. Move between the cells with the arrow keys.",
     show: (quarter: string) => `Show ${quarter} on the map`,
     select: (area: string) => `Select ${area}`,
     focus: (area: string) => `Focus the page on ${area}`,
@@ -203,7 +218,8 @@ export const en = {
     houses: "Houses",
     change: "Change",
     quarters: "Quarters",
-    rowLabel: (selected: boolean, name: string, figures: string, sales: string) => `${selected ? "Selected: " : ""}${name}. ${figures}, ${sales}`,
+    // The visible label first, such as "6e", so a voice command that says what it sees finds the row.
+    rowLabel: (label: string, name: string, figures: string, sales: string, change: string) => `${label === name ? name : `${label}, ${name}`}. ${figures}, ${sales}, change ${change}`,
     figures: (sqm: string, price: string) => `Median ${sqm}, median price ${price}`,
     housesNote: "Houses: their share of the sales. A share above 10% is in bold, because a house's price includes its land and the median is harder to compare.",
     parisTitle: "Arrondissements of Paris",
@@ -216,6 +232,7 @@ export const en = {
     group: "Group",
   },
   map: {
+    label: "Map of the areas, coloured by the figure chosen above. The ranking gives the same figures as a list.",
     changeTitle: "Change in price per m², by area",
     dotsTitle: "Individual sales on the map",
     levelTitle: "Median price per m², by area",
@@ -249,6 +266,8 @@ export const en = {
     zoomHint: (key: string) => `Hold ${key} and scroll to zoom the map`,
     touchHint: "Use two fingers to move the map",
     tiles: "Tiles &copy; Esri",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
   },
   dots: {
     house: "House",
@@ -305,8 +324,8 @@ export const en = {
     /** An Area's name after the words that come before it in a sentence: "in the 11e arrondissement". */
     inArea: (name: string, _kind?: Area["kind"]) => (name === "All Paris" ? "all of Paris" : /arrondissement$/.test(name) ? `the ${name}` : name),
     quarter: (y: number, q: number) => `${y} Q${q}`,
-    houseShare: (pct: number) => `${pct}% houses`,
-    houseShareWarning: (pct: number) => `Houses are ${pct}% of these sales. A house's price includes its land, so this median is harder to compare.`,
+    houseShare: (pct: string) => `${pct} houses`,
+    houseShareWarning: (pct: string) => `Houses are ${pct} of these sales. A house's price includes its land, so this median is harder to compare.`,
   },
 };
 

@@ -35,7 +35,13 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown until the app draws, in place of a blank page on a slow connection. React replaces it. -->
+    <style>
+      .boot { min-height: 100dvh; margin: 0; display: flex; align-items: center; justify-content: center; font: 16px system-ui, sans-serif; color: #6b6660; }
+      html.dark .boot { color: #a3a8b3; background: #0e121b; }
+      html[lang="fr"] .boot-en, html:not([lang="fr"]) .boot-fr { display: none; }
+    </style>
+    <div id="root"><p class="boot" role="status"><span class="boot-en">Loading the sales data…</span><span class="boot-fr">Chargement des données des ventes…</span></p></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

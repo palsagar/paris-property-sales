@@ -9,6 +9,7 @@ import express from "express";
 import { createApp } from "./app";
 import { API_RATE_LIMIT } from "./lib/rateLimit";
 import { QueryTimeoutError } from "./lib/salesDb";
+import { checkOneArea } from "./lib/salesQueries";
 
 const servers: Server[] = [];
 
@@ -27,6 +28,10 @@ function stubRoutes(): express.Router {
   });
   routes.get("/slow", () => {
     throw new QueryTimeoutError(5000);
+  });
+  routes.get("/area", (req, res) => {
+    checkOneArea(req.query as Record<string, string>);
+    res.json({ ok: true });
   });
   return routes;
 }
@@ -58,6 +63,29 @@ describe("headers", () => {
     assert.equal(res.headers.get("content-security-policy"), "frame-ancestors 'none'");
     assert.equal(res.headers.get("x-frame-options"), "DENY");
   });
+
+  test("responses forbid type sniffing and do not name the framework", async () => {
+    const base = await start();
+    const res = await fetch(`${base}/api/ip`);
+    assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(res.headers.get("x-powered-by"), null);
+  });
+});
+
+test("an unknown API path gives a JSON 404", async () => {
+  const base = await start();
+  for (const path of ["/api/nope", "/api/sales/nope/deep"]) {
+    const res = await fetch(`${base}${path}`);
+    assert.equal(res.status, 404);
+    assert.match(res.headers.get("content-type") ?? "", /application\/json/);
+    assert.deepEqual(await res.json(), { error: "Not found" });
+  }
+});
+
+test("a request that names two Areas gives 400", async () => {
+  const base = await start();
+  assert.equal((await fetch(`${base}/api/area?arrondissement=1&department=92`)).status, 400);
+  assert.equal((await fetch(`${base}/api/area?arrondissement=1`)).status, 200);
 });
 
 test("the server does not read request bodies", async () => {
@@ -178,6 +206,22 @@ describe("page", () => {
       assert.match(await res.text(), /og:url/);
     });
   }
+
+  for (const path of ["/favicon.ico", "/sitemap.xml", "/assets/missing.js"]) {
+    test(`a missing file such as ${path} gives 404, not the page`, async () => {
+      const base = await start({ STATIC_DIR: site() });
+      const res = await fetch(`${base}${path}`);
+      assert.equal(res.status, 404);
+      assert.doesNotMatch(await res.text(), /raw/);
+    });
+  }
+
+  test("a path without a file extension gives the page", async () => {
+    const base = await start({ STATIC_DIR: site() });
+    const res = await fetch(`${base}/some/view`);
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /raw/);
+  });
 
   test("other files are served as they are", async () => {
     const base = await start({ STATIC_DIR: site(), SITE_URL: "https://example.test" });

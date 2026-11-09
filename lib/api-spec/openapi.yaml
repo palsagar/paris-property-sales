@@ -542,12 +542,15 @@ components:
           type: integer
     Distribution:
       type: object
-      required: [bins, median, mean, p10, p25, p75, p90]
+      required: [bins, above, median, mean, p10, p25, p75, p90]
       properties:
         bins:
           type: array
           items:
             $ref: "#/components/schemas/DistributionBin"
+        above:
+          type: integer
+          description: The Sales above the last bin. The bins stop at the 99th percentile, so the chart shows these in one open-ended bar.
         median:
           type: ["number", "null"]
           description: Null when fewer than 5 Sales

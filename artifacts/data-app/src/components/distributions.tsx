@@ -7,12 +7,20 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Res
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, TipBox, useChartColors } from "@/components/ui-bits";
 import { eurShort, sqm, num, houseShareLabel, keep, tooFew } from "@/lib/fmt";
-import { binStart, binTick } from "@/lib/histogram";
-import { keepInSameArea } from "@/lib/areas";
+import { binStart, binTick, binTicks } from "@/lib/histogram";
+import { keepInSameSelection } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 import { t } from "@/lib/i18n/messages";
 
-const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; color: string }) {
+/** The bins for the CSV file, with the open-ended bar of the Sales above the last bin: its `to` is empty. */
+const withAbove = (dist?: Distribution) => {
+  if (!dist) return undefined;
+  const last = dist.bins[dist.bins.length - 1];
+  return last && dist.above > 0 ? [...dist.bins, { from: last.to, to: "", count: dist.above }] : dist.bins;
+};
+
+/** `unit` follows the exact bin edges in the tooltip: "1 500 000 – 1 550 000 EUR". */
+const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, unit, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; unit: string; color: string }) {
   const c = useChartColors(isDark);
   const { median, mean, p10, p25, p75, p90 } = dist;
   if (median == null || mean == null || p10 == null || p25 == null || p75 == null || p90 == null) {
@@ -21,21 +29,29 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, co
   const share = houseShareLabel(houseShare);
   const d = t().distributions, sales = t().trend.sales;
   // The numeric `from` is the category key: it is unique, so the reference lines find their bin, and the labels may repeat or not.
-  const data = dist.bins.map((b) => ({ ...b, mid: (b.from + b.to) / 2 }));
+  const data: { from: number; to: number | null; count: number; mid: number }[] = dist.bins.map((b) => ({ ...b, mid: (b.from + b.to) / 2 }));
+  // The bins stop at the 99th percentile. The Sales above it go in one open-ended bar, so every Sale is drawn.
+  const last = dist.bins[dist.bins.length - 1];
+  if (last && dist.above > 0) data.push({ from: last.to, to: null, count: dist.above, mid: last.to });
+  const ticks = binTicks(dist.bins);
+  const edge = (v: number) => keep(`${num(v)} ${unit}`);
   // P25/P75 labels sit inside the plot, on the outer side of their line, so they never collide with the Median label on top.
   const refs: [string, number, string, "insideTopRight" | "top" | "insideTopLeft", number][] = [
     ["P25", p25, c.second, "insideTopRight", 1.25], [d.median, median, c.accent, "top", 2], ["P75", p75, c.second, "insideTopLeft", 1.25],
   ];
   return (
     <>
+      {/* The strip of percentiles under the chart and the sentence above it carry the figures. */}
+      <div role="img" aria-label={d.chartAlt}><div aria-hidden>
       <ResponsiveContainer width="100%" height={260} debounce={0}>
         <BarChart data={data} margin={{ top: 22, right: 8, left: 0, bottom: 0 }} barCategoryGap={1}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
-          <XAxis dataKey="from" tickFormatter={(v: number) => binTick(v, dist.bins)} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} interval="preserveStartEnd" minTickGap={22} />
-          <YAxis tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={44} />
+          <XAxis dataKey="from" ticks={ticks.ticks} tickFormatter={(v: number) => binTick(v, ticks.step)} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} interval={0} />
+          <YAxis tickFormatter={num} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={48} />
           <Tooltip isAnimationActive={false} cursor={{ fill: c.cursor }}
             content={({ active, payload }) => active && payload?.length ? (
-              <TipBox title={`${fmtVal(payload[0].payload.from)} - ${fmtVal(payload[0].payload.to)}`} rows={[[sales, num(payload[0].payload.count), color]]} />
+              <TipBox title={payload[0].payload.to == null ? d.orMore(edge(payload[0].payload.from)) : keep(`${num(payload[0].payload.from)} – ${num(payload[0].payload.to)} ${unit}`)}
+                rows={[[sales, num(payload[0].payload.count), color]]} />
             ) : null} />
           <Bar dataKey="count" isAnimationActive={false} radius={[2, 2, 0, 0]}>
             {data.map((d, i) => <Cell key={i} fill={color} fillOpacity={d.mid >= p25 && d.mid <= p75 ? 0.9 : 0.4} />)}
@@ -46,6 +62,7 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, co
           ))}
         </BarChart>
       </ResponsiveContainer>
+      </div></div>
       <dl className="grid grid-cols-5 gap-1 mt-3 text-center border-t pt-2">
         {([["P10", p10], ["P25", p25], [d.median, median], ["P75", p75], ["P90", p90]] as [string, number][]).map(([k, v]) => (
           <div key={k} className="py-1">
@@ -54,7 +71,7 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, co
           </div>
         ))}
       </dl>
-      <p className="text-[13px] text-muted-foreground mt-2">{d.mean(fmtVal(mean), share ?? "")}</p>
+      <p className="text-[13px] text-muted-foreground mt-2">{d.mean(fmtVal(mean), share ?? "")}{last && dist.above > 0 && keep(d.above(t().sales(num(dist.above), dist.above), edge(last.to)))}</p>
     </>
   );
 });
@@ -62,19 +79,19 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, co
 export const Distributions = memo(function Distributions({ filters, houseShare, isDark }: { filters: Filters; houseShare?: number | null; isDark: boolean }) {
   const c = useChartColors(isDark);
   const d = t().distributions;
-  const pd = useGetPriceDistribution(filters, { query: { queryKey: getGetPriceDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
-  const sd = useGetPricePerSqmDistribution(filters, { query: { queryKey: getGetPricePerSqmDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  const pd = useGetPriceDistribution(filters, { query: { queryKey: getGetPriceDistributionQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
+  const sd = useGetPricePerSqmDistribution(filters, { query: { queryKey: getGetPricePerSqmDistributionQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
   return (
     <>
       <ChartCard testId="price-dist" level={3} title={d.pricesTitle} desc={d.pricesDesc} className="flex-[1_1_360px]"
         lede={pd.data?.p25 != null && pd.data.p75 != null ? keep(d.half(eurShort(pd.data.p25), eurShort(pd.data.p75))) : undefined}
-        isDark={isDark} loading={pd.isLoading} fetching={pd.isFetching} csv={pd.data?.bins} csvName="price-distribution.csv">
-        {pd.isLoading ? <Skeleton className="w-full h-[340px]" /> : pd.isError ? <ErrorState onRetry={() => pd.refetch()} /> : pd.data && <Histogram dist={pd.data} houseShare={houseShare} isDark={isDark} color={c.second} fmtVal={eurShort} />}
+        isDark={isDark} loading={pd.isLoading} fetching={pd.isFetching} csv={withAbove(pd.data)} csvName="price-distribution.csv">
+        {pd.isLoading ? <Skeleton className="w-full h-[340px]" /> : pd.isError ? <ErrorState onRetry={() => pd.refetch()} /> : pd.data && <Histogram dist={pd.data} houseShare={houseShare} isDark={isDark} color={c.second} fmtVal={eurShort} unit="EUR" />}
       </ChartCard>
       <ChartCard testId="sqm-dist" level={3} title={d.sqmTitle} desc={d.sqmDesc} className="flex-[1_1_360px]"
         lede={sd.data?.p25 != null && sd.data.p75 != null ? keep(d.half(sqm(sd.data.p25), sqm(sd.data.p75))) : undefined}
-        isDark={isDark} loading={sd.isLoading} fetching={sd.isFetching} csv={sd.data?.bins} csvName="price-per-sqm-distribution.csv">
-        {sd.isLoading ? <Skeleton className="w-full h-[340px]" /> : sd.isError ? <ErrorState onRetry={() => sd.refetch()} /> : sd.data && <Histogram dist={sd.data} houseShare={houseShare} isDark={isDark} color={c.accent} fmtVal={sqm} />}
+        isDark={isDark} loading={sd.isLoading} fetching={sd.isFetching} csv={withAbove(sd.data)} csvName="price-per-sqm-distribution.csv">
+        {sd.isLoading ? <Skeleton className="w-full h-[340px]" /> : sd.isError ? <ErrorState onRetry={() => sd.refetch()} /> : sd.data && <Histogram dist={sd.data} houseShare={houseShare} isDark={isDark} color={c.accent} fmtVal={sqm} unit="EUR/m²" />}
       </ChartCard>
     </>
   );
@@ -86,7 +103,7 @@ export const Distributions = memo(function Distributions({ filters, houseShare, 
  */
 export const RoomsChart = memo(function RoomsChart({ filters, isDark }: { filters: Filters; isDark: boolean }) {
   const c = useChartColors(isDark);
-  const rooms = useGetSalesByRooms(filters, { query: { queryKey: getGetSalesByRoomsQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  const rooms = useGetSalesByRooms(filters, { query: { queryKey: getGetSalesByRoomsQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
   const d = t().distributions, tr = t().trend;
   const rows = (rooms.data ?? []).map((r) => ({ ...r, label: d.rooms(r.rooms) }));
   const maxPrice = Math.max(1, ...rows.map((r) => r.medianPrice ?? 0));
