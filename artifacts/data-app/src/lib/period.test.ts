@@ -30,8 +30,9 @@ test("a long Period wholly before the data stops at the end of the data", () => 
   assert.equal(nearestValidPeriod("2010-01-01", "2020-12-31", ...D).to, "2026-06-30");
 });
 
-test("a reversed Period inside the data stays as the link gave it", () => {
-  assert.deepEqual(nearestValidPeriod("2025-01-01", "2024-01-01", ...D), { from: "2025-01-01", to: "2024-01-01", moved: false });
+test("a reversed Period covers the same months in order", () => {
+  assert.deepEqual(nearestValidPeriod("2025-01-01", "2024-01-01", ...D), { from: "2024-01-01", to: "2025-01-31", moved: false });
+  assert.deepEqual(nearestValidPeriod("2026-06-01", "2021-01-01", ...D), { from: "2022-01-03", to: "2026-06-30", moved: true });
 });
 
 test("a Year bucket takes the label of its year range, which names the months of a Partial year", () => {

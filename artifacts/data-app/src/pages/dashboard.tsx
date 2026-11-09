@@ -61,7 +61,7 @@ type DatasetProps = { datasetFrom: string; datasetTo: string; releaseMonth: stri
 
 /** Owns the requested view and the panel choices, and shows the dashboard for the view whose data has loaded. */
 function ViewHost(props: DatasetProps) {
-  const [view, patch, movedTo] = useViewState(props.datasetFrom, props.datasetTo);
+  const [view, patch, movedTo, correct] = useViewState(props.datasetFrom, props.datasetTo);
   const [choices, setChoices] = useState<PanelChoices>(lastChoices);
   lastChoices = choices;
   const { shown, updating, failed, retry } = useShownView(view, choices);
@@ -78,6 +78,13 @@ function ViewHost(props: DatasetProps) {
     return { id, name, group };
   }).sort((a, b) => a.name.localeCompare(b.name, "fr")), [communeB.data]);
   const names = useMemo(() => new Map([...quartiers, ...communes].map((x) => [x.id, x.name])), [quartiers, communes]);
+  // A link to a Quartier or Commune that does not exist shows All Paris, and the address bar drops the bad id.
+  useEffect(() => {
+    const a = view.area;
+    if ((a.kind === "q" && qB.data && !quartiers.some((q) => q.id === a.id)) || (a.kind === "commune" && communeB.data && !communes.some((c) => c.id === a.id))) {
+      correct({ area: { kind: "paris" }, rank: "paris" });
+    }
+  }, [view.area, qB.data, communeB.data, quartiers, communes, correct]);
   const viewRef = useRef(view);
   viewRef.current = view;
   const namesRef = useRef(names);

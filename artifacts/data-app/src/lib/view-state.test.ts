@@ -48,6 +48,22 @@ test("a link to an Area that does not exist", () => {
   assert.equal(v.rank, "major");
 });
 
+test("a date that is not in the calendar is dropped", () => {
+  assert.equal(parseView("?from=2020-13-45").from, undefined);
+  assert.equal(parseView("?to=9999-99-99").to, undefined);
+  assert.equal(parseView("?to=2024-02-29").to, "2024-02-29");
+});
+
+test("a link's Period is cleaned: bounds at the ends of the data are left out, a reversed Period is put in order", async () => {
+  const { linkView } = await import("./view-state");
+  assert.equal(viewQuery(linkView("?arr=abc&to=2030-01-01&gran=x", "2021-07-01", "2026-06-30").state), "");
+  assert.deepEqual(linkView("?to=2030-01-01", "2021-07-01", "2026-06-30").moved, true);
+  const v = linkView("?from=2026-01-01&to=2022-01-01", "2021-07-01", "2026-06-30").state;
+  assert.deepEqual([v.from, v.to], ["2022-01-01", "2026-01-31"]);
+  // A preset that ends with the data keeps its bounds.
+  assert.equal(linkView("?from=2025-07-01&to=2026-06-30", "2021-07-01", "2026-06-30").state.to, "2026-06-30");
+});
+
 test("a link with a fractional Arrondissement shows All Paris", () => {
   assert.deepEqual(parseView("?arr=1.5").area, { kind: "paris" });
   assert.deepEqual(parseView("?arr=7").area, { kind: "arr", arr: 7 });

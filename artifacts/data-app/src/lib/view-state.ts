@@ -18,6 +18,11 @@ export interface ViewState {
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A date that exists in the calendar, so "2020-13-45" is not one. */
+function isDate(s: string | undefined): s is string {
+  const d = s && DATE.test(s) ? new Date(`${s}T00:00:00Z`) : null;
+  return !!d && !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
 
 const RANKS: readonly string[] = ["paris", "92", "93", "94", "major"];
 
@@ -45,8 +50,8 @@ export function parseView(search: string): ViewState {
     ptype: t === "Appartement" || t === "Maison" ? t : "all",
     area,
     rank: r && RANKS.includes(r) ? (r as RankGroup) : groupOfArea(area),
-    from: from && DATE.test(from) ? from : undefined,
-    to: to && DATE.test(to) ? to : undefined,
+    from: isDate(from) ? from : undefined,
+    to: isDate(to) ? to : undefined,
     mapMode: mm === "change" || mm === "dots" ? mm : "level",
     mapLevel: ml === "quartier" ? "quartier" : "arr",
     gran: g === "month" || g === "year" ? g : "quarter",
@@ -79,32 +84,43 @@ export function historyMode(prev: Pick<ViewState, "area">, next: Pick<ViewState,
   return JSON.stringify(prev.area) === JSON.stringify(next.area) ? "replace" : "push";
 }
 
+/**
+ * The view of a link, with its Period moved inside the data. A Period that covers all the data is left out, as the
+ * "All dates" preset does, so a link cleaned of a bad date reads as the default view.
+ */
+export function linkView(search: string, datasetFrom: string, datasetTo: string): { state: ViewState; moved: boolean } {
+  const s = parseView(search);
+  const p = nearestValidPeriod(s.from, s.to, datasetFrom, datasetTo);
+  const all = (p.from ?? datasetFrom) === datasetFrom && (p.to ?? datasetTo) === datasetTo;
+  return { state: { ...s, from: all ? undefined : p.from, to: all ? undefined : p.to }, moved: p.moved };
+}
+
 /** View state mirrored into the query string so a link reproduces the view. */
 export function useViewState(datasetFrom: string, datasetTo: string) {
-  // The first state holds the moved dates, so no request uses the expired ones.
+  // The first state holds the moved dates, so no request uses the expired ones. Writing it replaces the link's
+  // query string, so the address bar shows the cleaned view.
   const [first] = useState(() => {
-    const s = parseView(window.location.search);
-    const p = nearestValidPeriod(s.from, s.to, datasetFrom, datasetTo);
-    return { state: { ...s, from: p.from, to: p.to }, movedTo: p.moved ? { from: p.from, to: p.to } : null };
+    const { state, moved } = linkView(window.location.search, datasetFrom, datasetTo);
+    return { state, movedTo: moved ? { from: state.from, to: state.to } : null };
   });
   const [state, setState] = useState<ViewState>(first.state);
   const written = useRef<ViewState>(first.state);
   const fromHistory = useRef(false);
+  const correcting = useRef(false);
   useEffect(() => {
     const qs = viewQuery(state);
     const url = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
     // A view restored by Back or Forward is already the current entry.
     if (fromHistory.current) fromHistory.current = false;
-    else if (historyMode(written.current, state) === "push") window.history.pushState(window.history.state, "", url);
+    else if (!correcting.current && historyMode(written.current, state) === "push") window.history.pushState(window.history.state, "", url);
     else window.history.replaceState(window.history.state, "", url);
     written.current = state;
+    correcting.current = false;
   }, [state]);
   useEffect(() => {
     const onPop = () => {
-      const s = parseView(window.location.search);
-      const p = nearestValidPeriod(s.from, s.to, datasetFrom, datasetTo);
       fromHistory.current = true;
-      setState({ ...s, from: p.from, to: p.to });
+      setState(linkView(window.location.search, datasetFrom, datasetTo).state);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -113,5 +129,7 @@ export function useViewState(datasetFrom: string, datasetTo: string) {
     (p: Partial<ViewState> | ((s: ViewState) => Partial<ViewState>)) => setState((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) })),
     [],
   );
-  return [state, patch, first.movedTo] as const;
+  // Fixes a view that a link got wrong, such as an Area that does not exist. It replaces the history entry.
+  const correct = useCallback((p: Partial<ViewState>) => { correcting.current = true; setState((s) => ({ ...s, ...p })); }, []);
+  return [state, patch, first.movedTo, correct] as const;
 }
