@@ -16,7 +16,7 @@ function leaves(o: Node, path = ""): [string, string, "string" | "function"][] {
 }
 
 // The words that CONTEXT.md keeps the same in both languages, the switch labels and the author's name.
-const SAME = /^(DVF|Mutation|Arrondissement|Quartier|Commune|EN|FR|Sagar Pal|Language · Langue|)$/;
+const SAME = /^(DVF|Paris|2 arrondissement|Mutation|Arrondissement|Quartier|Commune|EN|FR|Sagar Pal|Language · Langue|)$/;
 
 test("French is complete", () => {
   const f = new Map(leaves(fr).map(([p, , k]) => [p, k]));

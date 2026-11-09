@@ -101,7 +101,7 @@ export function useViewState(datasetFrom: string, datasetTo: string) {
   // query string, so the address bar shows the cleaned view.
   const [first] = useState(() => {
     const { state, moved } = linkView(window.location.search, datasetFrom, datasetTo);
-    return { state, movedTo: moved ? { from: state.from, to: state.to } : null };
+    return { state, movedTo: moved ? { from: state.from ?? datasetFrom, to: state.to ?? datasetTo } : null };
   });
   const [state, setState] = useState<ViewState>(first.state);
   const written = useRef<ViewState>(first.state);

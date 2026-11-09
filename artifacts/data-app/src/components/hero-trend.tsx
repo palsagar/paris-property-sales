@@ -23,7 +23,11 @@ const Y_W = 46;
  */
 function nameLines(name: string, max = 14): string[] {
   const lines: string[] = [];
-  for (const part of name.split(/(?<=[- ])/)) {
+  // The separators are kept by the capture group, and each one is joined to the word before it.
+  const parts = name.split(/([- ])/);
+  for (let i = 0; i < parts.length; i += 2) {
+    const part = parts[i]! + (parts[i + 1] ?? "");
+    if (!part) continue;
     const last = lines.length - 1;
     if (last >= 0 && (lines[last]! + part).length <= max) lines[last] += part;
     else lines.push(part);
@@ -113,7 +117,9 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
     return niceTicks(Math.max(0, lo - pad), hi + pad);
   }, [data, showBand]);
   const domain: [number, number] = [ticks[0]!, ticks[ticks.length - 1]!];
-  const tickDigits = ticks.length > 1 && (ticks[1]! - ticks[0]!) % 1000 !== 0 ? 1 : 0;
+  // Decimals of a tick in thousands: none for a step of 1000 or more, one for 100, two for a step like 50, 20 or 10.
+  const step = ticks.length > 1 ? ticks[1]! - ticks[0]! : 1000;
+  const tickDigits = step % 1000 === 0 ? 0 : step % 100 === 0 ? 1 : 2;
   const lowN = data.filter((d) => d.low).length;
   // The two end labels must not overlap: the lower line's label goes below its point.
   const lastPt = data[data.length - 1];

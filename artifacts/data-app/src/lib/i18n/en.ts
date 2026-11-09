@@ -80,7 +80,7 @@ export const en = {
     choosePeriod: "Choose a period",
     updating: "Updating",
     updatingDots: "Updating…",
-    failed: "You are offline, so the figures for this choice did not load. The page still shows the previous Selection. Check your connection and try again.",
+    failed: "You are offline, so the figures for this choice did not load. The page still shows the previous Selection. The new choice loads when your connection returns.",
     inSelection: "sales in this Selection",
     change: "Change",
     sheetTitle: "Choose what to show",
@@ -96,6 +96,8 @@ export const en = {
     last12: "Last 12 months",
   },
   picker: {
+    paris: "Paris",
+    arrondissement: (arr: string) => `${arr} arrondissement`,
     departments: "Departments",
     quartiersOf: (arr: string) => `Quartiers of the ${arr}`,
     communesIn: (department: string) => `Communes · ${department}`,

@@ -96,7 +96,7 @@ export const fr: Messages = {
     choosePeriod: "Choisir une période",
     updating: "Mise à jour",
     updatingDots: "Mise à jour…",
-    failed: "Vous êtes hors ligne, donc les chiffres de ce choix n'ont pas chargé. La page montre encore la Sélection précédente. Vérifiez votre connexion et réessayez.",
+    failed: "Vous êtes hors ligne, donc les chiffres de ce choix n'ont pas chargé. La page montre encore la Sélection précédente. Le nouveau choix se chargera au retour de votre connexion.",
     inSelection: "ventes dans cette Sélection",
     change: "Modifier",
     sheetTitle: "Choisir ce qui s'affiche",
@@ -112,6 +112,8 @@ export const fr: Messages = {
     last12: "12 derniers mois",
   },
   picker: {
+    paris: "Paris",
+    arrondissement: (arr: string) => `${arr} arrondissement`,
     departments: "Départements",
     quartiersOf: (arr: string) => `Quartiers du ${arr}`,
     communesIn: (department: string) => `Communes ${OF_DEPARTMENT[department] ?? `de ${department}`}`,

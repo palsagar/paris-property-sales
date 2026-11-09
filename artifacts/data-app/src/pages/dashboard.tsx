@@ -64,7 +64,7 @@ function ViewHost(props: DatasetProps) {
   const [view, patch, movedTo, correct] = useViewState(props.datasetFrom, props.datasetTo);
   const [choices, setChoices] = useState<PanelChoices>(lastChoices);
   lastChoices = choices;
-  const { shown, updating, failed, retry } = useShownView(view, choices);
+  const { shown, updating, failed } = useShownView(view, choices);
   // The Quartiers and Communes, for the search box and for the names that analytics sends. The map loads the same
   // boundaries, so they are fetched once.
   const qB = useGetQuartierBoundaries();
@@ -108,7 +108,7 @@ function ViewHost(props: DatasetProps) {
     openSent = true;
     if (viewQuery(firstView.current) !== "") track("open", openProps(firstView.current, names));
   }, [nameLoading, names]);
-  const requested = useMemo(() => ({ view, patch, selectArea, updating, failed, retry }), [view, patch, selectArea, updating, failed, retry]);
+  const requested = useMemo(() => ({ view, patch, selectArea, updating, failed }), [view, patch, selectArea, updating, failed]);
   const panelChoices = useMemo(() => ({ choices, setChoices }), [choices]);
   return (
     <RequestedView.Provider value={requested}>
@@ -266,12 +266,15 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const showCompare = (v: "map" | "list") => { if (v !== compareTab) track("change-compare-view", { view: v }); setCompareTab(v); };
   // A breadcrumb and "Back to all of Paris" disappear with the Area they leave, so the focus moves to the new Area's
   // heading once it shows, and a screen reader reads its name.
-  const focusHeading = useRef(false);
-  const goBack = (a: Area, via: AreaVia, only: boolean) => { focusHeading.current = true; (only ? selectAreaOnly : selectArea)(a, via); };
+  // The flag holds the Area that the click asked for, so it applies only to that navigation: if another Area shows
+  // first (the click never loaded), the flag is cleared without moving the focus.
+  const focusHeading = useRef<string | null>(null);
+  const goBack = (a: Area, via: AreaVia, only: boolean) => { focusHeading.current = JSON.stringify(a); (only ? selectAreaOnly : selectArea)(a, via); };
   useEffect(() => {
-    if (!focusHeading.current) return;
-    focusHeading.current = false;
-    document.getElementById("text-area-name")?.focus();
+    const wanted = focusHeading.current;
+    if (wanted === null) return;
+    focusHeading.current = null;
+    if (wanted === JSON.stringify(area)) document.getElementById("text-area-name")?.focus();
   }, [area]);
 
   return (
@@ -324,7 +327,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
 
         <SelectionBar chartView={chartView} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years} isDark={isDark} quartiers={quartiers} communes={communes} qById={qById} arrNames={arrNames}
           count={summary.data?.count} />
-        {movedTo && from === movedTo.from && to === movedTo.to && (
+        {movedTo && ef === movedTo.from && et === movedTo.to && (
           <p className="mt-3 text-[14px] text-muted-foreground print:hidden" data-testid="period-moved-notice" role="status">
             {tx.page.moved(rangeLabel(ef, et))}
           </p>

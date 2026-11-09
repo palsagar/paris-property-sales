@@ -12,6 +12,9 @@ const TYPES: Record<string, string> = {
 /** Short forms inside a name. */
 const WORDS: Record<string, string> = { st: "Saint", ste: "Sainte" };
 const SMALL = new Set(["de", "du", "des", "la", "le", "les", "et", "au", "aux", "sur", "sous", "en"]);
+/** An article is lower-case only after "de", "du", "des" or "d'": "Rue de la Paix", but "Rue La Fayette". */
+const ARTICLES = new Set(["la", "le", "les"]);
+const PREPOSITIONS = new Set(["de", "du", "des"]);
 
 export function streetName(raw: string): string {
   const words = raw.trim().split(/\s+/);
@@ -24,6 +27,8 @@ export function streetName(raw: string): string {
     const elided = /^([ld])'(.+)$/i.exec(w);
     if (elided) { out.push(`${elided[1]!.toLowerCase()}'${elided[2]}`); continue; }
     if ((lower === "l" || lower === "d") && i + 1 < words.length) { out.push(`${lower}'${words[++i]}`); continue; }
+    const after = out[out.length - 1]!.toLowerCase();
+    if (ARTICLES.has(lower) && !(PREPOSITIONS.has(after) || after.endsWith("d'"))) { out.push(w); continue; }
     if (SMALL.has(lower)) { out.push(lower); continue; }
     out.push(WORDS[lower] ?? w);
   }

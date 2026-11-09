@@ -35,6 +35,10 @@ test("a reversed Period covers the same months in order", () => {
   assert.deepEqual(nearestValidPeriod("2026-06-01", "2021-01-01", ...D), { from: "2022-01-03", to: "2026-06-30", moved: true });
 });
 
+test("a reversed Period in one month is also put in order", () => {
+  assert.deepEqual(nearestValidPeriod("2024-05-20", "2024-05-03", ...D), { from: "2024-05-01", to: "2024-05-31", moved: false });
+});
+
 test("a Year bucket takes the label of its year range, which names the months of a Partial year", () => {
   const years = [{ label: "2021, Jul–Dec", from: "2021-07-01" }, { label: "2022", from: "2022-01-03" }];
   assert.equal(yearBucketLabel("2021", "2021", years), "2021, Jul–Dec");

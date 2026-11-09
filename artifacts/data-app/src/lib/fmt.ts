@@ -44,6 +44,9 @@ export const sharePct = (share: number) => {
   const f = format("share", { style: "percent", maximumFractionDigits: 0 });
   return share > 0 && share < 0.5 ? t().ui.under(percentText(f, 0.01)) : percentText(f, Math.round(share) / 100);
 };
+/** The same share for a narrow column: "<1%" in place of "under 1%". */
+export const sharePctShort = (share: number) =>
+  share > 0 && share < 0.5 ? `<${percentText(format("share", { style: "percent", maximumFractionDigits: 0 }), 0.01)}` : sharePct(share);
 export const houseShareLabel = (share: number | null | undefined) => (share == null ? null : t().fmt.houseShare(sharePct(share)));
 export const houseShareWarning = (share: number | null | undefined) =>
   share == null || share <= HOUSE_SHARE_LIMIT

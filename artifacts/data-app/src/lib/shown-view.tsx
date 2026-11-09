@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AreaVia } from "./analytics";
 import type { Area } from "./areas";
@@ -17,11 +17,10 @@ const MAX_WAIT_MS = 3000;
  * browser is offline does not swap: `failed` is true, the page keeps the shown view with its own figures and offers
  * `retry`. It swaps by itself when the requests succeed, for example when the connection comes back.
  */
-export function useShownView(view: ViewState, choices: PanelChoices): { shown: ViewState; updating: boolean; failed: boolean; retry: () => void } {
+export function useShownView(view: ViewState, choices: PanelChoices): { shown: ViewState; updating: boolean; failed: boolean } {
   const qc = useQueryClient();
   const [shown, setShown] = useState(view);
   const [failedKey, setFailedKey] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const choicesRef = useRef(choices);
   choicesRef.current = choices;
   const key = viewQuery(view);
@@ -46,16 +45,15 @@ export function useShownView(view: ViewState, choices: PanelChoices): { shown: V
     const timer = setTimeout(settle, MAX_WAIT_MS);
     Promise.all(queries.map((o) => qc.prefetchQuery(o))).then(() => { clearTimeout(timer); settle(); });
     return () => { live = false; clearTimeout(timer); };
-  }, [key, qc, attempt]);
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  }, [key, qc]);
   const failed = failedKey === key && viewQuery(shown) !== key;
-  return { shown, updating: viewQuery(shown) !== key && !failed, failed, retry };
+  return { shown, updating: viewQuery(shown) !== key && !failed, failed };
 }
 
 export type Patch = (p: Partial<ViewState> | ((s: ViewState) => Partial<ViewState>)) => void;
 
 /** The requested view, for the controls that must answer a click at once. */
-export const RequestedView = createContext<{ view: ViewState; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; updating: boolean; failed: boolean; retry: () => void } | null>(null);
+export const RequestedView = createContext<{ view: ViewState; patch: Patch; selectArea: (a: Area, via: AreaVia) => void; updating: boolean; failed: boolean } | null>(null);
 
 export function useRequestedView() {
   const v = useContext(RequestedView);

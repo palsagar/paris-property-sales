@@ -33,9 +33,9 @@ export function AreaPicker({ quartiers, communes, arrNames, area, selArr, onSele
     const communesOf = (group: RankGroup) => communes.filter((c) => c.group === group).map((c): Option => ({ id: c.id, name: c.name, area: { kind: "commune", id: c.id } }));
     const arrs = [...new Set(quartiers.map((q) => q.arr))].sort((a, b) => a - b);
     const p = t().picker;
-    const arrOption = (n: number): Option => ({ id: arrPostcode(n), name: `${arrLabel(n)} arrondissement`, context: arrNames.get(n), extra: arrSearchTerms(n, arrNames.get(n)), area: { kind: "arr", arr: n } });
+    const arrOption = (n: number): Option => ({ id: arrPostcode(n), name: p.arrondissement(arrLabel(n)), context: arrNames.get(n), extra: arrSearchTerms(n, arrNames.get(n)), area: { kind: "arr", arr: n } });
     const out: [string, Option[]][] = [
-      ["Paris", [{ id: "paris", name: t().fmt.allParis, area: { kind: "paris" } }, ...Array.from({ length: 20 }, (_, i) => arrOption(i + 1))]],
+      [p.paris, [{ id: "paris", name: t().fmt.allParis, area: { kind: "paris" } }, ...Array.from({ length: 20 }, (_, i) => arrOption(i + 1))]],
       [p.departments, DEPARTMENTS.map(departmentOption)],
       ...arrs.map((arr): [string, Option[]] => [p.quartiersOf(arrLabel(arr)), quartiers.filter((q) => q.arr === arr).map(qOption)]),
       ...DEPARTMENTS.map(([id, name]): [string, Option[]] => [p.communesIn(name), communesOf(id)]),

@@ -12,7 +12,7 @@ export function nearestValidPeriod(
   datasetTo: string,
 ): { from?: string; to?: string; moved: boolean } {
   // A reversed Period reads as the same months in order: from the first day of the earlier month to the end of the later.
-  if (from && to && month(from) > month(to)) [from, to] = [`${month(to)}-01`, endOfMonth(from)];
+  if (from && to && (month(from) > month(to) || (month(from) === month(to) && from > to))) [from, to] = [`${month(to)}-01`, endOfMonth(from)];
 
   const start = from ?? datasetFrom;
   const end = to ?? datasetTo;

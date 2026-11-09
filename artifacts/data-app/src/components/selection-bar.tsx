@@ -48,7 +48,7 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
   /** Sales in the shown Selection, once loaded. */
   count?: number;
 }) {
-  const { view, patch, selectArea, updating, failed, retry } = useRequestedView();
+  const { view, patch, selectArea, updating, failed } = useRequestedView();
   const { ptype, area, from, to } = view;
   const [areaOpen, setAreaOpen] = useState(false);
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -168,7 +168,6 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
       {failed && (
         <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 md:px-8 py-2 border-t text-[14px]" data-testid="selection-failed">
           <p className="flex-1 min-w-[16em]">{tx.selection.failed}</p>
-          <button type="button" onClick={() => { track("retry-selection"); retry(); }} className={outlineBtnCls} data-testid="button-retry-selection">{tx.page.tryAgain}</button>
         </div>
       )}
 

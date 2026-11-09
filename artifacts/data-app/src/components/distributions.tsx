@@ -12,6 +12,13 @@ import { keepInSameSelection } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 import { t } from "@/lib/i18n/messages";
 
+/** The bins for the CSV file, with the open-ended bar of the Sales above the last bin: its `to` is empty. */
+const withAbove = (dist?: Distribution) => {
+  if (!dist) return undefined;
+  const last = dist.bins[dist.bins.length - 1];
+  return last && dist.above > 0 ? [...dist.bins, { from: last.to, to: "", count: dist.above }] : dist.bins;
+};
+
 /** `unit` follows the exact bin edges in the tooltip: "1 500 000 – 1 550 000 EUR". */
 const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, unit, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; unit: string; color: string }) {
   const c = useChartColors(isDark);
@@ -78,12 +85,12 @@ export const Distributions = memo(function Distributions({ filters, houseShare, 
     <>
       <ChartCard testId="price-dist" level={3} title={d.pricesTitle} desc={d.pricesDesc} className="flex-[1_1_360px]"
         lede={pd.data?.p25 != null && pd.data.p75 != null ? keep(d.half(eurShort(pd.data.p25), eurShort(pd.data.p75))) : undefined}
-        isDark={isDark} loading={pd.isLoading} fetching={pd.isFetching} csv={pd.data?.bins} csvName="price-distribution.csv">
+        isDark={isDark} loading={pd.isLoading} fetching={pd.isFetching} csv={withAbove(pd.data)} csvName="price-distribution.csv">
         {pd.isLoading ? <Skeleton className="w-full h-[340px]" /> : pd.isError ? <ErrorState onRetry={() => pd.refetch()} /> : pd.data && <Histogram dist={pd.data} houseShare={houseShare} isDark={isDark} color={c.second} fmtVal={eurShort} unit="EUR" />}
       </ChartCard>
       <ChartCard testId="sqm-dist" level={3} title={d.sqmTitle} desc={d.sqmDesc} className="flex-[1_1_360px]"
         lede={sd.data?.p25 != null && sd.data.p75 != null ? keep(d.half(sqm(sd.data.p25), sqm(sd.data.p75))) : undefined}
-        isDark={isDark} loading={sd.isLoading} fetching={sd.isFetching} csv={sd.data?.bins} csvName="price-per-sqm-distribution.csv">
+        isDark={isDark} loading={sd.isLoading} fetching={sd.isFetching} csv={withAbove(sd.data)} csvName="price-per-sqm-distribution.csv">
         {sd.isLoading ? <Skeleton className="w-full h-[340px]" /> : sd.isError ? <ErrorState onRetry={() => sd.refetch()} /> : sd.data && <Histogram dist={sd.data} houseShare={houseShare} isDark={isDark} color={c.accent} fmtVal={sqm} unit="EUR/m²" />}
       </ChartCard>
     </>

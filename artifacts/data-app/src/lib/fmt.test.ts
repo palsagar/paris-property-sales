@@ -93,7 +93,8 @@ test("both languages group thousands with a space; decimals and percent signs fo
 });
 
 test("a small share of houses above zero never reads 0%", async () => {
-  const { sharePct } = await import("./fmt");
+  const { sharePct, sharePctShort } = await import("./fmt");
+  assert.deepEqual([sharePctShort(0), sharePctShort(0.44), sharePctShort(0.6), sharePctShort(30.4)], ["0%", "<1%", "1%", "30%"]);
   assert.deepEqual([sharePct(0), sharePct(0.44), sharePct(0.6), sharePct(30.4)], ["0%", "under 1%", "1%", "30%"]);
   assert.equal(houseShareLabel(0.44), "under 1% houses");
 });

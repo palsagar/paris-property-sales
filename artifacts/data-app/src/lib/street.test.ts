@@ -14,6 +14,14 @@ test("a DVF street name gets its type in full and French small words in lower ca
   assert.equal(streetName("Rue Saint-Honore"), "Rue Saint-Honore");
 });
 
+test("an article stays capitalised in a proper name and is lower case after a preposition", () => {
+  assert.equal(streetName("Rue La Fayette"), "Rue La Fayette");
+  assert.equal(streetName("Rue Le Peletier"), "Rue Le Peletier");
+  assert.equal(streetName("Rue La Boetie"), "Rue La Boetie");
+  assert.equal(streetName("Rue De La Paix"), "Rue de la Paix");
+  assert.equal(streetName("Av Du General Le Clerc"), "Avenue du General Le Clerc");
+});
+
 test("an unknown street type and an empty street stay as they are", () => {
   assert.equal(streetName("Vc Ham Michel Ange"), "Vc Ham Michel Ange");
   assert.equal(streetName(""), "");
