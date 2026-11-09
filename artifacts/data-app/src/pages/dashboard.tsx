@@ -305,8 +305,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
         </header>
 
         {/* Intro: scrolls away, the Selection bar below stays pinned */}
-        <section className="pt-5 pb-5 md:pt-9 md:pb-7 flex flex-col gap-2.5" data-testid="intro">
-          <h1 className="font-display font-bold text-[26px] md:text-[40px] leading-[1.12] max-w-[20em] text-balance" data-testid="text-headline">{tx.page.headline(longMonthLabel(datasetFrom))}</h1>
+        <section aria-labelledby="text-headline" className="pt-5 pb-5 md:pt-9 md:pb-7 flex flex-col gap-2.5" data-testid="intro">
+          <h1 id="text-headline" className="font-display font-bold text-[26px] md:text-[40px] leading-[1.12] max-w-[20em] text-balance" data-testid="text-headline">{tx.page.headline(longMonthLabel(datasetFrom))}</h1>
           <p className="text-[16px] md:text-[18px] leading-relaxed text-muted-foreground max-w-[66ch] text-pretty">
             {tx.page.lede(longMonthLabel(datasetFrom), longMonthLabel(datasetTo))}
             <span className="hidden md:inline">{tx.page.hint}</span>

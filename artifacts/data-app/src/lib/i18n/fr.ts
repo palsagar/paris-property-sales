@@ -88,6 +88,7 @@ export const fr: Messages = {
   },
   sales: (n: string, count: number) => `${n} ${plural(count, "vente", "ventes")}`,
   selection: {
+    region: "Sélection",
     area: "Secteur",
     propertyType: "Type de bien",
     period: "Période",

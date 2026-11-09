@@ -72,6 +72,7 @@ export const en = {
   /** "1 234 sales". */
   sales: (n: string, count: number) => `${n} ${count === 1 ? "sale" : "sales"}`,
   selection: {
+    region: "Selection",
     area: "Area",
     propertyType: "Property type",
     period: "Period",

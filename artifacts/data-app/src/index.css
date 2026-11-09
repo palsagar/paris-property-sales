@@ -529,8 +529,10 @@ body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index
   input, select, textarea { font-size: 16px; }
 }
 button, a, select, input[type="range"] { touch-action: manipulation; }
-/* Sticky Selection bar: keep a focused control or an anchor target clear of it. */
-html { scroll-padding-top: 88px; }
+/* Sticky Selection bar: keep a focused control or an anchor target clear of it. selection-bar.tsx measures the bar. */
+html { scroll-padding-top: calc(var(--selection-bar-h, 80px) + 8px); }
+/* On a short screen the bar is not sticky (selection-bar.tsx), so nothing covers the top. */
+@media (max-height: 500px) { html { scroll-padding-top: 0; } }
 /* The thin line under the Selection bar while a new Selection loads. */
 @keyframes progress-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .progress-line { animation: progress-slide 1.1s cubic-bezier(.4,0,.2,1) infinite; }

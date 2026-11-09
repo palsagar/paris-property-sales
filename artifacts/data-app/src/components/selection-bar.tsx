@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PropertyTypeParameter, YearRange } from "@workspace/api-client-react";
 import { CalendarDays, Loader2, MapPin, SlidersHorizontal, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -63,8 +63,30 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
   const setPeriod = (f?: string, t?: string) => patch({ from: f, to: t });
   const status = updating ? tx.selection.updating : count != null ? tx.sales(num(count), count) : "";
 
+  // The page keeps a focused control or an anchor target clear of the bar (index.css), so it needs the bar's real
+  // height: one or two rows, and the offline notice.
+  const barRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const ro = new ResizeObserver(() => root.style.setProperty("--selection-bar-h", `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.removeProperty("--selection-bar-h"); };
+  }, []);
+
+  // Radix hides the page behind the sheet from screen readers, except the paths to its live regions, which here cover
+  // most of the page. The sheet sits outside #root, so making #root inert hides all of it.
+  useEffect(() => {
+    const root = document.getElementById("root");
+    if (!sheetOpen || !root) return;
+    root.inert = true;
+    return () => { root.inert = false; };
+  }, [sheetOpen]);
+
   return (
-    <div className="sticky top-0 z-30 -mx-4 md:-mx-8 bg-background border-y print:hidden" data-testid="selection-bar">
+    // On a short screen (a phone on its side, or a page zoomed to 400%) the bar scrolls away, so it never covers a third of it.
+    <section ref={barRef} aria-label={tx.selection.region} className="sticky [@media(max-height:500px)]:static top-0 z-30 -mx-4 md:-mx-8 bg-background border-y print:hidden" data-testid="selection-bar">
       {/* Laptop and tablet */}
       <div className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-2 px-8 py-2.5">
         <Popover open={areaOpen} onOpenChange={setAreaOpen}>
@@ -97,7 +119,8 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
 
       {/* Phone */}
       <div className="md:hidden px-4 py-2">
-        <Drawer open={sheetOpen} onOpenChange={setSheetOpen} shouldScaleBackground={false}>
+        {/* autoFocus: vaul leaves the focus on the trigger by default, so the sheet would not trap Tab or hear Esc. */}
+        <Drawer open={sheetOpen} onOpenChange={setSheetOpen} shouldScaleBackground={false} autoFocus>
           <DrawerTrigger asChild>
             <button type="button" className="w-full min-h-14 flex items-center gap-3 pl-3.5 pr-2 py-1.5 rounded-[10px] border border-control bg-card text-left" data-testid="button-selection" aria-haspopup="dialog">
               <MapPin className="w-5 h-5 text-primary shrink-0" aria-hidden />
@@ -110,7 +133,7 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
               </span>
             </button>
           </DrawerTrigger>
-          <DrawerContent className="max-h-[92dvh] bg-card rounded-t-2xl shadow-lg" aria-describedby="selection-sheet-desc">
+          <DrawerContent className="max-h-[92dvh] bg-card rounded-t-2xl shadow-lg" aria-describedby="selection-sheet-desc" aria-modal="true">
             <div className="flex items-center justify-between pl-4 pr-2 pt-1 pb-2 border-b">
               <DrawerTitle className="font-display text-[20px] font-bold tracking-normal">{tx.selection.sheetTitle}</DrawerTitle>
               <DrawerClose className={iconBtnCls} aria-label={tx.selection.close}><X className="w-[22px] h-[22px]" aria-hidden /></DrawerClose>
@@ -154,6 +177,6 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
           <div className="progress-line h-full w-2/5 bg-primary" />
         </div>
       )}
-    </div>
+    </section>
   );
 });
