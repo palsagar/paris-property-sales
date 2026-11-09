@@ -12,6 +12,7 @@ import { useRequestedView } from "@/lib/shown-view";
 import { track, typeName } from "@/lib/analytics";
 import type { ViewState } from "@/lib/view-state";
 import { t } from "@/lib/i18n/messages";
+import { getLang } from "@/lib/i18n/language";
 
 const types = (): [PropertyTypeParameter, string][] => (["all", "Appartement", "Maison"] as const).map((v) => [v, t().types[v]]);
 
@@ -79,7 +80,9 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
         <Popover open={periodOpen} onOpenChange={setPeriodOpen}>
           <PopoverTrigger asChild>
             <FieldButton icon={<CalendarDays className="w-[18px] h-[18px]" />} label={tx.selection.period} className="w-[min(340px,34vw)]" data-testid="button-period" aria-haspopup="dialog"
-              value={<><span className="hidden xl:inline">{period}</span><span className="xl:hidden">{periodLabel(from, to, datasetFrom, datasetTo, years, true)}</span></>} />
+              // The French long label ("Toutes les dates · juil. 2021 – juin 2026") does not fit the button, so French keeps the short one.
+              value={getLang() === "fr" ? periodLabel(from, to, datasetFrom, datasetTo, years, true)
+                : <><span className="hidden xl:inline">{period}</span><span className="xl:hidden">{periodLabel(from, to, datasetFrom, datasetTo, years, true)}</span></>} />
           </PopoverTrigger>
           <PopoverContent align="start" sideOffset={8} className="w-[540px] max-w-[calc(100vw-32px)] p-4 rounded-xl" aria-label={tx.selection.choosePeriod}>
             <TimeControl chartView={chartView} from={from} to={to} datasetFrom={datasetFrom} datasetTo={datasetTo} years={years}
