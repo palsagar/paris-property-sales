@@ -264,6 +264,15 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const switchLang = (l: Lang) => { if (l === lang) return; track("change-language", { to: l }); changeLang(l); };
   const flipTheme = () => { track("toggle-dark-mode", { on: !isDark }); toggleTheme(); };
   const showCompare = (v: "map" | "list") => { if (v !== compareTab) track("change-compare-view", { view: v }); setCompareTab(v); };
+  // A breadcrumb and "Back to all of Paris" disappear with the Area they leave, so the focus moves to the new Area's
+  // heading once it shows, and a screen reader reads its name.
+  const focusHeading = useRef(false);
+  const goBack = (a: Area, via: AreaVia, only: boolean) => { focusHeading.current = true; (only ? selectAreaOnly : selectArea)(a, via); };
+  useEffect(() => {
+    if (!focusHeading.current) return;
+    focusHeading.current = false;
+    document.getElementById("text-area-name")?.focus();
+  }, [area]);
 
   return (
     <div className="relative z-[1] min-h-[100dvh] bg-background">
@@ -332,18 +341,18 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
                       {crumbs.map((c, i) => (
                         <li key={c.label} className="flex items-center gap-1.5">
                           {i > 0 && <span aria-hidden className="text-control">/</span>}
-                          {c.area ? <button type="button" onClick={() => selectAreaOnly(c.area!, "back-link")} className="text-primary underline underline-offset-[3px] hover:opacity-80" data-testid={`crumb-${i}`}>{c.label}</button>
+                          {c.area ? <button type="button" onClick={() => goBack(c.area!, "back-link", true)} className="text-primary underline underline-offset-[3px] hover:opacity-80" data-testid={`crumb-${i}`}>{c.label}</button>
                             : <span aria-current="page" className="text-muted-foreground">{c.label}</span>}
                         </li>
                       ))}
                     </ol>
                   </nav>
                 )}
-                <h2 id="text-area-name" className="font-display font-bold text-[30px] md:text-[36px] leading-[1.1]" data-testid="text-area-name">{areaName}</h2>
+                <h2 id="text-area-name" tabIndex={-1} className="font-display font-bold text-[30px] md:text-[36px] leading-[1.1]" data-testid="text-area-name">{areaName}</h2>
                 <p className="text-[16px] text-muted-foreground flex flex-wrap items-baseline gap-x-2">{areaKicker && `${areaKicker}. `}{focusLine}<FetchDot on={summary.isFetching && !summary.isLoading} /></p>
               </div>
               {area.kind !== "paris" && (
-                <button type="button" onClick={() => selectArea({ kind: "paris" }, "back-link")} data-testid="button-clear-area" className={`${outlineBtnCls} print:hidden`}>
+                <button type="button" onClick={() => goBack({ kind: "paris" }, "back-link", false)} data-testid="button-clear-area" className={`${outlineBtnCls} print:hidden`}>
                   <X className="w-4 h-4" aria-hidden />{tx.page.backToParis}
                 </button>
               )}
