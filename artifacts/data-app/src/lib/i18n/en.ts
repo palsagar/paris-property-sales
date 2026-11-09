@@ -51,7 +51,7 @@ export const en = {
     copyFailedDesc: "Copy it from the address bar instead.",
     aboutTitle: "About the data",
     notValuation: "The figures describe past Sales. They are not a valuation of any home.",
-    source: (range: string) => `They come from Demandes de valeurs foncières (DVF), published by the DGFiP, and cover residential sales in Paris and 135 Communes around it from ${range}. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20,000 to 20,000,000 EUR, has 9 to 300 m² of built surface and has a price of 1,000 to 35,000 EUR/m².`,
+    source: (from: string, to: string) => `They come from Demandes de valeurs foncières (DVF), published by the DGFiP, and cover residential sales in Paris and 135 Communes around it from ${from} to ${to}. Prices are in nominal euros and are not adjusted for inflation. A Sale has one apartment or house, costs 20\u00a0000 to 20\u00a0000\u00a0000\u00a0EUR, has 9 to 300\u00a0m² of built surface and has a price per m² of 1\u00a0000 to 35\u00a0000\u00a0EUR.`,
     excluded: (n: string) => `${n} residential sales in the whole dataset are left out by these rules: sales of several properties at once, commercial premises and statistical outliers, which would distort the price per m².`,
     changeNote: (months: number) => `A change compares the median of the first ${months} months of the Period with the median of the last ${months} months. Small areas and short periods give noisy figures, so periods with fewer than 10 sales are marked. A median based on fewer than 5 sales is not shown.`,
     sourcesTitle: "Sources",
@@ -305,8 +305,8 @@ export const en = {
     /** An Area's name after the words that come before it in a sentence: "in the 11e arrondissement". */
     inArea: (name: string, _kind?: Area["kind"]) => (name === "All Paris" ? "all of Paris" : /arrondissement$/.test(name) ? `the ${name}` : name),
     quarter: (y: number, q: number) => `${y} Q${q}`,
-    houseShare: (pct: number) => `${pct}% houses`,
-    houseShareWarning: (pct: number) => `Houses are ${pct}% of these sales. A house's price includes its land, so this median is harder to compare.`,
+    houseShare: (pct: string) => `${pct} houses`,
+    houseShareWarning: (pct: string) => `Houses are ${pct} of these sales. A house's price includes its land, so this median is harder to compare.`,
   },
 };
 

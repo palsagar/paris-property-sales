@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from "react";
 import type { AreaStat, AreaTrendPoint } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeltaChip, ErrorState, Segmented, Sparkline, useChartColors } from "@/components/ui-bits";
-import { num, sqm, arrLabel, eur, tooFew, houseShareWarning, houseShareLabel } from "@/lib/fmt";
+import { num, sqm, arrLabel, eur, tooFew, houseShareWarning, houseShareLabel, sharePct } from "@/lib/fmt";
 import type { Area, RankGroup } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
 import type { PropertyTypeParameter } from "@workspace/api-client-react";
@@ -89,7 +89,7 @@ export const Ranking = memo(function Ranking({ stats, trend, loading, error, ret
                       </span>
                     )}
                     <span className="hidden sm:block font-num text-[12px] text-muted-foreground text-right whitespace-nowrap font-normal">{num(s.count)}</span>
-                    {showShare && <span className={`hidden sm:block font-num text-[12px] text-right ${warn ? "text-primary font-semibold" : "text-muted-foreground font-normal"}`} title={warn ?? undefined}>{s.houseShare == null ? null : `${Math.round(s.houseShare)}%`}</span>}
+                    {showShare && <span className={`hidden sm:block font-num text-[12px] text-right ${warn ? "text-primary font-semibold" : "text-muted-foreground font-normal"}`} title={warn ?? undefined}>{s.houseShare == null ? null : sharePct(s.houseShare)}</span>}
                     <span><DeltaChip value={s.changePct} size="xs" /></span>
                     <span className="hidden sm:block"><Sparkline values={vals} color={sel ? c.accent : c.tick} w={56} /></span>
                   </button>

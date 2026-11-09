@@ -9,7 +9,7 @@ import { escapeHtml } from "@/lib/escape";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SalesMap } from "@/components/sales-map";
 import { ChartCard, ErrorState, GradientLegend, Segmented, StepLegend, outlineBtnCls } from "@/components/ui-bits";
-import { eur, sqm, num, arrLabel, pct, makeDivScale, rangeLabel, tooFew, houseShareLabel, houseShareWarning, bucketLabel } from "@/lib/fmt";
+import { eur, sqm, num, arrLabel, pct, kShort, makeDivScale, rangeLabel, tooFew, houseShareLabel, houseShareWarning, bucketLabel } from "@/lib/fmt";
 import { groupDots, type SaleDot } from "@/lib/dots";
 import { DEPARTMENT_NAMES, featureState, keepInSameArea, type Area, type DepartmentId, type MapFeature, type areaParams } from "@/lib/areas";
 import type { StepScale } from "@/lib/colour-scale";
@@ -170,10 +170,10 @@ export const MapPanel = memo(function MapPanel(props: {
       {/* The legend sits under the map, not on it: the map keeps its area and the thresholds can be read at 12 px. */}
       <div className="mt-3">
         {mode === "change" ? (
-          <GradientLegend title={<>{mt.changeLegend}{rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} className="w-full sm:max-w-[420px]" />
+          <GradientLegend title={<>{mt.changeLegend}{rangeLabel(ef, et)}</>} min={-maxChange} max={maxChange} mid={0} scale={divScale} fmt={(n) => pct(n, 0)} className="w-full sm:max-w-[420px]" />
         ) : (
           <StepLegend title={<>{mt.levelLegend}<span className="font-semibold text-foreground">{travelLabel ? mt.fourQuarters(travelLabel) : mode === "dots" ? mt.perDot : rangeLabel(ef, et)}</span>{mt.ninth}</>}
-            scale={scale} fmt={(n) => `${(n / 1000).toFixed(1)}k`} />
+            scale={scale} fmt={(n) => kShort(n, 1)} />
         )}
         {mode === "dots" && items && total <= items.length && <div className="text-[13px] mt-1 text-muted-foreground font-num">{mt.plotted(num(total))}</div>}
       </div>

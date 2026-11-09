@@ -15,7 +15,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { toast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { makeStepScale, quantileThresholds } from "@/lib/colour-scale";
-import { arrLabel, rangeLabel, longMonthLabel, num, keep, yearRangeLabel } from "@/lib/fmt";
+import { arrLabel, rangeLabel, longMonthLabel, monthLabel, num, keep, yearRangeLabel } from "@/lib/fmt";
 import { areaStatParams, areaTrendParams, heatParams, parisSummaryParams, summaryParams, type PanelChoices } from "@/lib/selection-queries";
 import { PanelChoicesContext, RequestedView, useShownView, type Patch } from "@/lib/shown-view";
 import { FetchDot, Segmented, iconBtnCls, outlineBtnCls } from "@/components/ui-bits";
@@ -397,7 +397,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
           <section aria-labelledby="about-title" className="flex-[2_1_480px] max-w-[72ch] flex flex-col gap-2.5 text-[15px] leading-relaxed">
             <h2 id="about-title" className="font-display font-semibold text-[19px]">{tx.page.aboutTitle}</h2>
             <p className="font-medium">{tx.page.notValuation}</p>
-            <p>{tx.page.source(rangeLabel(datasetFrom, datasetTo))}</p>
+            <p>{tx.page.source(monthLabel(datasetFrom.slice(0, 7)), monthLabel(datasetTo.slice(0, 7)))}</p>
             {noteSummary.current && <p>{tx.page.excluded(num(noteSummary.current.excludedCount))}</p>}
             <p className="text-muted-foreground">{tx.page.changeNote(noteSummary.current?.changeWindowMonths ?? 3)}</p>
           </section>

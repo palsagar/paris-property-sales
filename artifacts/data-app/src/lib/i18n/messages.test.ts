@@ -31,3 +31,7 @@ test("French is not English", () => {
 test("French avoids banlieue, zone and transaction", () => {
   for (const [p, v] of leaves(fr)) assert.doesNotMatch(v, /\b(banlieue|zone|transaction)s?\b/i, `fr.${p}`);
 });
+
+test("French puts a no-break space, never a plain one, before : ; ? ! and %", () => {
+  for (const [p, v] of leaves(fr)) assert.doesNotMatch(v, / [:;?!%]/, `fr.${p} has a plain space before a sign: "${v}"`);
+});

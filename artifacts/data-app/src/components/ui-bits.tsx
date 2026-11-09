@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import type { StepScale } from "@/lib/colour-scale";
 import { track } from "@/lib/analytics";
 import { csvSafe } from "@/lib/escape";
+import { pct } from "@/lib/fmt";
 import { t, t as texts } from "@/lib/i18n/messages";
 
 export type ChartColors = {
@@ -209,13 +210,13 @@ export function StepLegend({ title, scale, fmt, className = "w-full" }: { title:
 
 /** A Change: arrow, sign and colour, so it never relies on colour alone. Blue for a fall, red for a rise. */
 export function DeltaChip({ value, size = "sm" }: { value: number | null | undefined; size?: "sm" | "xs" }) {
-  if (value == null || !isFinite(value)) return <span className="text-[12px] text-muted-foreground">n/a</span>;
+  if (value == null || !isFinite(value)) return <span className="text-[12px] text-muted-foreground">{t().kpis.na}</span>;
   const up = value > 0.05, down = value < -0.05;
   const cls = up ? "bg-rise-bg text-rise" : down ? "bg-fall-bg text-fall" : "bg-sunken text-muted-foreground";
   return (
     <span className={`inline-flex items-center gap-1 rounded font-num font-medium whitespace-nowrap ${size === "xs" ? "text-[12px] h-5 px-1.5" : "text-[13px] h-6 px-2"} ${cls}`}>
       {(up || down) && <span aria-hidden>{up ? "▲" : "▼"}</span>}
-      {`${value > 0 ? "+" : value < 0 ? "-" : ""}${Math.abs(value).toFixed(1)}%`}
+      {pct(value)}
     </span>
   );
 }

@@ -212,7 +212,9 @@ Each panel sits on a flat card: 12 px corners, a 1 px border, and no shadow. The
 
 - The tone is plain and explanatory, with full sentences.
 - Prices are nominal euros, written "EUR" and "EUR/m²". Large values use "k EUR", "M EUR" and "Md EUR" (billions). The symbol € is not used.
-- Numbers use French grouping, as in "12 345". A Change has a sign and one decimal place, as in "+3.4%".
+- Numbers use French grouping, as in "12 345", in both languages. Decimals follow the language: "+3.4%" and "1.2 M EUR" in English, "+3,4 %" and "1,2 M EUR" in French, with a narrow no-break space before "%". A negative number has a minus sign (−), not a hyphen. A Change has a sign and one decimal place.
+- Ranges use an en dash: "Jul 2021 – Jun 2026", "2021, Jul–Dec".
+- French text has a no-break space before ":" and a narrow no-break space before ";", "?", "!" and "%".
 - A year that the data covers only in part always shows its months, for example "2021, Jul–Dec".
 
 ## 10. Analytics

@@ -117,7 +117,7 @@ export const Heatmap = memo(function Heatmap({ data, rows, loading, error, retry
             </button>
           )}
           <div className="flex flex-wrap items-end justify-between gap-3">
-            {rel === "rel" ? <GradientLegend title={h.relLegend} min={-relMax} max={relMax} mid={0} scale={div} fmt={(n) => (n === 0 ? "0%" : pct(n, 0))} className="w-full sm:w-[280px]" />
+            {rel === "rel" ? <GradientLegend title={h.relLegend} min={-relMax} max={relMax} mid={0} scale={div} fmt={(n) => pct(n, 0)} className="w-full sm:w-[280px]" />
               : <GradientLegend title={h.levelLegend} min={domain[0]} max={domain[1]} scale={scale} fmt={num} className="w-full sm:w-[280px]" />}
             <span className="text-[13px] text-muted-foreground">{h.note}</span>
           </div>
