@@ -36,6 +36,18 @@ export function keepInSameArea(a: ReturnType<typeof areaParams>) {
   };
 }
 
+/**
+ * The `placeholderData` option of a panel that shows the Selection's figures under the Selection's labels. It keeps
+ * the previous data only while the whole Selection stays the same, for example while the Sales list loads a new sort
+ * or the trend a new time step. A slow new Selection then shows the panel's loading state, never the old figures.
+ */
+export function keepInSameSelection(f: ReturnType<typeof areaParams> & { propertyType: string; from?: string; to?: string }) {
+  return <T,>(previous: T | undefined, query?: { queryKey: readonly unknown[] }): T | undefined => {
+    const p = (query?.queryKey[1] ?? {}) as Partial<typeof f>;
+    return keepInSameArea(f)(previous, query) !== undefined && p.propertyType === f.propertyType && p.from === f.from && p.to === f.to ? previous : undefined;
+  };
+}
+
 /** The group a Commune code belongs to, from its first two characters. */
 const groupOfCommune = (id: string): RankGroup => {
   const d = id.slice(0, 2);

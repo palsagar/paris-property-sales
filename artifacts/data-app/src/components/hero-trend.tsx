@@ -6,7 +6,7 @@ import { ChartCard, ErrorState, Segmented, SwitchField, TipBox, useChartColors }
 import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, kShort, tooFew, bucketLabel } from "@/lib/fmt";
 import { niceTicks } from "@/lib/histogram";
 import { t } from "@/lib/i18n/messages";
-import { keepInSameArea, type areaParams } from "@/lib/areas";
+import { keepInSameSelection, type areaParams } from "@/lib/areas";
 import { parisTrendParams, smoothOn, summaryParams, trendParams, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
 import { yearBucketLabel } from "@/lib/period";
@@ -54,7 +54,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
   const smooth = smoothOn(gran, isQuartier, choices.smooth);
   const params = trendParams(view, choices);
   const win = params.window;
-  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameArea(summaryParams(view)) } });
+  const q = useGetSalesTrend(params, { query: { queryKey: getGetSalesTrendQueryKey(params), placeholderData: keepInSameSelection(summaryParams(view)) } });
   const allP = parisTrendParams(view, choices);
   const all = useGetSalesTrend(allP, { query: { queryKey: getGetSalesTrendQueryKey(allP), enabled: hasArea } });
 

@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { TimeControl } from "@/components/time-control";
 import { AreaPicker, type CommuneMeta, type QMeta } from "@/components/area-picker";
-import { FieldButton, Segmented, iconBtnCls, primaryBtnCls } from "@/components/ui-bits";
+import { FieldButton, Segmented, iconBtnCls, outlineBtnCls, primaryBtnCls } from "@/components/ui-bits";
 import { arrLabel, monthsBefore, num, rangeLabel } from "@/lib/fmt";
 import { DEPARTMENT_NAMES, type Area } from "@/lib/areas";
 import { useRequestedView } from "@/lib/shown-view";
@@ -47,7 +47,7 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
   /** Sales in the shown Selection, once loaded. */
   count?: number;
 }) {
-  const { view, patch, selectArea, updating } = useRequestedView();
+  const { view, patch, selectArea, updating, failed, retry } = useRequestedView();
   const { ptype, area, from, to } = view;
   const [areaOpen, setAreaOpen] = useState(false);
   const [periodOpen, setPeriodOpen] = useState(false);
@@ -137,6 +137,14 @@ export const SelectionBar = memo(function SelectionBar({ chartView, datasetFrom,
           </DrawerContent>
         </Drawer>
       </div>
+
+      {/* The requested Selection did not load: the panels keep the previous one, with its own labels. */}
+      {failed && (
+        <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 md:px-8 py-2 border-t text-[14px]" data-testid="selection-failed">
+          <p className="flex-1 min-w-[16em]">{tx.selection.failed}</p>
+          <button type="button" onClick={() => { track("retry-selection"); retry(); }} className={outlineBtnCls} data-testid="button-retry-selection">{tx.page.tryAgain}</button>
+        </div>
+      )}
 
       {updating && (
         <div className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden" aria-hidden>

@@ -10,7 +10,7 @@ import {
 import { Sun, Moon, Printer, X, Link2, MoreHorizontal } from "lucide-react";
 import { useViewState, viewQuery, type MapLevel, type MapMode, type ViewState } from "@/lib/view-state";
 import { areaProps, openProps, track, type AreaVia } from "@/lib/analytics";
-import { areaChange, areaParams, featureArea, groupOfArea, keepInSameArea, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
+import { areaChange, areaParams, featureArea, groupOfArea, keepInSameSelection, DEPARTMENT_NAMES, type Area, type DepartmentId, type MapFeature, type RankGroup } from "@/lib/areas";
 import { useTheme } from "@/hooks/use-theme";
 import { toast } from "@/hooks/use-toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -64,7 +64,7 @@ function ViewHost(props: DatasetProps) {
   const [view, patch, movedTo] = useViewState(props.datasetFrom, props.datasetTo);
   const [choices, setChoices] = useState<PanelChoices>(lastChoices);
   lastChoices = choices;
-  const { shown, updating } = useShownView(view, choices);
+  const { shown, updating, failed, retry } = useShownView(view, choices);
   // The Quartiers and Communes, for the search box and for the names that analytics sends. The map loads the same
   // boundaries, so they are fetched once.
   const qB = useGetQuartierBoundaries();
@@ -101,7 +101,7 @@ function ViewHost(props: DatasetProps) {
     openSent = true;
     if (viewQuery(firstView.current) !== "") track("open", openProps(firstView.current, names));
   }, [nameLoading, names]);
-  const requested = useMemo(() => ({ view, patch, selectArea, updating }), [view, patch, selectArea, updating]);
+  const requested = useMemo(() => ({ view, patch, selectArea, updating, failed, retry }), [view, patch, selectArea, updating, failed, retry]);
   const panelChoices = useMemo(() => ({ choices, setChoices }), [choices]);
   return (
     <RequestedView.Provider value={requested}>
@@ -139,7 +139,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
   const areaP = useMemo(() => areaParams(area), [area]);
   const selArr = area.kind === "arr" ? area.arr : area.kind === "q" ? qById.get(area.id)?.arr : undefined;
 
-  const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  const summary = useGetSalesSummary(filters, { query: { queryKey: getGetSalesSummaryQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
   // All Paris for the same type and Period, beside an Area's figures. selectionQueries loads it with the Selection.
   const parisP = useMemo(() => parisSummaryParams(selection), [selection]);
   const parisSummary = useGetSalesSummary(parisP, { query: { queryKey: getGetSalesSummaryQueryKey(parisP), enabled: area.kind !== "paris" } });

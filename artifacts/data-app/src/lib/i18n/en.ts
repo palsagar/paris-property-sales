@@ -79,6 +79,7 @@ export const en = {
     choosePeriod: "Choose a period",
     updating: "Updating",
     updatingDots: "Updating…",
+    failed: "You are offline, so the figures for this choice did not load. The page still shows the previous Selection. Check your connection and try again.",
     inSelection: "sales in this Selection",
     change: "Change",
     sheetTitle: "Choose what to show",

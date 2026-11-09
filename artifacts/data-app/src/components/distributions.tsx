@@ -7,8 +7,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Res
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, TipBox, useChartColors } from "@/components/ui-bits";
 import { eurShort, sqm, num, houseShareLabel, keep, tooFew } from "@/lib/fmt";
-import { binStart, binTick } from "@/lib/histogram";
-import { keepInSameArea } from "@/lib/areas";
+import { binStart, binTick, binTicks } from "@/lib/histogram";
+import { keepInSameSelection } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 import { t } from "@/lib/i18n/messages";
 
@@ -69,8 +69,8 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, un
 export const Distributions = memo(function Distributions({ filters, houseShare, isDark }: { filters: Filters; houseShare?: number | null; isDark: boolean }) {
   const c = useChartColors(isDark);
   const d = t().distributions;
-  const pd = useGetPriceDistribution(filters, { query: { queryKey: getGetPriceDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
-  const sd = useGetPricePerSqmDistribution(filters, { query: { queryKey: getGetPricePerSqmDistributionQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  const pd = useGetPriceDistribution(filters, { query: { queryKey: getGetPriceDistributionQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
+  const sd = useGetPricePerSqmDistribution(filters, { query: { queryKey: getGetPricePerSqmDistributionQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
   return (
     <>
       <ChartCard testId="price-dist" level={3} title={d.pricesTitle} desc={d.pricesDesc} className="flex-[1_1_360px]"
@@ -93,7 +93,7 @@ export const Distributions = memo(function Distributions({ filters, houseShare, 
  */
 export const RoomsChart = memo(function RoomsChart({ filters, isDark }: { filters: Filters; isDark: boolean }) {
   const c = useChartColors(isDark);
-  const rooms = useGetSalesByRooms(filters, { query: { queryKey: getGetSalesByRoomsQueryKey(filters), placeholderData: keepInSameArea(filters) } });
+  const rooms = useGetSalesByRooms(filters, { query: { queryKey: getGetSalesByRoomsQueryKey(filters), placeholderData: keepInSameSelection(filters) } });
   const d = t().distributions, tr = t().trend;
   const rows = (rooms.data ?? []).map((r) => ({ ...r, label: d.rooms(r.rooms) }));
   const maxPrice = Math.max(1, ...rows.map((r) => r.medianPrice ?? 0));

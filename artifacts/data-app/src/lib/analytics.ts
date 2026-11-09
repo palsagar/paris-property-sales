@@ -51,6 +51,8 @@ export interface Events {
   "copy-link": { via: "clipboard" | "share" };
   "toggle-dark-mode": { on: boolean };
   "change-language": { to: Lang };
+  /** A new Selection did not load, and the Visitor asked for it again. */
+  "retry-selection": undefined;
   /** A click on the author's site or on the GitHub repository in the header. */
   "author-link": { target: "github" | "site" };
 }

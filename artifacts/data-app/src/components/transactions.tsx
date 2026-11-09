@@ -4,7 +4,7 @@ import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, outlineBtnCls } from "@/components/ui-bits";
 import { eur, sqm, num, dateLabel, inArea } from "@/lib/fmt";
-import { keepInSameArea, saleArea, type Area } from "@/lib/areas";
+import { keepInSameSelection, saleArea, type Area } from "@/lib/areas";
 import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE, type Selection } from "@/lib/selection-queries";
 import { usePanelChoices } from "@/lib/shown-view";
 import { track } from "@/lib/analytics";
@@ -50,7 +50,7 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
     setChoices((c) => ({ ...c, sortBy: by, sortDir: dir }));
   };
   const p = transactionParams(view, choices, page * PAGE);
-  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameArea(filters) } });
+  const tx = useListTransactions(p, { query: { queryKey: getListTransactionsQueryKey(p), placeholderData: keepInSameSelection(filters) } });
   const totalPages = tx.data ? Math.max(1, Math.ceil(tx.data.total / PAGE)) : 1;
   const sortKey = `${sortBy}-${sortDir}`;
   const sortTo = (key: string) => {

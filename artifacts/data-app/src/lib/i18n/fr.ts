@@ -95,6 +95,7 @@ export const fr: Messages = {
     choosePeriod: "Choisir une période",
     updating: "Mise à jour",
     updatingDots: "Mise à jour…",
+    failed: "Vous êtes hors ligne, donc les chiffres de ce choix n'ont pas chargé. La page montre encore la Sélection précédente. Vérifiez votre connexion et réessayez.",
     inSelection: "ventes dans cette Sélection",
     change: "Modifier",
     sheetTitle: "Choisir ce qui s'affiche",
