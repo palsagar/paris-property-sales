@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import type { SalesDb, SqlParams } from "./salesDb";
 import {
   bucketInfo,
@@ -19,6 +20,17 @@ export interface SaleFilter {
   commune?: string;
   from?: string;
   to?: string;
+}
+
+/**
+ * A request names at most one Area. Two, such as arrondissement=1&department=92, would select no Sale at all, so
+ * the route answers 400 instead of an empty result. The app's error handler turns the ZodError into that 400.
+ */
+export function checkOneArea(f: SaleFilter): void {
+  const named = (["arrondissement", "quartier", "department", "commune"] as const).filter((k) => f[k] !== undefined);
+  if (named.length > 1) {
+    throw new ZodError([{ code: "custom", path: named, message: `Name at most one Area, not ${named.join(" and ")}` }]);
+  }
 }
 
 /**

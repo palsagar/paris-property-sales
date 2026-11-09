@@ -15,6 +15,8 @@ import { previewTags, siteUrl } from "./lib/pageMeta";
 export function createApp(router: Router, env: NodeJS.ProcessEnv = process.env): Express {
   const app: Express = express();
   app.set("trust proxy", TRUSTED_PROXIES);
+  // The response does not need to name the framework.
+  app.disable("x-powered-by");
 
   // The DVF reuse conditions forbid indexing by search engines (docs/adr/0006-public-site-limits.md). robots.txt lets
   // preview bots read the page, so this header and the robots meta tag do the blocking, on every response.
@@ -23,6 +25,8 @@ export function createApp(router: Router, env: NodeJS.ProcessEnv = process.env):
     // No other site may show these pages in a frame.
     res.set("Content-Security-Policy", "frame-ancestors 'none'");
     res.set("X-Frame-Options", "DENY");
+    // A browser must use the declared type and never guess one, for example run a JSON answer as a script.
+    res.set("X-Content-Type-Options", "nosniff");
     next();
   });
 
@@ -48,6 +52,8 @@ export function createApp(router: Router, env: NodeJS.ProcessEnv = process.env):
   app.use(compression());
 
   app.use("/api", visitorIp, createApiRateLimit(), responseCache, router);
+  // An unknown API path answers in JSON, like the rest of the API, and never falls through to the page.
+  app.use("/api", (_req, res) => { res.status(404).json({ error: "Not found" }); });
 
   // Optional: serve the built dashboard from this server (used for self-hosting).
   // Set STATIC_DIR to the folder that contains index.html.
@@ -74,7 +80,9 @@ export function createApp(router: Router, env: NodeJS.ProcessEnv = process.env):
       else next();
     });
     app.use(express.static(root, { index: false, maxAge: "1h" }));
-    app.get(/^\/(?!api\/).*/, sendPage);
+    // The page answers every path the dashboard can open. A missing file, such as /favicon.ico (the page links
+    // favicon.svg), has an extension and gets a plain 404, not the page.
+    app.get(/^\/(?!api\/).*/, (req, res, next) => (path.posix.extname(req.path) ? next() : sendPage(req, res)));
   }
 
   app.use(
