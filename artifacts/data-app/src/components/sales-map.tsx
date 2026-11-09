@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON, useMap, ZoomControl } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { GeoFeatureCollection } from "@workspace/api-client-react";
@@ -187,7 +187,9 @@ export function SalesMap({ level, bounds, isDark, fillFor, tooltipFor, stateOf, 
   return (
     <div className="relative h-full w-full">
     <MapContainer zoomAnimation={!reduceMotion()} fadeAnimation={!reduceMotion()} center={HOME.center} zoom={HOME.zoom} minZoom={9} maxZoom={18} preferCanvas
-      scrollWheelZoom={false} dragging={!L.Browser.mobile} className="h-full w-full">
+      scrollWheelZoom={false} dragging={!L.Browser.mobile} zoomControl={false} className="h-full w-full">
+      {/* Leaflet's own zoom buttons, with their titles in the page's language. */}
+      <ZoomControl position="topleft" zoomInTitle={t().map.zoomIn} zoomOutTitle={t().map.zoomOut} />
       <AutoResize />
       <GestureGuard onHint={showHint} />
       <TileLayer key={isDark ? "d" : "l"} attribution={t().map.tiles} maxNativeZoom={16}

@@ -256,6 +256,8 @@ export const en = {
     zoomHint: (key: string) => `Hold ${key} and scroll to zoom the map`,
     touchHint: "Use two fingers to move the map",
     tiles: "Tiles &copy; Esri",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
   },
   dots: {
     house: "House",

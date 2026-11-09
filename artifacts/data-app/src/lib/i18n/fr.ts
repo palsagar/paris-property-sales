@@ -272,6 +272,8 @@ export const fr: Messages = {
     zoomHint: (key: string) => `Maintenez ${key} et faites défiler pour zoomer`,
     touchHint: "Utilisez deux doigts pour déplacer la carte",
     tiles: "Fond de carte &copy; Esri",
+    zoomIn: "Zoomer",
+    zoomOut: "Dézoomer",
   },
   dots: {
     house: "Maison",
