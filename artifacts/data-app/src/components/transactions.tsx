@@ -9,6 +9,7 @@ import { summaryParams, transactionParams, TRANSACTIONS_PAGE as PAGE, type Selec
 import { usePanelChoices } from "@/lib/shown-view";
 import { track } from "@/lib/analytics";
 import { t } from "@/lib/i18n/messages";
+import { streetName } from "@/lib/street";
 
 /** The orders a phone offers in one menu, instead of tapping column heads. */
 const SORTS: [string, ListTransactionsSortBy, "asc" | "desc"][] = [
@@ -84,7 +85,7 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
               {tx.isLoading ? Array.from({ length: 6 }).map((_, i) => <li key={i} className="py-3 border-t"><Skeleton className="h-14 w-full" /></li>)
                 : tx.data?.items.length ? tx.data.items.map((t) => { const a = saleArea(t); return (
                   <li key={t.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 py-3 border-t" data-testid={`card-tx-${t.id}`}>
-                    <p className="text-[16px] font-semibold leading-snug">{t.address}</p>
+                    <p className="text-[16px] font-semibold leading-snug">{streetName(t.address)}</p>
                     <p className="font-num text-[15px] font-medium text-right whitespace-nowrap">{eur(t.price)}</p>
                     <p className="text-[14px] text-muted-foreground">
                       {t.quartierName ? <button type="button" onClick={() => onSelectQuartierName(t.quartierName!)} className="no-tap text-primary underline underline-offset-2">{t.quartierName}</button>
@@ -122,7 +123,7 @@ export const Transactions = memo(function Transactions({ selection: view, scopeL
                 )) : tx.data?.items.length ? tx.data.items.map((t) => { const a = saleArea(t); return (
                   <tr key={t.id} className="border-t hover:bg-muted/40 transition-colors" data-testid={`row-tx-${t.id}`}>
                     <td className="px-3 py-2.5 whitespace-nowrap font-num text-[14px]">{dateLabel(t.date)}</td>
-                    <td className="px-3 py-2 max-w-[280px] truncate" title={t.address}>{t.address}</td>
+                    <td className="px-3 py-2 max-w-[280px] truncate" title={streetName(t.address)}>{streetName(t.address)}</td>
                     {showArea && <td className="px-3 py-2">
                       <button onClick={() => onSelectArea(a.area)} className="inline-flex items-center gap-1.5 hover:underline text-left">
                         <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: areaColor(a.id) }} aria-hidden />{a.label}
