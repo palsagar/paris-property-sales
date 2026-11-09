@@ -29,3 +29,13 @@ test("an empty side, an empty scale and equal values all work", () => {
   assert.deepEqual(quantileThresholds([5, 5], [5, 5], 4), [5]);
   assert.equal(makeStepScale([]).colors.length, 1);
 });
+
+test("every dark-mode step keeps 3:1 against the dark card", () => {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  // The dark --card token, hsl(224 28% 11%).
+  const card = lum("#141824");
+  for (const c of makeStepScale([1, 2, 3, 4, 5, 6, 7, 8], true).colors) assert.ok((lum(c) + 0.05) / (card + 0.05) >= 3, c);
+});

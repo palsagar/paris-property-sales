@@ -195,8 +195,8 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
       ...stats.map((s) => s.medianPricePerSqm),
       ...trend.filter((r) => r.count >= 10).map((r) => r.medianPricePerSqm),
     ].filter((v): v is number => v != null);
-    return makeStepScale(quantileThresholds(figures(arrStats, arrTrend), figures(communeStats, communeTrend)));
-  }, [arrStats, arrTrend, communeStats, communeTrend]);
+    return makeStepScale(quantileThresholds(figures(arrStats, arrTrend), figures(communeStats, communeTrend)), isDark);
+  }, [arrStats, arrTrend, communeStats, communeTrend, isDark]);
   const domain = useMemo<[number, number]>(() => [scale.thresholds[0] ?? 0, scale.thresholds[scale.thresholds.length - 1] ?? 0], [scale]);
   const areaMedians = useMemo(() => new Map([...arrStats, ...communeStats].map((s) => [s.id, s.medianPricePerSqm])), [arrStats, communeStats]);
   const areaColor = useCallback((id: string) => {
