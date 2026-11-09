@@ -34,6 +34,8 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, un
   ];
   return (
     <>
+      {/* The strip of percentiles under the chart and the sentence above it carry the figures. */}
+      <div role="img" aria-label={d.chartAlt}><div aria-hidden>
       <ResponsiveContainer width="100%" height={260} debounce={0}>
         <BarChart data={data} margin={{ top: 22, right: 8, left: 0, bottom: 0 }} barCategoryGap={1}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
@@ -53,6 +55,7 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, un
           ))}
         </BarChart>
       </ResponsiveContainer>
+      </div></div>
       <dl className="grid grid-cols-5 gap-1 mt-3 text-center border-t pt-2">
         {([["P10", p10], ["P25", p25], [d.median, median], ["P75", p75], ["P90", p90]] as [string, number][]).map(([k, v]) => (
           <div key={k} className="py-1">

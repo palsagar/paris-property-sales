@@ -161,6 +161,7 @@ export const fr: Messages = {
     notFoundBody: "Avez-vous oublié d'ajouter la page au routeur ?",
   },
   trend: {
+    chartAlt: (from: string, to: string) => `Graphique du prix médian au m², de ${from} à ${to}, avec le nombre de ventes de chaque période en dessous.`,
     takeaway: (area: string, end: string, n: number, start: string, change: string) => `${cap(area)}, la médiane était de ${end} ${months(n, "dernier")} de la période, contre ${start} ${n === 1 ? "le premier" : `les ${n} premiers`} : ${change}.`,
     parisMoved: (change: string) => ` Tout Paris a évolué de ${change}.`,
     noSales: "Aucune vente",
@@ -188,6 +189,7 @@ export const fr: Messages = {
     lowPeriods: (n: number) => `${n} ${plural(n, "période", "périodes")} de moins de 10 ventes`,
   },
   distributions: {
+    chartAlt: "Diagramme en barres du nombre de ventes par tranche de prix. Les chiffres en dessous donnent les centiles.",
     median: "Médiane",
     mean: (v: string, share: string) => `La moyenne est de ${v}. Les barres foncées contiennent la moitié centrale des ventes, entre P25 et P75.${share ? ` Cette sélection compte ${share}.` : ""}`,
     above: (sales: string, edge: string) => ` La dernière barre regroupe les ${sales} au-dessus de ${edge}.`,

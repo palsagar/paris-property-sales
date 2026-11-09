@@ -145,6 +145,7 @@ export const en = {
     notFoundBody: "Did you forget to add the page to the router?",
   },
   trend: {
+    chartAlt: (from: string, to: string) => `Chart of the median price per m², from ${from} to ${to}, with the number of sales in each period under it.`,
     takeaway: (area: string, end: string, n: number, start: string, change: string) => `In ${area}, the median was ${end} in ${months(n, "last")} of the Period, against ${start} in ${n === 1 ? "the first" : `the first ${n}`}: ${change}.`,
     parisMoved: (change: string) => ` All Paris moved by ${change}.`,
     noSales: "No sales",
@@ -172,6 +173,7 @@ export const en = {
     lowPeriods: (n: number) => `${n} period${n > 1 ? "s" : ""} with fewer than 10 sales`,
   },
   distributions: {
+    chartAlt: "Bar chart of the number of sales in each price band. The figures under it give the percentiles.",
     median: "Median",
     mean: (v: string, share: string) => `The mean is ${v}. Darker bars hold the middle half of sales, between P25 and P75.${share ? ` This selection is ${share}.` : ""}`,
     above: (sales: string, edge: string) => ` The last bar holds the ${sales} above ${edge}.`,

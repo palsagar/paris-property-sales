@@ -17,17 +17,40 @@ export type Filters = ReturnType<typeof areaParams> & { propertyType: PropertyTy
 const PLOT_H = 260;
 const STRIP_H = 64; // 40px of bars plus the x-axis labels
 const Y_W = 46;
-// Room on the right for the names written at the end of the lines.
-const END_W = 72;
+/**
+ * A line's name in lines of at most 14 characters, broken after a hyphen or a space: "Seine-Saint-" / "Denis".
+ * A name with no break stays whole.
+ */
+function nameLines(name: string, max = 14): string[] {
+  const lines: string[] = [];
+  for (const part of name.split(/(?<=[- ])/)) {
+    const last = lines.length - 1;
+    if (last >= 0 && (lines[last]! + part).length <= max) lines[last] += part;
+    else lines.push(part);
+  }
+  return lines.map((l) => l.trimEnd());
+}
 
-/** Writes a line's name and last value just after its last point, so the lines need no legend to be told apart. */
-const endLabel = (name: string, color: string, last: number, dy: number) =>
+// Room on the right for the names written at the end of the lines: 72 px, or the longest line of a name, at about
+// 6.6 px a character of 12 px semibold text, up to 112 px.
+const endWidth = (names: string[]) => Math.min(112, Math.max(72, Math.ceil(Math.max(...names.flatMap((n) => nameLines(n)).map((l) => l.length)) * 6.6) + 14));
+const LINE_H = 14;
+
+/**
+ * Writes a line's name and last value just after its last point, so the lines need no legend to be told apart. `above`
+ * puts the block above the point, else below it.
+ */
+const endLabel = (name: string, color: string, last: number, above: boolean) =>
   function EndLabel(p: { x?: number | string; y?: number | string; index?: number; value?: number | string | null }) {
     if (p.index !== last || p.value == null || p.x == null || p.y == null) return <g />;
+    const lines = nameLines(name);
+    const x = Number(p.x) + 8;
+    // Below: the first line 8 px under the point. Above: the value line 8 px over it.
+    const dy = above ? -8 - lines.length * LINE_H : 8;
     return (
-      <text x={Number(p.x) + 8} y={Number(p.y) + dy} fill={color} fontSize={12} fontWeight={600} dominantBaseline="middle">
-        <tspan x={Number(p.x) + 8}>{name}</tspan>
-        <tspan x={Number(p.x) + 8} dy={14} fontWeight={500} style={{ fontFamily: "var(--app-font-mono)" }}>{num(Number(p.value))}</tspan>
+      <text x={x} y={Number(p.y) + dy} fill={color} fontSize={12} fontWeight={600} dominantBaseline="middle">
+        {lines.map((l, i) => <tspan key={i} x={x} dy={i === 0 ? 0 : LINE_H}>{l}</tspan>)}
+        <tspan x={x} dy={LINE_H} fontWeight={500} style={{ fontFamily: "var(--app-font-mono)" }}>{num(Number(p.value))}</tspan>
       </text>
     );
   };
@@ -96,7 +119,12 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
   const lastPt = data[data.length - 1];
   const parisBelow = lastPt?.paris != null && lastPt.medianPricePerSqm != null && lastPt.paris < lastPt.medianPricePerSqm;
   const shortName = areaName.replace(/ arrondissement$/, "");
+  const END_W = hasArea ? endWidth([shortName, t().fmt.allParis]) : 72;
   const noMedian = data.every((d) => d.medianPricePerSqm == null);
+  // The chart's text alternative: its first and last medians. The figures in the sentence above it and the CSV say more.
+  const withMedian = data.filter((d) => d.medianPricePerSqm != null);
+  const firstPt = withMedian[0], endPt = withMedian[withMedian.length - 1];
+  const alt = firstPt && endPt ? t().trend.chartAlt(`${firstPt.shown} (${sqm(firstPt.medianPricePerSqm!)})`, `${endPt.shown} (${sqm(endPt.medianPricePerSqm!)})`) : tooFew();
   // The charts depend only on their data and settings, so a change elsewhere on the page does not redraw them.
   const ptype = view.ptype;
   const tr = t().trend, allParis = t().fmt.allParis;
@@ -128,9 +156,9 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
               {showBand && <Line dataKey="p25PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
               {showBand && <Line dataKey="p75PricePerSqm" stroke={c.accent} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="1 3" dot={false} activeDot={false} isAnimationActive={false} />}
               {hasArea && <Line dataKey="paris" stroke={c.second} strokeWidth={1.75} strokeDasharray="5 4" dot={false} isAnimationActive={false} connectNulls
-                label={endLabel(allParis, c.second, data.length - 1, parisBelow ? 8 : -22)} />}
+                label={endLabel(allParis, c.second, data.length - 1, !parisBelow)} />}
               <Line dataKey="medianPricePerSqm" stroke={c.accent} strokeWidth={2.75} isAnimationActive={false} type="linear"
-                label={hasArea ? endLabel(shortName, c.accent, data.length - 1, parisBelow ? -22 : 8) : undefined}
+                label={hasArea ? endLabel(shortName, c.accent, data.length - 1, parisBelow) : undefined}
                 activeDot={{ r: 5, stroke: c.bg, strokeWidth: 2 }}
                 dot={(p: { cx?: number; cy?: number | null; index?: number; payload?: { low: boolean } }) =>
                   p.cy == null ? <g key={p.index} /> : p.payload?.low ? <circle key={p.index} cx={p.cx} cy={p.cy} r={4} fill={c.bg} stroke={c.accent} strokeWidth={1.5} strokeDasharray="2 1.5" />
@@ -149,7 +177,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
             </BarChart>
           </ResponsiveContainer>
     </>
-  ), [data, ticks, tickDigits, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName, tr, allParis]);
+  ), [data, ticks, tickDigits, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName, tr, allParis, END_W]);
 
   return (
     <ChartCard testId="trend" title={tr.title(inArea(areaName, selection.area.kind))} isDark={isDark}
@@ -171,7 +199,8 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
         <div className="flex items-center justify-center text-center text-muted-foreground text-sm px-4" style={{ height: PLOT_H + STRIP_H }} data-testid="trend-one-point">{tr.onePoint(gran)}</div>
       ) : (
         <>
-          {charts}
+          {/* A screen reader hears the alternative, not the tick labels of the SVG. */}
+          <div role="img" aria-label={keep(alt)}><div aria-hidden>{charts}</div></div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[13px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5"><span className="w-4 h-0.5" style={{ background: c.accent }} />{tr.medianSqm}</span>
             {showBand && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted" style={{ borderColor: c.accent }} />{tr.bandLegend}</span>}
