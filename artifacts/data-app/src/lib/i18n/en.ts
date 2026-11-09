@@ -114,6 +114,8 @@ export const en = {
     chartDesc: "Bars: sales per month. Line: median price per m². Drag a handle, use the arrow keys on it, or pick the months below.",
     from: "From",
     to: "To",
+    startHandle: "Start of the Period",
+    endHandle: "End of the Period",
   },
   kpis: {
     notLoaded: "The key figures did not load.",

@@ -130,6 +130,8 @@ export const fr: Messages = {
     chartDesc: "Barres : ventes par mois. Ligne : prix médian au m². Faites glisser une poignée, utilisez les flèches du clavier dessus ou choisissez les mois ci-dessous.",
     from: "De",
     to: "À",
+    startHandle: "Début de la période",
+    endHandle: "Fin de la période",
   },
   kpis: {
     notLoaded: "Les chiffres clés n'ont pas chargé.",

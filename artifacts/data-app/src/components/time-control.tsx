@@ -15,6 +15,23 @@ const pillCls = (on: boolean, tall: boolean) =>
 const selectCls = "h-10 w-full rounded-lg border border-control bg-background px-2.5 text-[15px] disabled:opacity-50";
 
 /**
+ * A Brush handle: Recharts' own 12 px bar with its two grip lines. On a touch screen an invisible band of 16 px on each
+ * side takes the touch too, since the handle reads the touch on its whole drawing.
+ */
+const COARSE = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+function Handle({ x, y, width, height, stroke }: { x: number; y: number; width: number; height: number; stroke?: string }) {
+  const lineY = Math.floor(y + height / 2) - 1;
+  return (
+    <>
+      {COARSE && <rect x={x - 16} y={y} width={width + 32} height={height} fill="transparent" />}
+      <rect x={x} y={y} width={width} height={height} fill={stroke} />
+      <line x1={x + 1} y1={lineY} x2={x + width - 1} y2={lineY} stroke="#fff" />
+      <line x1={x + 1} y1={lineY + 2} x2={x + width - 1} y2={lineY + 2} stroke="#fff" />
+    </>
+  );
+}
+
+/**
  * Chooses the Period: one-tap presets, a brush over the whole timeline, and From / To months for anyone who cannot
  * or does not want to drag. It is the body of the Period popover on a laptop and of the Selection sheet on a phone.
  * `chartView` is the shown view, for the small chart. `from` and `to` are the requested Period, for the handles.
@@ -87,7 +104,7 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
   const chart = useMemo(() => (
     <ResponsiveContainer width="100%" height={chartH} debounce={0}>
       <ComposedChart data={data} margin={{ top: 0, right: 8, left: 8, bottom: 0 }}>
-        <Brush key={`${startIdx}-${endIdx}-${data.length}`} dataKey="label" height={chartH} y={0} travellerWidth={12}
+        <Brush key={`${startIdx}-${endIdx}-${data.length}`} dataKey="label" height={chartH} y={0} travellerWidth={12} traveller={Handle} ariaLabel={texts().period.from}
           startIndex={startIdx} endIndex={endIdx} stroke={c.accent} fill="transparent"
           tickFormatter={() => ""}
           onChange={(r) => {
@@ -110,6 +127,31 @@ export function TimeControl({ chartView, from, to, datasetFrom, datasetTo, years
 
   const yearTicks = periods.map((p, i) => [p, i] as const).filter(([p]) => p.slice(5, 7) === "01");
   const shownS = draft ? draft.s : startIdx, shownE = draft ? draft.e : endIdx;
+
+  // Recharts names both handles "Min value: undefined, Max value: undefined" and gives a pixel as their value, so each
+  // handle gets its own name and its month here, after every draw of this control, and once the chart first draws:
+  // it waits for its size. A handle can be dragged past the other one, so the start is the one on the left.
+  const nameHandles = useRef(() => {});
+  nameHandles.current = () => {
+    const [start, end] = travellers().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    const set = (el: SVGGElement | undefined, label: string, i: number) => {
+      if (!el || periods[i] == null) return;
+      el.setAttribute("aria-label", label);
+      el.setAttribute("aria-valuemin", "0");
+      el.setAttribute("aria-valuemax", String(periods.length - 1));
+      el.setAttribute("aria-valuenow", String(i));
+      el.setAttribute("aria-valuetext", monthLabel(periods[i]!.slice(0, 7)));
+    };
+    set(start, tx.period.startHandle, shownS);
+    set(end, tx.period.endHandle, shownE);
+  };
+  useEffect(() => nameHandles.current());
+  useEffect(() => {
+    if (!wrapper.current) return;
+    const mo = new MutationObserver(() => nameHandles.current());
+    mo.observe(wrapper.current, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, []);
 
   return (
     <div className="flex flex-col gap-4" data-testid="time-control">
