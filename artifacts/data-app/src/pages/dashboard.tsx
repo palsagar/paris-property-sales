@@ -368,7 +368,7 @@ const DashboardView = memo(function DashboardView({ datasetFrom, datasetTo, rele
               <h2 id="compare-title" className="font-display font-bold text-[22px] md:text-[26px] leading-tight">{tx.page.compareTitle}</h2>
               <p className="text-[16px] text-muted-foreground">{tx.page.compareDesc}</p>
             </div>
-            <Segmented role="tablist" label={tx.page.compareView} testId="compare-tab" value={compareTab} onChange={showCompare} stretch tall className="md:hidden mb-3"
+            <Segmented label={tx.page.compareView} testId="compare-tab" value={compareTab} onChange={showCompare} stretch tall className="md:hidden mb-3"
               options={[["map", tx.page.map], ["list", tx.page.list]]} />
             <div className="flex flex-wrap gap-4 items-start">
               <div className={`flex-[999_1_560px] min-w-0 ${compareTab === "map" ? "" : "hidden md:block"}`}>

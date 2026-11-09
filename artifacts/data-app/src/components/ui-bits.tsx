@@ -124,17 +124,17 @@ export function ErrorState({ onRetry }: { onRetry: () => void }) {
 }
 
 /**
- * One choice among a few options. The same style everywhere: a sunken track, the chosen option inked.
+ * One choice among a few options. The same style everywhere: a sunken track, the chosen option inked. It also switches
+ * between two views of a panel: a group of pressed buttons needs no tab panels or arrow keys, unlike tabs.
  * `stretch` makes the options share the width (phones); `tall` makes them 44 px.
  */
-export function Segmented<T extends string>({ value, options, onChange, testId, label, stretch = false, tall = false, className = "", role = "group" }: {
-  value: T; options: [T, string][]; onChange: (v: T) => void; testId: string; label?: string; stretch?: boolean; tall?: boolean; className?: string; role?: "group" | "tablist";
+export function Segmented<T extends string>({ value, options, onChange, testId, label, stretch = false, tall = false, className = "" }: {
+  value: T; options: [T, string][]; onChange: (v: T) => void; testId: string; label?: string; stretch?: boolean; tall?: boolean; className?: string;
 }) {
   return (
-    <div className={`${stretch ? "flex" : "inline-flex"} gap-0.5 rounded-[10px] bg-sunken p-[3px] print:hidden ${className}`} role={role} aria-label={label}>
+    <div className={`${stretch ? "flex" : "inline-flex"} gap-0.5 rounded-[10px] bg-sunken p-[3px] print:hidden ${className}`} role="group" aria-label={label}>
       {options.map(([v, l]) => (
-        <button key={v} type="button" onClick={() => onChange(v)} data-testid={`${testId}-${v}`}
-          {...(role === "tablist" ? { role: "tab", "aria-selected": value === v } : { "aria-pressed": value === v })}
+        <button key={v} type="button" onClick={() => onChange(v)} data-testid={`${testId}-${v}`} aria-pressed={value === v}
           className={`${stretch ? "flex-1 min-w-0" : ""} ${tall ? "h-11 text-[15px]" : "h-[34px] text-[14px]"} px-3 rounded-[7px] font-medium whitespace-nowrap transition-colors ${value === v ? "bg-foreground text-background" : "text-foreground hover:bg-foreground/[0.06]"}`}>{l}</button>
       ))}
     </div>
