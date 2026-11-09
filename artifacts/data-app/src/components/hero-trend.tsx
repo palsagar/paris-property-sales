@@ -3,7 +3,8 @@ import { useGetSalesTrend, getGetSalesTrendQueryKey, type GranularityParameter, 
 import { ComposedChart, BarChart, Area, Line, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartCard, ErrorState, Segmented, SwitchField, TipBox, useChartColors } from "@/components/ui-bits";
-import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, tooFew, bucketLabel } from "@/lib/fmt";
+import { eur, sqm, sqmOrTooFew, num, pct, orTooFew, houseShareLabel, inArea, keep, kShort, tooFew, bucketLabel } from "@/lib/fmt";
+import { niceTicks } from "@/lib/histogram";
 import { t } from "@/lib/i18n/messages";
 import { keepInSameArea, type areaParams } from "@/lib/areas";
 import { parisTrendParams, smoothOn, summaryParams, trendParams, type Selection } from "@/lib/selection-queries";
@@ -75,7 +76,8 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
   // Without the range, the y-axis is fitted to the median (and the All Paris line) so its movement is readable.
   // With the range on, the axis covers P25 to P75 plus 40% of that span on each side, so the range reads as a
   // band inside the plot instead of filling it.
-  const domain = useMemo<[number, number]>(() => {
+  // The axis is then rounded out to evenly spaced round ticks.
+  const ticks = useMemo<number[]>(() => {
     const line = data.flatMap((d) => [d.medianPricePerSqm, d.paris]).filter((x): x is number => x != null && isFinite(x));
     if (!line.length) return [0, 1];
     let lo = Math.min(...line), hi = Math.max(...line);
@@ -85,8 +87,10 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
       hi = Math.max(hi, ...data.map((d) => d.p75PricePerSqm).filter((x) => x != null));
       pad = (hi - lo) * 0.4;
     }
-    return [Math.max(0, Math.floor((lo - pad) / 500) * 500), Math.ceil((hi + pad) / 500) * 500];
+    return niceTicks(Math.max(0, lo - pad), hi + pad);
   }, [data, showBand]);
+  const domain: [number, number] = [ticks[0]!, ticks[ticks.length - 1]!];
+  const tickDigits = ticks.length > 1 && (ticks[1]! - ticks[0]!) % 1000 !== 0 ? 1 : 0;
   const lowN = data.filter((d) => d.low).length;
   // The two end labels must not overlap: the lower line's label goes below its point.
   const lastPt = data[data.length - 1];
@@ -102,7 +106,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
             <ComposedChart data={data} syncId="trend" margin={{ top: 8, right: END_W, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
               <XAxis dataKey="shown" hide />
-              <YAxis tickFormatter={(v: number) => `${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={Y_W} domain={domain} allowDataOverflow tickCount={5} />
+              <YAxis tickFormatter={(v: number) => kShort(v, tickDigits)} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={Y_W} domain={domain} ticks={ticks} allowDataOverflow />
               <Tooltip filterNull={false} isAnimationActive={false} cursor={{ stroke: c.tick, strokeDasharray: "3 3" }}
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
@@ -145,7 +149,7 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
             </BarChart>
           </ResponsiveContainer>
     </>
-  ), [data, domain, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName, tr, allParis]);
+  ), [data, ticks, tickDigits, showBand, hasArea, noMedian, c, ptype, parisBelow, shortName, tr, allParis]);
 
   return (
     <ChartCard testId="trend" title={tr.title(inArea(areaName, selection.area.kind))} isDark={isDark}
@@ -162,13 +166,13 @@ export const HeroTrend = memo(function HeroTrend({ selection, gran, areaName, se
       }>
       {q.isLoading ? <Skeleton className="w-full" style={{ height: PLOT_H + STRIP_H }} /> : q.isError ? <ErrorState onRetry={() => q.refetch()} /> : data.length === 0 ? (
         <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height: PLOT_H + STRIP_H }}>{tr.empty}</div>
+      ) : data.length === 1 ? (
+        // One point draws no line: say why, instead of a lone dot under a wide bar.
+        <div className="flex items-center justify-center text-center text-muted-foreground text-sm px-4" style={{ height: PLOT_H + STRIP_H }} data-testid="trend-one-point">{tr.onePoint(gran)}</div>
       ) : (
         <>
           {charts}
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[13px] text-muted-foreground">
-      ) : data.length === 1 ? (
-        // One point draws no line: say why, instead of a lone dot under a wide bar.
-        <div className="flex items-center justify-center text-center text-muted-foreground text-sm px-4" style={{ height: PLOT_H + STRIP_H }} data-testid="trend-one-point">{tr.onePoint(gran)}</div>
             <span className="inline-flex items-center gap-1.5"><span className="w-4 h-0.5" style={{ background: c.accent }} />{tr.medianSqm}</span>
             {showBand && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dotted" style={{ borderColor: c.accent }} />{tr.bandLegend}</span>}
             {hasArea && <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed" style={{ borderColor: c.second }} />{allParis}</span>}

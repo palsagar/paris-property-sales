@@ -12,7 +12,8 @@ import { keepInSameArea } from "@/lib/areas";
 import type { Filters } from "@/components/hero-trend";
 import { t } from "@/lib/i18n/messages";
 
-const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; color: string }) {
+/** `unit` follows the exact bin edges in the tooltip: "1 500 000 – 1 550 000 EUR". */
+const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, unit, color }: { dist: Distribution; houseShare?: number | null; isDark: boolean; fmtVal: (n: number) => string; unit: string; color: string }) {
   const c = useChartColors(isDark);
   const { median, mean, p10, p25, p75, p90 } = dist;
   if (median == null || mean == null || p10 == null || p25 == null || p75 == null || p90 == null) {
@@ -21,7 +22,12 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, co
   const share = houseShareLabel(houseShare);
   const d = t().distributions, sales = t().trend.sales;
   // The numeric `from` is the category key: it is unique, so the reference lines find their bin, and the labels may repeat or not.
-  const data = dist.bins.map((b) => ({ ...b, mid: (b.from + b.to) / 2 }));
+  const data: { from: number; to: number | null; count: number; mid: number }[] = dist.bins.map((b) => ({ ...b, mid: (b.from + b.to) / 2 }));
+  // The bins stop at the 99th percentile. The Sales above it go in one open-ended bar, so every Sale is drawn.
+  const last = dist.bins[dist.bins.length - 1];
+  if (last && dist.above > 0) data.push({ from: last.to, to: null, count: dist.above, mid: last.to });
+  const ticks = binTicks(dist.bins);
+  const edge = (v: number) => keep(`${num(v)} ${unit}`);
   // P25/P75 labels sit inside the plot, on the outer side of their line, so they never collide with the Median label on top.
   const refs: [string, number, string, "insideTopRight" | "top" | "insideTopLeft", number][] = [
     ["P25", p25, c.second, "insideTopRight", 1.25], [d.median, median, c.accent, "top", 2], ["P75", p75, c.second, "insideTopLeft", 1.25],
@@ -31,11 +37,12 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, co
       <ResponsiveContainer width="100%" height={260} debounce={0}>
         <BarChart data={data} margin={{ top: 22, right: 8, left: 0, bottom: 0 }} barCategoryGap={1}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
-          <XAxis dataKey="from" tickFormatter={(v: number) => binTick(v, dist.bins)} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} interval="preserveStartEnd" minTickGap={22} />
-          <YAxis tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={44} />
+          <XAxis dataKey="from" ticks={ticks.ticks} tickFormatter={(v: number) => binTick(v, ticks.step)} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} interval={0} />
+          <YAxis tickFormatter={num} tick={{ fontSize: 12, fill: c.tick }} stroke={c.tick} width={48} />
           <Tooltip isAnimationActive={false} cursor={{ fill: c.cursor }}
             content={({ active, payload }) => active && payload?.length ? (
-              <TipBox title={`${fmtVal(payload[0].payload.from)} - ${fmtVal(payload[0].payload.to)}`} rows={[[sales, num(payload[0].payload.count), color]]} />
+              <TipBox title={payload[0].payload.to == null ? d.orMore(edge(payload[0].payload.from)) : keep(`${num(payload[0].payload.from)} – ${num(payload[0].payload.to)} ${unit}`)}
+                rows={[[sales, num(payload[0].payload.count), color]]} />
             ) : null} />
           <Bar dataKey="count" isAnimationActive={false} radius={[2, 2, 0, 0]}>
             {data.map((d, i) => <Cell key={i} fill={color} fillOpacity={d.mid >= p25 && d.mid <= p75 ? 0.9 : 0.4} />)}
@@ -54,7 +61,7 @@ const Histogram = memo(function Histogram({ dist, houseShare, isDark, fmtVal, co
           </div>
         ))}
       </dl>
-      <p className="text-[13px] text-muted-foreground mt-2">{d.mean(fmtVal(mean), share ?? "")}</p>
+      <p className="text-[13px] text-muted-foreground mt-2">{d.mean(fmtVal(mean), share ?? "")}{last && dist.above > 0 && keep(d.above(t().sales(num(dist.above), dist.above), edge(last.to)))}</p>
     </>
   );
 });
@@ -69,12 +76,12 @@ export const Distributions = memo(function Distributions({ filters, houseShare, 
       <ChartCard testId="price-dist" level={3} title={d.pricesTitle} desc={d.pricesDesc} className="flex-[1_1_360px]"
         lede={pd.data?.p25 != null && pd.data.p75 != null ? keep(d.half(eurShort(pd.data.p25), eurShort(pd.data.p75))) : undefined}
         isDark={isDark} loading={pd.isLoading} fetching={pd.isFetching} csv={pd.data?.bins} csvName="price-distribution.csv">
-        {pd.isLoading ? <Skeleton className="w-full h-[340px]" /> : pd.isError ? <ErrorState onRetry={() => pd.refetch()} /> : pd.data && <Histogram dist={pd.data} houseShare={houseShare} isDark={isDark} color={c.second} fmtVal={eurShort} />}
+        {pd.isLoading ? <Skeleton className="w-full h-[340px]" /> : pd.isError ? <ErrorState onRetry={() => pd.refetch()} /> : pd.data && <Histogram dist={pd.data} houseShare={houseShare} isDark={isDark} color={c.second} fmtVal={eurShort} unit="EUR" />}
       </ChartCard>
       <ChartCard testId="sqm-dist" level={3} title={d.sqmTitle} desc={d.sqmDesc} className="flex-[1_1_360px]"
         lede={sd.data?.p25 != null && sd.data.p75 != null ? keep(d.half(sqm(sd.data.p25), sqm(sd.data.p75))) : undefined}
         isDark={isDark} loading={sd.isLoading} fetching={sd.isFetching} csv={sd.data?.bins} csvName="price-per-sqm-distribution.csv">
-        {sd.isLoading ? <Skeleton className="w-full h-[340px]" /> : sd.isError ? <ErrorState onRetry={() => sd.refetch()} /> : sd.data && <Histogram dist={sd.data} houseShare={houseShare} isDark={isDark} color={c.accent} fmtVal={sqm} />}
+        {sd.isLoading ? <Skeleton className="w-full h-[340px]" /> : sd.isError ? <ErrorState onRetry={() => sd.refetch()} /> : sd.data && <Histogram dist={sd.data} houseShare={houseShare} isDark={isDark} color={c.accent} fmtVal={sqm} unit="EUR/m²" />}
       </ChartCard>
     </>
   );
