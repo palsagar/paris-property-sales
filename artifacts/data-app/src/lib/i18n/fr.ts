@@ -245,6 +245,7 @@ export const fr: Messages = {
     group: "Groupe",
   },
   map: {
+    label: "Carte des secteurs, colorés selon le chiffre choisi au-dessus. Le classement donne les mêmes chiffres sous forme de liste.",
     changeTitle: "Évolution du prix au m², par secteur",
     dotsTitle: "Les ventes une à une sur la carte",
     levelTitle: "Prix médian au m², par secteur",

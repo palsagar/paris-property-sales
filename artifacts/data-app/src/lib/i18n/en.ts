@@ -230,6 +230,7 @@ export const en = {
     group: "Group",
   },
   map: {
+    label: "Map of the areas, coloured by the figure chosen above. The ranking gives the same figures as a list.",
     changeTitle: "Change in price per m², by area",
     dotsTitle: "Individual sales on the map",
     levelTitle: "Median price per m², by area",

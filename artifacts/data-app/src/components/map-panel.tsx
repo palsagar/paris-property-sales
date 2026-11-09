@@ -158,11 +158,13 @@ export const MapPanel = memo(function MapPanel(props: {
           <SalesMap level={mode === "dots" ? "arr" : level} bounds={bounds} isDark={isDark} fillFor={fillFor} tooltipFor={tooltipFor}
             stateOf={(p) => featureState(p, area, selArr)} styleKey={styleKey}
             onSelect={props.onSelect} outlineOnly={mode === "dots"} labels={mode !== "dots" && level === "arr"}
-            dots={mode === "dots" ? dots ?? [] : undefined} pointScale={scale.color} dotName={dotName} onSelectDot={selectDot} focusFeature={focusFeature} />
+            dots={mode === "dots" ? dots ?? [] : undefined} pointScale={scale.color} dotName={dotName} onSelectDot={selectDot} focusFeature={focusFeature}
+            focusWide={area.kind === "commune"} outline={area.kind === "q" && (level === "arr" || mode === "dots") ? focusFeature : null} />
         )}
         {loading && <div className="absolute inset-0 z-[450] bg-background/40 flex items-center justify-center pointer-events-none"><Skeleton className="w-48 h-5" /></div>}
         {mode === "dots" && items && total > items.length && (
-          <div className="absolute left-3 top-3 z-[400] rounded-lg bg-card border px-3 py-2 text-[13px] max-w-[260px] shadow-md" data-testid="text-dots-cap">
+          // Right of Leaflet's zoom buttons (10 px from the edge, 34 px wide, 44 px on a touch screen), so they do not cover its first words.
+          <div className="absolute left-[54px] pointer-coarse:left-[64px] right-3 top-3 z-[400] w-fit rounded-lg bg-card border px-3 py-2 text-[13px] max-w-[260px] shadow-md" data-testid="text-dots-cap">
             {mt.cap(num(items.length), num(total))}
           </div>
         )}
